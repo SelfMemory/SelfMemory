@@ -1,8 +1,84 @@
+"""
+Qdrant database client configuration and initialization.
+Handles the connection to the Qdrant vector database.
+"""
+
+import logging
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import Distance, VectorParams, CollectionStatus
+from qdrant_client.http.exceptions import UnexpectedResponse
 
-client = QdrantClient(url="http://localhost:6333")
+from constants import DatabaseConstants, VectorConstants
 
-client.get_collection(
-    collection_name="user_name_mcp",
-)
+logger = logging.getLogger(__name__)
+
+def create_qdrant_client() -> QdrantClient:
+    """
+    Create and return a configured Qdrant client.
+    
+    Returns:
+        QdrantClient: Configured Qdrant client instance
+        
+    Raises:
+        Exception: If connection to Qdrant fails
+    """
+    try:
+        client = QdrantClient(
+            url=DatabaseConstants.DEFAULT_QDRANT_URL,
+            timeout=DatabaseConstants.CONNECTION_TIMEOUT
+        )
+        logger.info(f"Connected to Qdrant at {DatabaseConstants.DEFAULT_QDRANT_URL}")
+        return client
+    except Exception as e:
+        logger.error(f"Failed to connect to Qdrant: {str(e)}")
+        raise Exception(f"Database connection failed: {str(e)}")
+
+def ensure_collection_exists(client: QdrantClient, collection_name: str) -> bool:
+    """
+    Ensure that the specified collection exists, create it if it doesn't.
+    
+    Args:
+        client: Qdrant client instance
+        collection_name: Name of the collection to check/create
+        
+    Returns:
+        bool: True if collection exists or was created successfully
+        
+    Raises:
+        Exception: If collection creation fails
+    """
+    try:
+        # Check if collection exists
+        collections = client.get_collections().collections
+        existing_collection = next(
+            (col for col in collections if col.name == collection_name), 
+            None
+        )
+        
+        if existing_collection:
+            logger.info(f"Collection '{collection_name}' already exists")
+            return True
+        
+        # Create collection if it doesn't exist
+        logger.info(f"Creating collection '{collection_name}'")
+        client.create_collection(
+            collection_name=collection_name,
+            vectors_config=VectorParams(
+                size=VectorConstants.VECTOR_DIMENSION,
+                distance=Distance.COSINE
+            )
+        )
+        logger.info(f"Successfully created collection '{collection_name}'")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to ensure collection exists: {str(e)}")
+        raise Exception(f"Collection management failed: {str(e)}")
+
+# Initialize the global client
+try:
+    client = create_qdrant_client()
+    ensure_collection_exists(client, VectorConstants.COLLECTION_NAME)
+except Exception as e:
+    logger.error(f"Failed to initialize Qdrant database: {str(e)}")
+    raise
