@@ -1,7 +1,8 @@
 """
-Constants for the MCP Memory Server.
-Contains configuration values for embeddings, vector database, and application settings.
+Enhanced Constants for the MCP Memory Server.
+Contains configuration values for embeddings, vector database, search capabilities, and temporal metadata.
 """
+from typing import List
 
 class EmbeddingConstants:
     """Constants related to embedding generation."""
@@ -16,9 +17,84 @@ class VectorConstants:
 
 class SearchConstants:
     """Constants related to memory search operations."""
-    DEFAULT_SEARCH_LIMIT = 3  # Default number of memories to retrieve
-    MAX_SEARCH_LIMIT = 10  # Maximum number of memories allowed in one search
+    DEFAULT_SEARCH_LIMIT = 5  # Default number of memories to retrieve
+    MAX_SEARCH_LIMIT = 20  # Maximum number of memories allowed in one search
     MIN_SEARCH_LIMIT = 1  # Minimum number of memories required
+    DEFAULT_SCORE_THRESHOLD = 0.7  # Minimum similarity score for relevant results
+    
+class DuplicateConstants:
+    """Constants related to duplicate detection and prevention."""
+    SIMILARITY_THRESHOLD = 0.90  # Threshold for considering memories as duplicates
+    MAX_DUPLICATE_CHECK_LIMIT = 100  # Maximum memories to check for duplicates
+    DUPLICATE_ACTION_SKIP = "skip"  # Skip adding duplicate memory
+    DUPLICATE_ACTION_MERGE = "merge"  # Merge with existing memory
+    DUPLICATE_ACTION_ADD = "add"  # Add anyway despite similarity
+
+class TemporalConstants:
+    """Constants related to temporal metadata and time-based queries."""
+    # Time periods for natural language queries
+    TEMPORAL_PERIODS = {
+        "today": 0,
+        "yesterday": 1,
+        "this_week": 7,
+        "last_week": 14,
+        "this_month": 30,
+        "last_month": 60,
+        "this_quarter": 90,
+        "last_quarter": 180
+    }
+    
+    # Day names for filtering
+    WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    
+    # Quarter definitions
+    QUARTERS = {
+        1: [1, 2, 3],    # Q1: Jan-Mar
+        2: [4, 5, 6],    # Q2: Apr-Jun
+        3: [7, 8, 9],    # Q3: Jul-Sep
+        4: [10, 11, 12]  # Q4: Oct-Dec
+    }
+
+class MetadataConstants:
+    """Constants related to memory metadata fields."""
+    # Core metadata fields
+    MEMORY_FIELD = "memory"
+    TIMESTAMP_FIELD = "timestamp"
+    TEMPORAL_FIELD = "temporal"
+    TAGS_FIELD = "tags"
+    PEOPLE_FIELD = "people_mentioned"
+    TOPIC_FIELD = "topic_category"
+    
+    # Temporal sub-fields
+    TEMPORAL_FIELDS = [
+        "day", "hour", "year", "month", "minute", "quarter",
+        "is_weekend", "day_of_week", "day_of_year", "week_of_year"
+    ]
+    
+    # Default topic categories
+    DEFAULT_TOPICS = [
+        "work", "personal", "learning", "health", "finance", 
+        "technology", "family", "friends", "projects", "ideas"
+    ]
+
+class SearchFilters:
+    """Constants for different types of search filters."""
+    # Filter types
+    SEMANTIC_FILTER = "semantic"
+    TEMPORAL_FILTER = "temporal"
+    TAG_FILTER = "tags"
+    PEOPLE_FILTER = "people"
+    TOPIC_FILTER = "topic"
+    SCORE_FILTER = "score"
+    
+    # Temporal filter operators
+    TEMPORAL_OPERATORS = {
+        "equals": "=",
+        "greater_than": ">",
+        "less_than": "<",
+        "in_range": "between",
+        "in_list": "in"
+    }
 
 class DatabaseConstants:
     """Constants related to database configuration."""

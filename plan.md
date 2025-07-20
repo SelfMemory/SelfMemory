@@ -1,49 +1,56 @@
-# MCP Clean Code Refactoring Plan (Simplified)
+# Enhanced Personal Memory Management System
 
 ## Overview
-Apply Uncle Bob's Clean Code principles to improve the existing MCP memory server without over-engineering. Focus on readability, maintainability, and simplicity.
+Build a sophisticated personal memory system with duplicate prevention, rich temporal metadata, and hybrid search capabilities following Uncle Bob's clean code principles.
 
-## Phase 1: Naming and Code Clarity ✅ 
-- [x] 1.1 Fix function names: `add_memorys` → `add_memory`
-- [x] 1.2 Fix function names: `get_memorys` → `retrieve_memories` 
-- [x] 1.3 Replace meaningless variables (e.g., `a` → `retrieved_memories`)
-- [x] 1.4 Improve function and variable names for clarity
+## Refined Implementation Focus
 
-## Phase 2: Function Refactoring ✅
-- [x] 2.1 Split functions with multiple responsibilities
-- [x] 2.2 Remove print statements and add proper logging
-- [x] 2.3 Add input validation and error handling
-- [x] 2.4 Extract magic numbers to constants
-- [x] 2.5 Improve ID generation strategy
+### Phase 1: Enhanced Memory Storage ⭐⭐⭐
+- [✅] Rich temporal metadata structure (day, hour, quarter, is_weekend, etc.)
+- [✅] Enhanced payload structure with tags, people_mentioned, topic_category
+- [✅] Automatic timestamp processing and temporal data generation
+- [✅] Update add_memory to support rich metadata
 
-## Phase 3: Code Organization ✅
-- [x] 3.1 Clean up imports and remove unused code
-- [x] 3.2 Add proper type hints throughout
-- [x] 3.3 Add docstrings to functions
-- [x] 3.4 Organize constants in a cleaner way
+### Phase 2: Duplicate Prevention System ⭐⭐⭐
+- [✅] Pre-storage similarity check with 0.95 threshold
+- [✅] Smart duplicate handling (merge, skip, or notify)
+- [✅] Configurable similarity thresholds
+- [✅] Integration with memory addition workflow
 
-## Phase 4: Error Handling & Robustness ✅
-- [x] 4.1 Add try-catch blocks for database operations
-- [x] 4.2 Handle embedding generation failures
-- [x] 4.3 Validate inputs properly
-- [x] 4.4 Return consistent error messages
+### Phase 3: Hybrid Search Engine ⭐⭐⭐
+- [✅] Enhanced similarity search with metadata filtering
+- [✅] Temporal queries ("yesterday", "last week", "weekends", "Q3")
+- [✅] Tag-based filtering and search
+- [✅] People-mentioned search functionality
+- [✅] Topic category filtering
 
-## Phase 5: Final Cleanup ✅
-- [x] 5.1 Remove the over-engineered folder structure
-- [x] 5.2 Update server.py to use cleaned functions
-- [x] 5.3 Create simple mem-mcp-Memory.md documentation
-- [ ] 5.4 Test the refactored code
+### Phase 4: Advanced Search Tools
+- [✅] search_memories_enhanced() - Enhanced with all filters
+- [✅] temporal_search() - Natural language time queries
+- [✅] search_by_people() - Find memories by person
+- [✅] search_by_tags() - Search by tags
+- [✅] search_by_topic() - Search by category
+- [✅] add_memory_with_metadata() - Enhanced memory addition
 
-## Key Principles Being Applied
-- **Single Responsibility Principle**: Each class/function does one thing
-- **Open/Closed Principle**: Open for extension, closed for modification
-- **Dependency Inversion**: Depend on abstractions, not concretions
-- **Clean Architecture**: Domain → Application → Infrastructure → Interface
-- **Meaningful Names**: Functions and variables express intent clearly
-- **Small Functions**: Each function does one thing well
-- **Error Handling**: Proper exception handling strategy
+### Phase 5: Clean Code Architecture
+- [✅] Create temporal utility modules
+- [✅] Implement clean search interfaces
+- [✅] Add comprehensive error handling
+- [✅] Update constants and configuration
+
+### Phase 6: Documentation & Testing
+- [⏳] Update mem-mcp-Memory.md with new capabilities
+- [⏳] Create module documentation
+- [⏳] Test all search capabilities
+- [⏳] Validate duplicate prevention
 
 ## Progress Tracking
-- **Started**: 2025-01-19 15:57
-- **Current Phase**: Phase 1 - Project Structure & Setup
-- **Completion**: 0% (0/44 tasks completed)
+- ✅ = Completed
+- 🚧 = In Progress  
+- ⏳ = Pending
+- ❌ = Blocked/Issues
+
+## Notes
+- Maintain backward compatibility with existing tools
+- Follow clean code principles throughout
+- Ensure comprehensive error handling and logging

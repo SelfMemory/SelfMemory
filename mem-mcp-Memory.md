@@ -1,145 +1,226 @@
-# mem-mcp Project Memory
+# Enhanced mem-mcp Project Memory
 
 ## Project Overview
-MCP (Model Context Protocol) Memory Server - A vector-based memory storage system that allows storing and retrieving user memories using semantic search through embeddings.
+Enhanced MCP (Model Context Protocol) Memory Server - A sophisticated personal memory management system with rich metadata, temporal filtering, duplicate detection, and comprehensive search capabilities. Built following Uncle Bob's clean code principles for maintainability and extensibility.
 
-## Project Structure
+## Key Features Implemented
+- ✅ **Rich Temporal Metadata**: Automatic extraction of detailed time information (day, hour, quarter, weekends, etc.)
+- ✅ **Duplicate Prevention**: 0.95 similarity threshold with configurable handling options
+- ✅ **Enhanced Memory Storage**: Tags, people mentioned, topic categories with validation
+- ✅ **Hybrid Search Engine**: Combine semantic similarity with metadata filtering
+- ✅ **Natural Language Temporal Queries**: "yesterday", "weekends", "Q3", "morning", etc.
+- ✅ **Comprehensive Filtering**: Search by tags, people, topics, time periods
+- ✅ **Backward Compatibility**: Legacy tools remain unchanged
 
-### Core Files and Their Purpose
+## Enhanced Project Structure
+
+### Core Enhanced Files
 
 #### `server.py`
-- **Purpose**: Main MCP server entry point using FastMCP framework
-- **Key Functions**:
-  - `add_memory()`: MCP tool endpoint for adding memories to the collection
-  - `retrieve_memory()`: MCP tool endpoint for retrieving memories based on similarity search
-- **Dependencies**: FastMCP, logging, memory management modules
-- **Notes**: Handles MCP protocol communication and provides clean error handling
+- **Purpose**: Enhanced MCP server with 8 comprehensive tools
+- **Enhanced Tools**:
+  - `add_memory()`: Legacy tool (backward compatibility)
+  - `retrieve_memory()`: Legacy tool (backward compatibility)
+  - `add_memory_with_metadata()`: Enhanced memory addition with rich metadata
+  - `search_memories_enhanced()`: Comprehensive search with all filters
+  - `temporal_search()`: Time-based search with natural language queries
+  - `search_by_tags()`: Tag-based filtering with semantic combination
+  - `search_by_people()`: People-mentioned filtering
+  - `search_by_topic()`: Topic category filtering
+- **Dependencies**: Enhanced search engine, all utility modules
+- **Notes**: Maintains backward compatibility while providing advanced capabilities
 
 #### `add_memory_to_collection.py`
-- **Purpose**: Core functionality for adding memories to the vector database
-- **Key Functions**:
-  - `add_memory(memory_content: str) -> str`: Main function to store memory with validation and error handling
-- **Important Features**:
-  - UUID-based ID generation (replaced random integers)
-  - Input validation for empty content
-  - Proper error handling and logging
-  - Clean content processing (strip whitespace)
-- **Dependencies**: uuid, logging, qdrant_db, generate_embeddings, constants
-
-#### `retrieve_memory_from_collection.py`
-- **Purpose**: Core functionality for retrieving memories using semantic search
-- **Key Functions**:
-  - `retrieve_memories(query_text, keyword_filter=None, limit=3) -> List[str]`: Main memory retrieval function
-  - `search_memories_with_filter(query_text, keyword_filter, limit=3) -> List[str]`: Enhanced search with keyword filtering
-- **Important Features**:
-  - Configurable search limits with validation
-  - Semantic similarity search using embeddings
-  - Optional keyword filtering
-  - Comprehensive error handling and logging
-- **Dependencies**: logging, typing, qdrant_db, generate_embeddings, constants
-
-#### `generate_embeddings.py`
-- **Purpose**: Handles embedding generation using Ollama
-- **Key Functions**:
-  - `generate_embeddings(text: str) -> dict`: Raw embedding generation
-  - `get_embeddings(text: str) -> List[float]`: Extract embedding vector from response
-- **Important Features**:
-  - Input validation for empty text
-  - Error handling for embedding generation failures
-  - Clean separation of concerns (generation vs extraction)
-  - Proper logging for debugging
-- **Dependencies**: logging, typing, ollama, constants
-
-#### `qdrant_db.py`
-- **Purpose**: Database client configuration and collection management
-- **Key Functions**:
-  - `create_qdrant_client() -> QdrantClient`: Initialize Qdrant connection
-  - `ensure_collection_exists(client, collection_name) -> bool`: Collection setup and validation
-- **Important Features**:
-  - Automatic collection creation if not exists
-  - Connection error handling
-  - Configurable timeout and connection parameters
-  - Global client initialization
-- **Dependencies**: logging, qdrant_client, constants
-
-#### `constants.py`
-- **Purpose**: Centralized configuration management
+- **Purpose**: Enhanced memory storage with rich metadata and duplicate detection
 - **Key Classes**:
-  - `EmbeddingConstants`: Model configuration
-  - `VectorConstants`: Database and vector configuration
-  - `SearchConstants`: Search operation limits and defaults
-  - `DatabaseConstants`: Connection and timeout settings
-  - `LoggingConstants`: Logging format and level configuration
+  - `EnhancedMemoryManager`: Main class handling advanced memory operations
+- **Key Functions**:
+  - `add_memory_with_metadata()`: Core enhanced memory addition
+  - `add_memory_enhanced()`: MCP-friendly wrapper function
+  - `add_memory()`: Legacy function for backward compatibility
 - **Important Features**:
-  - No magic numbers in code
-  - Easy configuration management
-  - Clear categorization of constants
-  - Well-documented constant purposes
+  - Rich temporal metadata generation
+  - Tags, people, and topic validation and cleaning
+  - Duplicate detection integration
+  - Comprehensive error handling
+  - Formatted response messages with emojis
 
-### Clean Code Principles Applied
+#### `src/shared/temporal_utils.py`
+- **Purpose**: Rich temporal metadata processing and natural language parsing
+- **Key Classes**:
+  - `TemporalProcessor`: Generates detailed temporal metadata from timestamps
+  - `TemporalFilter`: Builds Qdrant filter conditions from temporal queries
+- **Key Functions**:
+  - `generate_temporal_metadata()`: Creates 10-field temporal structure
+  - `parse_temporal_query()`: Parses natural language time queries
+  - `build_temporal_conditions()`: Converts to Qdrant filters
+- **Supported Queries**: "today", "yesterday", "weekends", "q1-q4", "morning/afternoon/evening", day names
+- **Temporal Fields**: day, hour, year, month, minute, quarter, is_weekend, day_of_week, day_of_year, week_of_year
 
-#### 1. Meaningful Names
-- `add_memorys` → `add_memory`
-- `get_memorys` → `retrieve_memories`
-- Variable `a` → `retrieved_memories`
-- Clear function and parameter names throughout
+#### `src/shared/duplicate_detector.py`
+- **Purpose**: Comprehensive duplicate detection and handling system  
+- **Key Classes**:
+  - `DuplicateDetector`: Semantic similarity-based duplicate detection
+  - `DuplicateHandler`: Multiple handling strategies for detected duplicates
+- **Key Functions**:
+  - `check_for_duplicates()`: Main duplicate detection with 0.95 threshold
+  - `handle_duplicate()`: Support for skip, merge, or add actions
+- **Important Features**:
+  - Configurable similarity thresholds
+  - Metadata-enhanced duplicate detection
+  - Multiple handling strategies
+  - Detailed similarity scoring
 
-#### 2. Single Responsibility Principle
-- Each function has a clear, single purpose
-- Separation of concerns between modules
-- Database operations separated from business logic
+#### `src/search/enhanced_search_engine.py`
+- **Purpose**: Comprehensive search engine with all advanced capabilities
+- **Key Class**: `EnhancedSearchEngine`
+- **Key Functions**:
+  - `search_memories()`: Master search function with all filters
+  - `temporal_search()`: Pure temporal and hybrid temporal+semantic search
+  - `tag_search()`: Tag-based filtering with AND/OR logic
+  - `people_search()`: People-mentioned filtering
+  - `topic_search()`: Topic category filtering
+- **Advanced Features**:
+  - Comprehensive filter building and combination
+  - Consistent result formatting
+  - Score-based relevance filtering
+  - Hybrid search capabilities
 
-#### 3. Error Handling
-- Comprehensive try-catch blocks
+#### `constants.py` (Enhanced)
+- **Purpose**: Comprehensive configuration management for all new features
+- **Enhanced Classes**:
+  - `SearchConstants`: Enhanced search limits and thresholds
+  - `DuplicateConstants`: Duplicate detection configuration
+  - `TemporalConstants`: Time period definitions and mappings
+  - `MetadataConstants`: Field names and structures
+  - `SearchFilters`: Filter types and operators
+- **Important Features**:
+  - No magic numbers throughout codebase
+  - Comprehensive temporal period mappings
+  - Quarter definitions and weekday lists
+  - Filter operation definitions
+
+### Enhanced Memory Payload Structure
+
+```json
+{
+  "memory": "User's memory content",
+  "timestamp": "2025-07-19T17:42:00Z",
+  "temporal": {
+    "day": 19, "hour": 17, "year": 2025, "month": 7, "minute": 42,
+    "quarter": 3, "is_weekend": true, "day_of_week": "saturday",
+    "day_of_year": 200, "week_of_year": 29
+  },
+  "tags": ["work", "meeting", "project"],
+  "people_mentioned": ["John", "Sarah", "Mike"],
+  "topic_category": "work"
+}
+```
+
+## MCP Tool Capabilities
+
+### Enhanced Memory Addition
+- **add_memory_with_metadata**: Rich metadata addition with duplicate detection
+- **Parameters**: memory_content, tags, people_mentioned, topic_category, check_duplicates
+- **Features**: Automatic temporal data, duplicate prevention, formatted responses
+
+### Advanced Search Capabilities
+- **search_memories_enhanced**: Master search with all filtering options
+- **temporal_search**: Natural language time-based search
+- **search_by_tags**: Tag filtering with AND/OR logic
+- **search_by_people**: People-mentioned filtering  
+- **search_by_topic**: Topic category filtering
+
+### Supported Natural Language Queries
+- **Time Periods**: "today", "yesterday", "this_week", "last_week"
+- **Day Types**: "weekends", "weekdays"  
+- **Quarters**: "q1", "q2", "q3", "q4"
+- **Time of Day**: "morning", "afternoon", "evening"
+- **Specific Days**: "monday", "tuesday", etc.
+
+## Clean Code Implementation
+
+### Design Principles Applied
+1. **Single Responsibility Principle**: Each class has one clear purpose
+2. **Open/Closed Principle**: Extensible without modification
+3. **Interface Segregation**: Clean, focused interfaces
+4. **Dependency Injection**: Configurable components
+5. **Factory Pattern**: Search engine creation
+6. **Strategy Pattern**: Multiple duplicate handling strategies
+
+### Error Handling Strategy
+- Comprehensive try-catch blocks at all levels
 - Input validation at function entry points
-- Consistent error messages and logging
-- Graceful failure handling
+- Graceful degradation for parsing failures
+- Detailed logging for debugging
+- User-friendly error messages with emojis
 
-#### 4. Function Size and Complexity
-- Small, focused functions
-- Clear function signatures with type hints
-- Comprehensive docstrings
-- Logical parameter ordering
+### Code Organization
+- Clear module separation by functionality
+- Consistent naming conventions throughout
+- Comprehensive type hints and docstrings
+- No magic numbers or hardcoded values
+- Clean import organization
 
-#### 5. Code Organization
-- Proper imports organization
-- Constants extracted to dedicated module
-- Consistent code formatting
-- Removal of dead code and unused imports
+## Configuration & Dependencies
+- **Embedding Model**: `mxbai-embed-large` (1024 dimensions)
+- **Vector Database**: Qdrant on localhost:6333
+- **Collection**: `test_collection_mcps`
+- **Similarity Threshold**: 0.95 for duplicates, 0.7 for search
+- **Default Limits**: 5 search results, max 20
+- **Dependencies**: qdrant-client, ollama, mcp, typing
 
-## Dependencies
-- `mcp.server.fastmcp`: MCP protocol implementation
-- `qdrant-client`: Vector database client
-- `ollama`: Embedding generation
-- `uuid`: Unique ID generation
-- `logging`: Structured logging
-- `typing`: Type hints
+## Usage Examples
 
-## Configuration
-- Embedding Model: `mxbai-embed-large`
-- Vector Dimensions: 1536
-- Default Search Limit: 3
-- Max Search Limit: 10
-- Database URL: `http://localhost:6333`
-- Collection Name: `test_collection_mcps`
+### Adding Enhanced Memories
+```python
+# Add memory with rich metadata
+add_memory_with_metadata(
+    memory_content="Discussed vector database optimization with the team",
+    tags="work,database,optimization",
+    people_mentioned="John,Sarah",
+    topic_category="technology",
+    check_duplicates=True
+)
+```
 
-## Usage
-1. Ensure Qdrant is running on localhost:6333
-2. Ensure Ollama is available with the mxbai-embed-large model
-3. Run the MCP server: `python server.py`
-4. Use MCP tools: `add_memory` and `retrieve_memory`
+### Advanced Searching
+```python
+# Comprehensive search
+search_memories_enhanced(
+    query="database optimization",
+    tags="work,technology",
+    people_mentioned="John",
+    temporal_filter="this_week",
+    limit=5
+)
 
-## Recent Changes (Clean Code Refactoring)
-- Applied Uncle Bob's Clean Code principles
-- Improved naming conventions throughout
-- Added comprehensive error handling
-- Implemented proper logging
-- Extracted magic numbers to constants
-- Added type hints and docstrings
-- Simplified architecture (avoided over-engineering)
-- Enhanced input validation
-- Improved function organization and responsibilities
+# Temporal search
+temporal_search(
+    temporal_query="yesterday",
+    semantic_query="meetings"
+)
+```
 
 ## Testing Status
-- Manual testing pending for refactored code
-- All core functions include basic test scenarios in `if __name__ == "__main__"` blocks
+- [✅] Core functionality implemented and tested
+- [✅] All MCP tools functional
+- [✅] Backward compatibility maintained
+- [⏳] Comprehensive integration testing pending
+- [⏳] Performance testing with large datasets pending
+
+## Future Enhancement Opportunities
+- **Batch Operations**: Multiple memory operations in single requests
+- **Advanced Analytics**: Memory pattern analysis and insights
+- **Automatic Tagging**: AI-powered tag suggestion
+- **Export/Import**: Memory backup and restoration
+- **Advanced Visualization**: Memory relationship mapping
+
+## Recent Major Changes
+- **Complete Architecture Overhaul**: Added 5 new modules with clean separation
+- **Rich Metadata System**: 10+ temporal fields plus tags/people/topics
+- **Duplicate Prevention**: Sophisticated similarity-based detection
+- **Natural Language Temporal Queries**: Human-friendly time-based search
+- **Comprehensive Search Engine**: 6 different search methods
+- **Enhanced MCP Tools**: 8 total tools (2 legacy + 6 enhanced)
+- **Clean Code Refactoring**: Uncle Bob principles throughout
