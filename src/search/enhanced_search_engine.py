@@ -15,7 +15,7 @@ from constants import (
     TemporalConstants,
     SearchFilters,
 )
-from qdrant_db import client
+from qdrant_db import get_qdrant_client, ensure_user_collection_exists
 from generate_embeddings import get_embeddings
 from src.shared.temporal_utils import TemporalProcessor, TemporalFilter
 
@@ -36,6 +36,7 @@ class EnhancedSearchEngine:
     def search_memories(
         self,
         query: str,
+        user_id: str,
         limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
         score_threshold: float = SearchConstants.DEFAULT_SCORE_THRESHOLD,
         tags: List[str] = None,
@@ -92,9 +93,13 @@ class EnhancedSearchEngine:
                 temporal_filter=temporal_filter,
             )
 
+            # Get user collection name and client
+            collection_name = ensure_user_collection_exists(user_id)
+            client = get_qdrant_client()
+            
             # Execute search
             search_result = client.query_points(
-                collection_name=VectorConstants.COLLECTION_NAME,
+                collection_name=collection_name,
                 query=query_vector,
                 limit=limit,
                 score_threshold=score_threshold,
@@ -116,6 +121,7 @@ class EnhancedSearchEngine:
     def temporal_search(
         self,
         temporal_query: str,
+        user_id: str,
         semantic_query: str = None,
         limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
     ) -> List[Dict[str, Any]]:
@@ -149,11 +155,15 @@ class EnhancedSearchEngine:
                 temporal_filters
             )
 
+            # Get user collection name and client
+            collection_name = ensure_user_collection_exists(user_id)
+            client = get_qdrant_client()
+
             if semantic_query:
                 # Hybrid search: temporal + semantic
                 query_vector = get_embeddings(semantic_query.strip())
                 search_result = client.query_points(
-                    collection_name=VectorConstants.COLLECTION_NAME,
+                    collection_name=collection_name,
                     query=query_vector,
                     limit=limit,
                     query_filter=Filter(**filter_conditions)
@@ -164,7 +174,7 @@ class EnhancedSearchEngine:
             else:
                 # Pure temporal search (scroll with filter)
                 search_result = client.scroll(
-                    collection_name=VectorConstants.COLLECTION_NAME,
+                    collection_name=collection_name,
                     scroll_filter=Filter(**filter_conditions)
                     if filter_conditions
                     else None,
@@ -183,6 +193,7 @@ class EnhancedSearchEngine:
     def tag_search(
         self,
         tags: List[str],
+        user_id: str,
         semantic_query: str = None,
         match_all_tags: bool = False,
         limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
@@ -218,11 +229,15 @@ class EnhancedSearchEngine:
             else:
                 tag_filter = Filter(should=tag_conditions)
 
+            # Get user collection name and client
+            collection_name = ensure_user_collection_exists(user_id)
+            client = get_qdrant_client()
+
             if semantic_query:
                 # Hybrid: semantic + tag filtering
                 query_vector = get_embeddings(semantic_query.strip())
                 search_result = client.query_points(
-                    collection_name=VectorConstants.COLLECTION_NAME,
+                    collection_name=collection_name,
                     query=query_vector,
                     limit=limit,
                     query_filter=tag_filter,
@@ -231,7 +246,7 @@ class EnhancedSearchEngine:
             else:
                 # Pure tag search
                 search_result = client.scroll(
-                    collection_name=VectorConstants.COLLECTION_NAME,
+                    collection_name=collection_name,
                     scroll_filter=tag_filter,
                     limit=limit,
                     with_payload=True,
@@ -248,6 +263,7 @@ class EnhancedSearchEngine:
     def people_search(
         self,
         people: List[str],
+        user_id: str,
         semantic_query: str = None,
         limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
     ) -> List[Dict[str, Any]]:
@@ -277,10 +293,14 @@ class EnhancedSearchEngine:
 
             people_filter = Filter(should=people_conditions)  # OR logic for people
 
+            # Get user collection name and client
+            collection_name = ensure_user_collection_exists(user_id)
+            client = get_qdrant_client()
+
             if semantic_query:
                 query_vector = get_embeddings(semantic_query.strip())
                 search_result = client.query_points(
-                    collection_name=VectorConstants.COLLECTION_NAME,
+                    collection_name=collection_name,
                     query=query_vector,
                     limit=limit,
                     query_filter=people_filter,
@@ -288,7 +308,7 @@ class EnhancedSearchEngine:
                 ).points
             else:
                 search_result = client.scroll(
-                    collection_name=VectorConstants.COLLECTION_NAME,
+                    collection_name=collection_name,
                     scroll_filter=people_filter,
                     limit=limit,
                     with_payload=True,
@@ -305,6 +325,7 @@ class EnhancedSearchEngine:
     def topic_search(
         self,
         topic_category: str,
+        user_id: str,
         semantic_query: str = None,
         limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
     ) -> List[Dict[str, Any]]:
@@ -332,10 +353,14 @@ class EnhancedSearchEngine:
                 ]
             )
 
+            # Get user collection name and client
+            collection_name = ensure_user_collection_exists(user_id)
+            client = get_qdrant_client()
+
             if semantic_query:
                 query_vector = get_embeddings(semantic_query.strip())
                 search_result = client.query_points(
-                    collection_name=VectorConstants.COLLECTION_NAME,
+                    collection_name=collection_name,
                     query=query_vector,
                     limit=limit,
                     query_filter=topic_filter,
@@ -343,7 +368,7 @@ class EnhancedSearchEngine:
                 ).points
             else:
                 search_result = client.scroll(
-                    collection_name=VectorConstants.COLLECTION_NAME,
+                    collection_name=collection_name,
                     scroll_filter=topic_filter,
                     limit=limit,
                     with_payload=True,

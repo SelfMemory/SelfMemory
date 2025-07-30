@@ -76,10 +76,48 @@ def ensure_collection_exists(client: QdrantClient, collection_name: str) -> bool
         raise Exception(f"Collection management failed: {str(e)}")
 
 
-# Initialize the global client
+def get_qdrant_client() -> QdrantClient:
+    """
+    Get a Qdrant client instance. Creates new client each time for thread safety.
+    
+    Returns:
+        QdrantClient: Qdrant client instance
+    """
+    return create_qdrant_client()
+
+
+def ensure_user_collection_exists(user_id: str) -> str:
+    """
+    Ensure that the user-specific collection exists, create it if it doesn't.
+    
+    Args:
+        user_id: User identifier to create collection for
+        
+    Returns:
+        str: Name of the user's collection
+        
+    Raises:
+        Exception: If collection creation fails
+    """
+    from user_management import user_manager
+    
+    # Validate user and get collection name
+    if not user_manager.is_valid_user(user_id):
+        raise ValueError(f"Invalid or unauthorized user_id: {user_id}")
+    
+    collection_name = user_manager.get_collection_name(user_id)
+    
+    # Create client and ensure collection exists
+    client = get_qdrant_client()
+    ensure_collection_exists(client, collection_name)
+    
+    return collection_name
+
+
+# Initialize the global client for basic operations
 try:
     client = create_qdrant_client()
-    ensure_collection_exists(client, VectorConstants.COLLECTION_NAME)
+    logger.info("Qdrant client initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize Qdrant database: {str(e)}")
     raise

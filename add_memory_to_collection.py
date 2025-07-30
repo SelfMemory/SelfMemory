@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
-from qdrant_db import client
+from qdrant_db import get_qdrant_client, ensure_user_collection_exists
 from generate_embeddings import get_embeddings
 from qdrant_client.models import PointStruct
 from constants import VectorConstants, MetadataConstants, DuplicateConstants
@@ -33,6 +33,7 @@ class EnhancedMemoryManager:
     def add_memory_with_metadata(
         self,
         memory_content: str,
+        user_id: str,
         tags: List[str] = None,
         people_mentioned: List[str] = None,
         topic_category: str = None,
@@ -100,13 +101,17 @@ class EnhancedMemoryManager:
                 memory_content.strip(), current_time, temporal_data, metadata
             )
 
+            # Ensure user collection exists and get collection name
+            collection_name = ensure_user_collection_exists(user_id)
+            
             # Generate embedding and store
             memory_id = str(uuid.uuid4())
             embedding_vector = get_embeddings(memory_content.strip())
 
-            # Store in Qdrant
+            # Get client and store in user-specific collection
+            client = get_qdrant_client()
             client.upsert(
-                collection_name=VectorConstants.COLLECTION_NAME,
+                collection_name=collection_name,
                 wait=True,
                 points=[
                     PointStruct(id=memory_id, vector=embedding_vector, payload=payload)
@@ -235,6 +240,7 @@ class EnhancedMemoryManager:
 # Enhanced function for MCP tools
 def add_memory_enhanced(
     memory_content: str = Field(..., description="Memory text content to store"),
+    user_id: str = Field(..., description="User identifier for memory isolation"),
     tags: str = Field("", description="Comma-separated tags (e.g., 'project,meeting')"),
     people_mentioned: str = Field("", description="Comma-separated names"),
     topic_category: str = Field("", description="Category or topic"),
@@ -263,6 +269,7 @@ def add_memory_enhanced(
         manager = EnhancedMemoryManager()
         result = manager.add_memory_with_metadata(
             memory_content=memory_content,
+            user_id=user_id,
             tags=tag_list,
             people_mentioned=people_list,
             topic_category=category,

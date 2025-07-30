@@ -1,7 +1,7 @@
 # mem-mcp Project Memory
 
 ## Project Overview
-Enhanced Memory MCP Server with SSE (Server-Sent Events) transport support for remote client connections.
+Enhanced Memory MCP Server with SSE (Server-Sent Events) transport support for remote client connections and multi-user functionality for alpha testing.
 
 ## Key Files and Purpose
 
@@ -102,6 +102,52 @@ Enhanced Memory MCP Server with SSE (Server-Sent Events) transport support for r
 - **Added:** starlette, uvicorn, mcp[cli], httpx
 - **Purpose:** Enable SSE transport and web server functionality
 - **Maintains:** All existing functionality (qdrant-client, ollama, etc.)
+
+## Multi-User Functionality (Alpha Testing)
+
+### 4. Multi-User Support Implementation
+- **Before:** Single collection for all memories (`test_collection_mcps`)
+- **After:** User-specific collections (`memories_{user_id}`) for complete isolation
+
+### User Management System
+- **users.json**
+  - Static list of approved alpha testers
+  - Easy to add new users for testing
+  - Format: `{"alpha_users": ["alice", "bob", "charlie", ...]}`
+
+- **user_management.py**
+  - `UserManager` class for user validation
+  - `is_valid_user(user_id)` - validates against approved list
+  - `get_collection_name(user_id)` - returns `memories_{user_id}`
+  - `add_user(user_id)` - for future dynamic user addition
+
+### URL Structure Changes
+- **Before:** `https://memory.tailb75d54.ts.net/sse`
+- **After:** `https://memory.tailb75d54.ts.net/{user_id}/sse`
+- **Example:** `https://memory.tailb75d54.ts.net/alice/sse`
+
+### Database Isolation
+- **User-Specific Collections:** Each user gets their own Qdrant collection
+- **Dynamic Creation:** Collections created automatically for valid users
+- **Complete Isolation:** No cross-user data access or contamination
+
+### Alpha Tester Onboarding
+```bash
+# Alice's setup
+npx install-mcp https://memory.tailb75d54.ts.net/alice/sse --client claude
+
+# Bob's setup  
+npx install-mcp https://memory.tailb75d54.ts.net/bob/sse --client claude
+
+# Charlie's setup
+npx install-mcp https://memory.tailb75d54.ts.net/charlie/sse --client claude
+```
+
+### User Context Management
+- **Global State:** `_current_user_id` variable for request context
+- **Context Functions:** `get_current_user_id()` and `set_current_user_id()`
+- **Transparent Operation:** Users don't see multi-user complexity
+- **Same Experience:** All memory tools work identically for each user
 
 ## Usage Patterns
 

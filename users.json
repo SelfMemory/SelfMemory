@@ -1,0 +1,12 @@
+{
+  "alpha_users": [
+    "alice",
+    "bob",
+    "charlie",
+    "diana",
+    "test_user"
+  ],
+  "description": "Static list of approved alpha testers. Each user gets their own Qdrant collection: memories_{user_id}",
+  "created": "2025-01-31",
+  "version": "1.0"
+}

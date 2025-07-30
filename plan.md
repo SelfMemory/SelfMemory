@@ -74,13 +74,56 @@ python server.py --host localhost --port 3000 --debug
 4. **Standard Transport:** HTTP/SSE instead of stdio pipes
 5. **Cross-platform:** Works with Claude Desktop and custom clients
 
+## Multi-User Alpha Testing Implementation:
+
+### ✅ 4. Multi-User Support Added
+- **Created User Management System:**
+  - `users.json` - Static list of approved alpha testers
+  - `user_management.py` - UserManager class for validation and collection naming
+  - User validation against approved list
+  - Dynamic collection naming: `memories_{user_id}`
+
+- **Updated URL Routing:**
+  - Changed from `/sse` to `/{user_id}/sse` 
+  - User ID extraction from URL path parameters
+  - User validation middleware in SSE handler
+  - User context management with global state
+
+- **Modified Database Operations:**
+  - `qdrant_db.py` - Added user-specific collection functions
+  - `ensure_user_collection_exists()` for dynamic collection creation
+  - All database operations now use user-specific collections
+
+- **Updated Memory Functions:**
+  - `add_memory_to_collection.py` - Added user_id parameter
+  - `src/search/enhanced_search_engine.py` - All search methods support user_id
+  - User-isolated memory storage and retrieval
+
+- **Enhanced MCP Tools:**
+  - All MCP tools now use current user context
+  - `get_current_user_id()` function for context access
+  - Transparent user isolation (users don't see multi-user complexity)
+
+### Alpha Tester URLs:
+- Alice: `npx install-mcp https://memory.tailb75d54.ts.net/alice/sse --client claude`
+- Bob: `npx install-mcp https://memory.tailb75d54.ts.net/bob/sse --client claude`
+- Charlie: `npx install-mcp https://memory.tailb75d54.ts.net/charlie/sse --client claude`
+- Diana: `npx install-mcp https://memory.tailb75d54.ts.net/diana/sse --client claude`
+- Test User: `npx install-mcp https://memory.tailb75d54.ts.net/test_user/sse --client claude`
+
 ## Next Steps:
-- [ ] Test the server with actual clients
-- [ ] Deploy to cloud infrastructure if needed
-- [ ] Create client connection documentation
-- [ ] Consider adding authentication if required
+- [ ] Test the multi-user server with actual clients
+- [ ] Add new alpha testers to users.json as needed
+- [ ] Monitor user-specific collections in Qdrant
+- [ ] Future: Create web-based user registration system
+- [ ] Future: Add proper authentication and authorization
 
 ## Files Modified:
 - `pyproject.toml` - Updated dependencies for SSE support
-- `server.py` - Converted from simple MCP to SSE web server
-- `plan.md` - Created this tracking document
+- `server.py` - Converted from simple MCP to SSE web server + multi-user support
+- `users.json` - Static alpha testers list
+- `user_management.py` - User validation and collection management
+- `qdrant_db.py` - User-specific collection support
+- `add_memory_to_collection.py` - User-aware memory storage
+- `src/search/enhanced_search_engine.py` - User-aware search operations
+- `plan.md` - Updated tracking document

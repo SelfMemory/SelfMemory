@@ -1,2 +1,4 @@
 fastapi
 fastmcp
+qdrant_client
+ollama

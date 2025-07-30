@@ -17,6 +17,7 @@ from retrieve_memory_from_collection import (
 )
 # from add_memory_to_collection import add_memory as add_memory_func, 
 from src.search.enhanced_search_engine import EnhancedSearchEngine
+from user_management import user_manager
 from pydantic import Field
 
 # Setup logging
@@ -120,8 +121,10 @@ async def add_memory(
         Formatted result with memory ID and metadata details
     """
     try:
+        user_id = get_current_user_id()
         result = add_memory_enhanced(
             memory_content=memory_content,
+            user_id=user_id,
             tags=tags,
             people_mentioned=people_mentioned,
             topic_category=topic_category,
@@ -173,8 +176,10 @@ async def search_memories(
         category = topic_category.strip() if topic_category else None
         temporal = temporal_filter.strip() if temporal_filter else None
 
+        user_id = get_current_user_id()
         results = search_engine.search_memories(
             query=query,
+            user_id=user_id,
             limit=limit,
             tags=tag_list,
             people_mentioned=people_list,
@@ -257,8 +262,10 @@ async def temporal_search(
         Formatted temporal search results
     """
     try:
+        user_id = get_current_user_id()
         results = search_engine.temporal_search(
             temporal_query=temporal_query,
+            user_id=user_id,
             semantic_query=semantic_query if semantic_query.strip() else None,
             limit=limit,
         )
@@ -347,8 +354,10 @@ async def search_by_tags(
         if not tag_list:
             return "❌ Please provide at least one tag to search for."
 
+        user_id = get_current_user_id()
         results = search_engine.tag_search(
             tags=tag_list,
+            user_id=user_id,
             semantic_query=semantic_query if semantic_query.strip() else None,
             match_all_tags=match_all_tags,
             limit=limit,
@@ -430,8 +439,10 @@ async def search_by_people(
         if not people_list:
             return "❌ Please provide at least one person's name to search for."
 
+        user_id = get_current_user_id()
         results = search_engine.people_search(
             people=people_list,
+            user_id=user_id,
             semantic_query=semantic_query if semantic_query.strip() else None,
             limit=limit,
         )
@@ -510,8 +521,10 @@ async def search_by_topic(
         if not topic_category.strip():
             return "❌ Please provide a topic category to search for."
 
+        user_id = get_current_user_id()
         results = search_engine.topic_search(
             topic_category=topic_category.strip(),
+            user_id=user_id,
             semantic_query=semantic_query if semantic_query.strip() else None,
             limit=limit,
         )
@@ -556,11 +569,43 @@ async def search_by_topic(
         return f"❌ Error: Topic search failed - {str(e)}"
 
 
+# Global variable to store current user context
+_current_user_id = None
+
+def get_current_user_id() -> str:
+    """Get the current user ID from context."""
+    if _current_user_id is None:
+        raise ValueError("No user context available")
+    return _current_user_id
+
+def set_current_user_id(user_id: str) -> None:
+    """Set the current user ID in context."""
+    global _current_user_id
+    _current_user_id = user_id
+
 def create_starlette_app(mcp_server: Server, *, debug: bool = False) -> Starlette:
     """Create a Starlette application that can serve the provided MCP server with SSE."""
     sse = SseServerTransport("/messages/")
 
     async def handle_sse(request: Request) -> None:
+        # Extract user_id from URL path
+        path_params = request.path_params
+        user_id = path_params.get("user_id")
+        
+        if not user_id:
+            logger.error("No user_id found in request path")
+            raise ValueError("User ID is required in URL path")
+        
+        # Validate user
+        if not user_manager.is_valid_user(user_id):
+            logger.warning(f"Unauthorized access attempt with user_id: {user_id}")
+            raise ValueError(f"Unauthorized user: {user_id}")
+        
+        logger.info(f"SSE connection established for user: {user_id}")
+        
+        # Set user context
+        set_current_user_id(user_id)
+        
         async with sse.connect_sse(
                 request.scope,
                 request.receive,
@@ -575,7 +620,7 @@ def create_starlette_app(mcp_server: Server, *, debug: bool = False) -> Starlett
     return Starlette(
         debug=debug,
         routes=[
-            Route("/sse", endpoint=handle_sse),
+            Route("/{user_id}/sse", endpoint=handle_sse),
             Mount("/messages/", app=sse.handle_post_message),
         ],
     )
