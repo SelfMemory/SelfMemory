@@ -1,7 +1,16 @@
 [project]
 name = "mem-mcp"
 version = "0.1.0"
-description = "Add your description here"
+description = "Enhanced Memory MCP Server with SSE Support"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.116.1",
+    "mcp[cli]>=1.2.1",
+    "starlette>=0.45.0",
+    "uvicorn>=0.34.0",
+    "qdrant-client>=1.7.0",
+    "ollama>=0.2.0",
+    "pydantic>=2.5.0",
+    "httpx>=0.28.0",
+]

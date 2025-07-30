@@ -1,4 +1,3 @@
-
 import logging
 from typing import List
 
@@ -8,16 +7,17 @@ from constants import EmbeddingConstants
 logger = logging.getLogger(__name__)
 embedding_client = ollama.Client()
 
+
 def generate_embeddings(text: str) -> dict:
     """
     Generate embeddings for the given text using Ollama.
-    
+
     Args:
         text: The input text to generate embeddings for
-        
+
     Returns:
         Dictionary containing embeddings and metadata
-        
+
     Raises:
         Exception: If embedding generation fails
     """
@@ -31,29 +31,31 @@ def generate_embeddings(text: str) -> dict:
         logger.error(f"Failed to generate embeddings: {str(e)}")
         raise Exception(f"Embedding generation failed: {str(e)}")
 
+
 def get_embeddings(text: str) -> List[float]:
     """
     Get embeddings vector for the given text.
-    
+
     Args:
         text: The input text to get embeddings for
-        
+
     Returns:
         List of float values representing the embedding vector
-        
+
     Raises:
         ValueError: If text is empty
         Exception: If embedding generation fails
     """
     if not text or not text.strip():
         raise ValueError("Text cannot be empty")
-    
+
     try:
         embeddings_response = generate_embeddings(text.strip())
-        return embeddings_response['embeddings'][0]
+        return embeddings_response["embeddings"][0]
     except Exception as e:
         logger.error(f"Failed to extract embeddings: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     test_text = "Hello, this is a test."
