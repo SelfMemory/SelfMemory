@@ -1,10 +1,11 @@
 {
   "alpha_users": [
-    "alice",
-    "bob",
-    "charlie",
-    "diana",
-    "test_user"
+    "jd",
+    "karrtik",
+    "ashokgo",
+    "ashok",
+    "shrijayan",
+    "sashi"
   ],
   "description": "Static list of approved alpha testers. Each user gets their own Qdrant collection: memories_{user_id}",
   "created": "2025-01-31",
