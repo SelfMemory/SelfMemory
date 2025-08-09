@@ -2,3 +2,5 @@ fastapi
 fastmcp
 qdrant_client
 ollama
+pymongo
+python-dotenv

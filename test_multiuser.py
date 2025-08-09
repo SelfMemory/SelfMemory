@@ -6,7 +6,7 @@ Tests user validation, collection naming, and basic operations.
 
 import logging
 import sys
-from user_management import user_manager
+from mongodb_user_manager import get_mongo_user_manager, initialize_mongo_user_manager
 from qdrant_db import ensure_user_collection_exists
 
 # Setup logging
@@ -19,13 +19,24 @@ def test_user_management():
     print("Testing User Management System")
     print("=" * 50)
     
-    # Test valid users
-    valid_users = ["alice", "bob", "charlie", "diana", "test_user"]
+    # Initialize MongoDB user manager
+    try:
+        initialize_mongo_user_manager()
+        user_manager = get_mongo_user_manager()
+    except Exception as e:
+        print(f"❌ Failed to initialize MongoDB user manager: {e}")
+        return False
+    
+    # Test valid users (these would be ObjectIds from MongoDB in practice)
+    valid_users = ["6897681028c862aaf94ac294", "alice", "bob", "charlie", "diana", "test_user"]
     
     for user_id in valid_users:
         is_valid = user_manager.is_valid_user(user_id)
-        collection_name = user_manager.get_collection_name(user_id) if is_valid else "N/A"
-        print(f"User: {user_id:10} | Valid: {is_valid:5} | Collection: {collection_name}")
+        try:
+            collection_name = user_manager.get_collection_name(user_id) if is_valid else "N/A"
+        except:
+            collection_name = "N/A"
+        print(f"User: {user_id:26} | Valid: {is_valid:5} | Collection: {collection_name}")
     
     # Test invalid users
     invalid_users = ["john", "invalid_user", "hacker", ""]
@@ -67,13 +78,20 @@ def test_url_patterns():
     print("=" * 50)
     
     base_url = "https://memory.tailb75d54.ts.net"
-    approved_users = user_manager.get_approved_users()
+    # Since we're using MongoDB now, we don't have a static list of approved users
+    # Users are approved when they sign in via Google OAuth and get added to MongoDB
+    example_users = ["alice", "bob", "test_user"]
     
-    print("Alpha testers can use these URLs:")
-    for user_id in approved_users:
+    print("Example URLs for authenticated users:")
+    for user_id in example_users:
         url = f"{base_url}/{user_id}/sse"
-        install_cmd = f"npx install-mcp {url} --client claude"
+        install_cmd = f"npx -y supergateway --sse {url}"
         print(f"{user_id:10}: {install_cmd}")
+    
+    print("\nNote: Users must first:")
+    print("1. Sign in to the dashboard via Google OAuth")
+    print("2. Generate an API key")
+    print("3. Use the API key with MCP server")
     
     return True
 

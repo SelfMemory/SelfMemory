@@ -67,23 +67,14 @@ class EnhancedSearchEngine:
             ValueError: If query is empty or parameters are invalid
             Exception: If search fails
         """
-        if not query or not query.strip():
-            raise ValueError("Search query cannot be empty")
-
-        # if not (
-        #     SearchConstants.MIN_SEARCH_LIMIT
-        #     <= limit
-        #     <= SearchConstants.MAX_SEARCH_LIMIT
-        # ):
-        #     raise ValueError(
-        #         f"Limit must be between {SearchConstants.MIN_SEARCH_LIMIT} and {SearchConstants.MAX_SEARCH_LIMIT}"
-        #     )
+        # Handle empty query case - return all memories sorted by timestamp
+        is_empty_query = not query or not query.strip()
 
         try:
-            logger.info(f"Searching memories with query")
-
-            # Generate query embedding
-            query_vector = get_embeddings(query.strip())
+            if is_empty_query:
+                logger.info(f"Getting all memories (empty query) for user")
+            else:
+                logger.info(f"Searching memories with query")
 
             # Build comprehensive filter
             search_filter = self._build_comprehensive_filter(
@@ -97,16 +88,42 @@ class EnhancedSearchEngine:
             collection_name = ensure_user_collection_exists(user_id)
             client = get_qdrant_client()
             
-            # Execute search
-            search_result = client.query_points(
-                collection_name=collection_name,
-                query=query_vector,
-                limit=limit,
-                score_threshold=score_threshold,
-                query_filter=search_filter,
-                with_payload=include_payload,
-                with_vectors=include_vectors,
-            ).points
+            if is_empty_query:
+                # For empty queries, use pagination to get ALL memories
+                # This is much more scalable than limiting to just first batch
+                search_result = self._get_all_memories_paginated(
+                    client=client,
+                    collection_name=collection_name,
+                    search_filter=search_filter,
+                    max_memories=limit * 10,  # Allow up to 10x the requested limit for all memories
+                    include_payload=include_payload,
+                    include_vectors=include_vectors
+                )
+                
+                # Sort by timestamp in Python (newest first)
+                if search_result:
+                    search_result = sorted(
+                        search_result,
+                        key=lambda x: x.payload.get(MetadataConstants.TIMESTAMP_FIELD, ""),
+                        reverse=True  # Most recent first
+                    )
+                
+                # Apply the original limit after sorting
+                search_result = search_result[:limit]
+            else:
+                # Generate query embedding for semantic search
+                query_vector = get_embeddings(query.strip())
+                
+                # Execute semantic search
+                search_result = client.query_points(
+                    collection_name=collection_name,
+                    query=query_vector,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                    query_filter=search_filter,
+                    with_payload=include_payload,
+                    with_vectors=include_vectors,
+                ).points
 
             # Format results
             formatted_results = self._format_search_results(search_result)
@@ -454,6 +471,74 @@ class EnhancedSearchEngine:
         except Exception as e:
             logger.warning(f"Failed to build comprehensive filter: {str(e)}")
             return None
+
+    def _get_all_memories_paginated(
+        self,
+        client,
+        collection_name: str,
+        search_filter: Optional[Filter] = None,
+        max_memories: int = 1000,
+        batch_size: int = 100,
+        include_payload: bool = True,
+        include_vectors: bool = False,
+    ) -> List:
+        """
+        Get all memories using pagination (based on user's suggested approach).
+        This is much more scalable than loading everything at once.
+
+        Args:
+            client: Qdrant client instance
+            collection_name: Name of the collection
+            search_filter: Optional filter to apply
+            max_memories: Maximum memories to retrieve (safety limit)
+            batch_size: Number of memories per batch
+            include_payload: Whether to include payload data
+            include_vectors: Whether to include vector data
+
+        Returns:
+            List of all memory points
+        """
+        all_memories = []
+        offset = None
+        retrieved_count = 0
+
+        try:
+            logger.info(f"Starting paginated retrieval of all memories (max: {max_memories})")
+
+            while retrieved_count < max_memories:
+                response = client.scroll(
+                    collection_name=collection_name,
+                    limit=min(batch_size, max_memories - retrieved_count),
+                    offset=offset,
+                    scroll_filter=search_filter,
+                    with_payload=include_payload,
+                    with_vectors=include_vectors
+                )
+
+                points, next_offset = response[0], response[1]
+                
+                if not points:
+                    logger.info(f"No more memories found. Total retrieved: {retrieved_count}")
+                    break
+
+                all_memories.extend(points)
+                retrieved_count += len(points)
+                offset = next_offset
+
+                logger.debug(f"Retrieved batch of {len(points)} memories (total: {retrieved_count})")
+
+                # If next_offset is None, we've reached the end
+                if next_offset is None:
+                    logger.info(f"Reached end of collection. Total retrieved: {retrieved_count}")
+                    break
+
+            logger.info(f"Paginated retrieval complete: {len(all_memories)} memories")
+            return all_memories
+
+        except Exception as e:
+            logger.error(f"Paginated memory retrieval failed: {str(e)}")
+            # Return whatever we managed to get
+            return all_memories
 
     def _format_search_results(self, search_points: List) -> List[Dict[str, Any]]:
         """

@@ -99,9 +99,10 @@ def ensure_user_collection_exists(user_id: str) -> str:
     Raises:
         Exception: If collection creation fails
     """
-    from user_management import user_manager
+    from mongodb_user_manager import get_mongo_user_manager
     
-    # Validate user and get collection name
+    # Get MongoDB user manager and validate user
+    user_manager = get_mongo_user_manager()
     if not user_manager.is_valid_user(user_id):
         raise ValueError(f"Invalid or unauthorized user_id: {user_id}")
     
@@ -111,6 +112,7 @@ def ensure_user_collection_exists(user_id: str) -> str:
     client = get_qdrant_client()
     ensure_collection_exists(client, collection_name)
     
+    logger.info(f"Ensured Qdrant collection exists: {collection_name}")
     return collection_name
 
 
