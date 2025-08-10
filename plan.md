@@ -105,11 +105,11 @@ python server.py --host localhost --port 3000 --debug
   - Transparent user isolation (users don't see multi-user complexity)
 
 ### Alpha Tester URLs:
-- Alice: `npx install-mcp https://memory.tailb75d54.ts.net/alice/sse --client claude`
-- Bob: `npx install-mcp https://memory.tailb75d54.ts.net/bob/sse --client claude`
-- Charlie: `npx install-mcp https://memory.tailb75d54.ts.net/charlie/sse --client claude`
-- Diana: `npx install-mcp https://memory.tailb75d54.ts.net/diana/sse --client claude`
-- Test User: `npx install-mcp https://memory.tailb75d54.ts.net/test_user/sse --client claude`
+- Alice: `npx install-mcp https://inmemory.tailb75d54.ts.net/alice/sse --client claude`
+- Bob: `npx install-mcp https://inmemory.tailb75d54.ts.net/bob/sse --client claude`
+- Charlie: `npx install-mcp https://inmemory.tailb75d54.ts.net/charlie/sse --client claude`
+- Diana: `npx install-mcp https://inmemory.tailb75d54.ts.net/diana/sse --client claude`
+- Test User: `npx install-mcp https://inmemory.tailb75d54.ts.net/test_user/sse --client claude`
 
 ## Next Steps:
 - [ ] Test the multi-user server with actual clients

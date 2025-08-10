@@ -122,9 +122,9 @@ Enhanced Memory MCP Server with SSE (Server-Sent Events) transport support for r
   - `add_user(user_id)` - for future dynamic user addition
 
 ### URL Structure Changes
-- **Before:** `https://memory.tailb75d54.ts.net/sse`
-- **After:** `https://memory.tailb75d54.ts.net/{user_id}/sse`
-- **Example:** `https://memory.tailb75d54.ts.net/alice/sse`
+- **Before:** `https://inmemory.tailb75d54.ts.net/sse`
+- **After:** `https://inmemory.tailb75d54.ts.net/{user_id}/sse`
+- **Example:** `https://inmemory.tailb75d54.ts.net/alice/sse`
 
 ### Database Isolation
 - **User-Specific Collections:** Each user gets their own Qdrant collection
@@ -134,13 +134,13 @@ Enhanced Memory MCP Server with SSE (Server-Sent Events) transport support for r
 ### Alpha Tester Onboarding
 ```bash
 # Alice's setup
-npx install-mcp https://memory.tailb75d54.ts.net/alice/sse --client claude
+npx install-mcp https://inmemory.tailb75d54.ts.net/alice/sse --client claude
 
 # Bob's setup  
-npx install-mcp https://memory.tailb75d54.ts.net/bob/sse --client claude
+npx install-mcp https://inmemory.tailb75d54.ts.net/bob/sse --client claude
 
 # Charlie's setup
-npx install-mcp https://memory.tailb75d54.ts.net/charlie/sse --client claude
+npx install-mcp https://inmemory.tailb75d54.ts.net/charlie/sse --client claude
 ```
 
 ### User Context Management

@@ -12,19 +12,19 @@ Each alpha tester gets their own personalized URL:
 
 ```bash
 # Alice
-npx install-mcp https://memory.tailb75d54.ts.net/alice/sse --client claude
+npx install-mcp https://inmemory.tailb75d54.ts.net/alice/sse --client claude
 
 # Bob  
-npx install-mcp https://memory.tailb75d54.ts.net/bob/sse --client claude
+npx install-mcp https://inmemory.tailb75d54.ts.net/bob/sse --client claude
 
 # Charlie
-npx install-mcp https://memory.tailb75d54.ts.net/charlie/sse --client claude
+npx install-mcp https://inmemory.tailb75d54.ts.net/charlie/sse --client claude
 
 # Diana
-npx install-mcp https://memory.tailb75d54.ts.net/diana/sse --client claude
+npx install-mcp https://inmemory.tailb75d54.ts.net/diana/sse --client claude
 
 # Test User
-npx install-mcp https://memory.tailb75d54.ts.net/test_user/sse --client claude
+npx install-mcp https://inmemory.tailb75d54.ts.net/test_user/sse --client claude
 ```
 
 ## How It Works
@@ -76,7 +76,7 @@ python server.py --host 0.0.0.0 --port 8080 --debug
 
 2. Give them their URL:
 ```bash
-npx install-mcp https://memory.tailb75d54.ts.net/new_user/sse --client claude
+npx install-mcp https://inmemory.tailb75d54.ts.net/new_user/sse --client claude
 ```
 
 3. Their collection `memories_new_user` will be created automatically
@@ -84,11 +84,11 @@ npx install-mcp https://memory.tailb75d54.ts.net/new_user/sse --client claude
 ## Architecture Changes
 
 ### Before (Single User)
-- URL: `https://memory.tailb75d54.ts.net/sse`
+- URL: `https://inmemory.tailb75d54.ts.net/sse`
 - Collection: `test_collection_mcps` (shared)
 
 ### After (Multi-User)  
-- URL: `https://memory.tailb75d54.ts.net/{user_id}/sse`
+- URL: `https://inmemory.tailb75d54.ts.net/{user_id}/sse`
 - Collection: `memories_{user_id}` (isolated)
 
 ## Files Added/Modified
