@@ -559,11 +559,20 @@ class EnhancedSearchEngine:
             ):
                 continue
 
+            # Get timestamp with fallback for older memories
+            timestamp = point.payload.get(MetadataConstants.TIMESTAMP_FIELD)
+            
+            # Handle missing timestamps for older memories
+            if not timestamp:
+                logger.warning(f"Memory {point.id} missing timestamp, using fallback")
+                # Use a fallback date for memories without timestamps
+                timestamp = "2024-01-01T00:00:00.000000"  # Fallback for older memories
+                
             result = {
                 "id": point.id,
                 "score": getattr(point, "score", None),
                 "memory": point.payload[MetadataConstants.MEMORY_FIELD],
-                "timestamp": point.payload.get(MetadataConstants.TIMESTAMP_FIELD),
+                "timestamp": timestamp,
                 "tags": point.payload.get(MetadataConstants.TAGS_FIELD, []),
                 "people_mentioned": point.payload.get(
                     MetadataConstants.PEOPLE_FIELD, []

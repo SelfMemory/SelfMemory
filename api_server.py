@@ -249,6 +249,14 @@ async def get_memories_api(
         # Format response
         memories = []
         for result in paginated_results:
+            # Fix: Use "timestamp" field from search results, not "created_at"/"updated_at"
+            timestamp = result.get("timestamp", "")
+            
+            # DEBUG: Log what we're getting from search results
+            logger.info(f"DEBUG - Raw search result keys: {list(result.keys())}")
+            logger.info(f"DEBUG - Timestamp value: '{timestamp}' (type: {type(timestamp)})")
+            logger.info(f"DEBUG - Memory content: '{result.get('memory', 'NO_MEMORY')[:50]}...'")
+            
             memory_data = {
                 "id": result.get("id", "unknown"),
                 "memory_content": result.get("memory", ""),
@@ -258,8 +266,8 @@ async def get_memories_api(
                 "topic_category": result.get("topic_category", ""),
                 "temporal_data": result.get("temporal_data", {}),
                 "score": result.get("score", 0),
-                "created_at": result.get("created_at", ""),
-                "updated_at": result.get("updated_at", "")
+                "created_at": timestamp,  # Use timestamp field from search results
+                "updated_at": timestamp   # Use timestamp field from search results
             }
             memories.append(memory_data)
         
@@ -298,6 +306,7 @@ async def search_memories_api(
         # Ensure consistent format
         formatted_results = []
         for result in (results or []):
+            timestamp = result.get("timestamp", "")
             formatted_result = {
                 "id": result.get("id", "unknown"),
                 "memory_content": result.get("memory", ""),
@@ -306,7 +315,9 @@ async def search_memories_api(
                 "people_mentioned": result.get("people_mentioned", []),
                 "topic_category": result.get("topic_category", ""),
                 "temporal_data": result.get("temporal_data", {}),
-                "score": result.get("score", 0)
+                "score": result.get("score", 0),
+                "created_at": timestamp,  # Use timestamp field from search results
+                "updated_at": timestamp   # Use timestamp field from search results
             }
             formatted_results.append(formatted_result)
         
@@ -335,6 +346,7 @@ async def temporal_search_api(
         # Ensure consistent format
         formatted_results = []
         for result in (results or []):
+            timestamp = result.get("timestamp", "")
             formatted_result = {
                 "id": result.get("id", "unknown"),
                 "memory_content": result.get("memory", ""),
@@ -343,7 +355,9 @@ async def temporal_search_api(
                 "people_mentioned": result.get("people_mentioned", []),
                 "topic_category": result.get("topic_category", ""),
                 "temporal_data": result.get("temporal_data", {}),
-                "score": result.get("score", 0)
+                "score": result.get("score", 0),
+                "created_at": timestamp,  # Use timestamp field from search results
+                "updated_at": timestamp   # Use timestamp field from search results
             }
             formatted_results.append(formatted_result)
         
@@ -377,6 +391,7 @@ async def search_by_tags_api(
         # Ensure consistent format
         formatted_results = []
         for result in (results or []):
+            timestamp = result.get("timestamp", "")
             formatted_result = {
                 "id": result.get("id", "unknown"),
                 "memory_content": result.get("memory", ""),
@@ -385,7 +400,9 @@ async def search_by_tags_api(
                 "people_mentioned": result.get("people_mentioned", []),
                 "topic_category": result.get("topic_category", ""),
                 "temporal_data": result.get("temporal_data", {}),
-                "score": result.get("score", 0)
+                "score": result.get("score", 0),
+                "created_at": timestamp,  # Use timestamp field from search results
+                "updated_at": timestamp   # Use timestamp field from search results
             }
             formatted_results.append(formatted_result)
         
@@ -420,6 +437,7 @@ async def search_by_people_api(
         # Ensure consistent format
         formatted_results = []
         for result in (results or []):
+            timestamp = result.get("timestamp", "")
             formatted_result = {
                 "id": result.get("id", "unknown"),
                 "memory_content": result.get("memory", ""),
@@ -428,7 +446,9 @@ async def search_by_people_api(
                 "people_mentioned": result.get("people_mentioned", []),
                 "topic_category": result.get("topic_category", ""),
                 "temporal_data": result.get("temporal_data", {}),
-                "score": result.get("score", 0)
+                "score": result.get("score", 0),
+                "created_at": timestamp,  # Use timestamp field from search results
+                "updated_at": timestamp   # Use timestamp field from search results
             }
             formatted_results.append(formatted_result)
         
@@ -462,6 +482,7 @@ async def search_by_topic_api(
         # Ensure consistent format
         formatted_results = []
         for result in (results or []):
+            timestamp = result.get("timestamp", "")
             formatted_result = {
                 "id": result.get("id", "unknown"),
                 "memory_content": result.get("memory", ""),
@@ -470,7 +491,9 @@ async def search_by_topic_api(
                 "people_mentioned": result.get("people_mentioned", []),
                 "topic_category": result.get("topic_category", ""),
                 "temporal_data": result.get("temporal_data", {}),
-                "score": result.get("score", 0)
+                "score": result.get("score", 0),
+                "created_at": timestamp,  # Use timestamp field from search results
+                "updated_at": timestamp   # Use timestamp field from search results
             }
             formatted_results.append(formatted_result)
         
