@@ -71,7 +71,7 @@ class EnhancedMemoryManager:
             if check_duplicates:
                 is_duplicate, similar_memories = (
                     self.duplicate_detector.check_for_duplicates(
-                        memory_content, metadata
+                        memory_content, user_id, metadata
                     )
                 )
 

@@ -9,12 +9,12 @@ from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 from constants import (
     DuplicateConstants,
-    VectorConstants,
     MetadataConstants,
     SearchConstants,
 )
 from qdrant_db import client
 from generate_embeddings import get_embeddings
+from mongodb_user_manager import get_mongo_user_manager
 
 logger = logging.getLogger(__name__)
 
@@ -37,34 +37,38 @@ class DuplicateDetector:
         )
 
     def check_for_duplicates(
-        self, memory_content: str, metadata: Dict[str, Any] = None
+        self, memory_content: str, user_id: str, metadata: Dict[str, Any] = None
     ) -> Tuple[bool, List[Dict[str, Any]]]:
         """
-        Check if a memory is similar to existing memories.
+        Check if a memory is similar to existing memories for a specific user.
 
         Args:
             memory_content: The memory text to check for duplicates
+            user_id: User ID to get the correct collection
             metadata: Optional metadata for enhanced duplicate detection
 
         Returns:
             Tuple of (is_duplicate: bool, similar_memories: List[Dict])
 
         Raises:
-            ValueError: If memory content is empty
+            ValueError: If memory content is empty or user_id is invalid
             Exception: If duplicate detection fails
         """
         if not memory_content or not memory_content.strip():
             raise ValueError("Memory content cannot be empty")
+        
+        if not user_id:
+            raise ValueError("User ID is required for duplicate detection")
 
         try:
-            logger.info("Checking for duplicates")
+            logger.info(f"Checking for duplicates for user: {user_id}")
 
             # Generate embedding for the new memory
             query_vector = get_embeddings(memory_content.strip())
 
-            # Search for similar memories
+            # Search for similar memories in user's collection
             similar_memories = self._find_similar_memories(
-                query_vector, memory_content, metadata
+                query_vector, memory_content, user_id, metadata
             )
 
             # Check if any memory exceeds the similarity threshold
@@ -86,26 +90,32 @@ class DuplicateDetector:
         self,
         query_vector: List[float],
         memory_content: str,
+        user_id: str,
         metadata: Dict[str, Any] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Find memories similar to the query vector.
+        Find memories similar to the query vector in user's collection.
 
         Args:
             query_vector: Embedding vector of the memory to check
             memory_content: Original memory content for comparison
+            user_id: User ID to get the correct collection
             metadata: Optional metadata for enhanced filtering
 
         Returns:
             List of similar memories with scores and details
         """
         try:
+            # Get user-specific collection name
+            user_manager = get_mongo_user_manager()
+            collection_name = user_manager.get_collection_name(user_id)
+            
             # Build filter conditions if metadata is provided
             # query_filter = self._build_duplicate_filter(metadata) if metadata else None
 
-            # Search for similar memories
+            # Search for similar memories in user's collection
             search_result = client.query_points(
-                collection_name=VectorConstants.COLLECTION_NAME,
+                collection_name=collection_name,
                 query=query_vector,
                 limit=DuplicateConstants.MAX_DUPLICATE_CHECK_LIMIT,
                 score_threshold=SearchConstants.DEFAULT_SCORE_THRESHOLD,
@@ -300,11 +310,12 @@ if __name__ == "__main__":
     detector = DuplicateDetector()
 
     test_memory = "This is a test memory about Python programming"
+    test_user_id = "test_user_123"  # Test user ID
     test_metadata = {"tags": ["programming", "python"], "topic_category": "learning"}
 
     try:
         is_duplicate, similar_memories = detector.check_for_duplicates(
-            test_memory, test_metadata
+            test_memory, test_user_id, test_metadata
         )
         print(f"Is duplicate: {is_duplicate}")
         print(f"Similar memories found: {len(similar_memories)}")

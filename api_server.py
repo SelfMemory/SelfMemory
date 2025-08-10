@@ -95,7 +95,7 @@ class SearchByTopicRequest(BaseModel):
 # Authentication dependency
 def authenticate_api_key(authorization: str = Header(None)) -> str:
     """
-    Authenticate API key and return user_id.
+    Authenticate API key, ensure collection exists, and return user_id.
     
     Args:
         authorization: Authorization header with Bearer token
@@ -118,6 +118,17 @@ def authenticate_api_key(authorization: str = Header(None)) -> str:
     
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired API key")
+    
+    # Lazily ensure user collection exists on first API usage
+    # This prevents 'last_used' from being updated during key creation
+    try:
+        from qdrant_db import ensure_user_collection_exists
+        ensure_user_collection_exists(user_id)
+        logger.debug(f"Ensured collection exists for user {user_id}")
+    except Exception as e:
+        logger.warning(f"Failed to ensure collection for user {user_id}: {e}")
+        # Don't fail authentication if collection creation fails
+        # The specific operation will fail later with a more appropriate error
     
     return user_id
 

@@ -3,21 +3,24 @@ from typing import List, Optional
 
 from qdrant_db import client
 from generate_embeddings import get_embeddings
-from constants import VectorConstants, SearchConstants
+from constants import SearchConstants
+from mongodb_user_manager import get_mongo_user_manager
 
 logger = logging.getLogger(__name__)
 
 
 def retrieve_memories(
     query_text: str,
+    user_id: str,
     keyword_filter: Optional[str] = None,
     limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
 ) -> List[str]:
     """
-    Retrieve memories from the collection based on similarity to the query text.
+    Retrieve memories from user's collection based on similarity to the query text.
 
     Args:
         query_text: The text to search for similar memories
+        user_id: User ID to get the correct collection
         keyword_filter: Optional keyword to filter results (currently not fully implemented)
         limit: Maximum number of memories to retrieve (default: 3)
 
@@ -25,11 +28,14 @@ def retrieve_memories(
         List of memory strings that are most similar to the query
 
     Raises:
-        ValueError: If query text is empty
+        ValueError: If query text is empty or user_id is invalid
         Exception: If database operation fails
     """
     if not query_text or not query_text.strip():
         raise ValueError("Query text cannot be empty")
+    
+    if not user_id:
+        raise ValueError("User ID is required for memory retrieval")
 
     if limit <= 0 or limit > SearchConstants.MAX_SEARCH_LIMIT:
         raise ValueError(
@@ -37,12 +43,16 @@ def retrieve_memories(
         )
 
     try:
-        logger.info(f"Retrieving memories for query: '{query_text[:50]}...'")
+        logger.info(f"Retrieving memories for user {user_id}, query: '{query_text[:50]}...'")
 
+        # Get user-specific collection name
+        user_manager = get_mongo_user_manager()
+        collection_name = user_manager.get_collection_name(user_id)
+        
         query_vector = get_embeddings(query_text.strip())
 
         search_result = client.query_points(
-            collection_name=VectorConstants.COLLECTION_NAME,
+            collection_name=collection_name,
             query=query_vector,
             limit=limit,
             with_payload=True,  # Get all payload data
@@ -65,6 +75,7 @@ def retrieve_memories(
 
 def search_memories_with_filter(
     query_text: str,
+    user_id: str,
     keyword_filter: str,
     limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
 ) -> List[str]:
@@ -73,6 +84,7 @@ def search_memories_with_filter(
 
     Args:
         query_text: The text to search for similar memories
+        user_id: User ID to get the correct collection
         keyword_filter: Keyword to filter results by
         limit: Maximum number of memories to retrieve
 
@@ -81,7 +93,7 @@ def search_memories_with_filter(
     """
     # For now, this is a simple wrapper - can be enhanced to implement actual filtering
     print("limit", limit)
-    memories = retrieve_memories(query_text, limit=limit)
+    memories = retrieve_memories(query_text, user_id, limit=limit)
 
     if keyword_filter:
         # Simple keyword filtering - can be enhanced with more sophisticated matching
@@ -95,8 +107,9 @@ def search_memories_with_filter(
 
 if __name__ == "__main__":
     test_query = "This is a test memory."
+    test_user_id = "test_user_123"  # Test user ID
     try:
-        results = retrieve_memories(test_query)
+        results = retrieve_memories(test_query, test_user_id)
         print(f"Found {len(results)} memories:")
         for i, memory in enumerate(results, 1):
             print(f"{i}. {memory}")

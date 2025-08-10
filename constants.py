@@ -18,7 +18,8 @@ class VectorConstants:
     VECTOR_DIMENSION = 1024  # Dimension of the embedding vectors
     VECTOR_TYPE = "float"  # Type of the vector, typically 'float' for embeddings
     VECTOR_NAME = "embedding"  # Name of the vector field in the database
-    COLLECTION_NAME = "test_collection_mcps"  # Name of the collection in the database
+    # Collection names are now per-user via mongodb_user_manager.get_collection_name(user_id)
+    # Format: "memories_{user_id}"
 
 
 class SearchConstants:
