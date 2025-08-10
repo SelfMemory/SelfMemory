@@ -247,12 +247,12 @@ def add_memory_enhanced(
     check_duplicates: bool = Field(
         True, description="Check for duplicates (default: True)"
     ),
-) -> str:
+) -> Dict[str, Any]:
     """
     Enhanced add_memory function with rich metadata support for MCP tools.
 
     Returns:
-        Formatted result message
+        Dictionary with operation result, memory_id, and formatted message
     """
     try:
         # Parse comma-separated strings
@@ -292,11 +292,17 @@ def add_memory_enhanced(
                     if metadata.get("topic_category"):
                         response_parts.append(f"Topic: {metadata['topic_category']}")
 
-                # if result.get('temporal_data'):
-                #     temporal = result['temporal_data']
-                #     response_parts.append(f"Time: {temporal['day_of_week']}, Q{temporal['quarter']} {temporal['year']}")
+                formatted_message = "\n".join(response_parts)
 
-                return "\n".join(response_parts)
+                # **CRITICAL FIX**: Return structured data including memory_id
+                return {
+                    "success": True,
+                    "memory_id": result.get("memory_id"),  # Include the actual memory ID
+                    "message": formatted_message,
+                    "action": result.get("action"),
+                    "metadata": result.get("metadata", {}),
+                    "temporal_data": result.get("temporal_data", {})
+                }
 
             # Handle duplicate detection cases
             elif (
@@ -309,17 +315,40 @@ def add_memory_enhanced(
                     # f"💭 Existing similar memory:",
                     # f"   {result.get('existing_memory', 'N/A')[:200]}{'...' if len(result.get('existing_memory', '')) > 200 else ''}",
                 ]
-                return "\n".join(response_parts)
+                formatted_message = "\n".join(response_parts)
+
+                return {
+                    "success": True,
+                    "memory_id": None,  # No new memory created for duplicates
+                    "message": formatted_message,
+                    "action": result.get("action"),
+                    "reason": result.get("reason")
+                }
 
             # Handle other success cases (merge, etc.)
             else:
-                return f"✅ {result['message']}"
+                return {
+                    "success": True,
+                    "memory_id": result.get("memory_id"),
+                    "message": f"✅ {result['message']}",
+                    "action": result.get("action")
+                }
         else:
-            return f"⚠️ {result['message']}"
+            return {
+                "success": False,
+                "memory_id": None,
+                "message": f"⚠️ {result['message']}",
+                "error": result.get("error")
+            }
 
     except Exception as e:
         logger.error(f"Enhanced add_memory failed: {str(e)}")
-        return f"❌ Failed to add memory: {str(e)}"
+        return {
+            "success": False,
+            "memory_id": None,
+            "message": f"❌ Failed to add memory: {str(e)}",
+            "error": str(e)
+        }
 
 
 if __name__ == "__main__":

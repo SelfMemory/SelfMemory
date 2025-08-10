@@ -219,11 +219,27 @@ async def add_memory_api(
             topic_category=request.topic_category,
         )
         
-        return {
-            "success": True,
-            "message": "Memory added successfully",
-            "result": result
-        }
+        # **CRITICAL FIX**: Extract memory_id from structured result
+        if isinstance(result, dict):
+            # New structured response format
+            return {
+                "success": result.get("success", True),
+                "message": "Memory added successfully",
+                "memory_id": result.get("memory_id"),  # Include the actual memory ID
+                "result": result.get("message", "Memory processed"),
+                "action": result.get("action"),
+                "metadata": result.get("metadata", {}),
+            }
+        else:
+            # Backward compatibility with old string format (shouldn't happen now)
+            logger.warning("⚠️ Received old string format from add_memory_enhanced, this should not happen")
+            return {
+                "success": True,
+                "message": "Memory added successfully",
+                "result": result,
+                "memory_id": None  # No ID available in old format
+            }
+        
     except Exception as e:
         logger.error(f"Failed to add memory via Core API: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to add memory: {str(e)}")
@@ -279,6 +295,51 @@ async def get_memories_api(
     except Exception as e:
         logger.error(f"Failed to get memories via Core API: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get memories: {str(e)}")
+
+@app.delete("/v1/memories/{memory_id}")
+async def delete_memory_api(
+    memory_id: str,
+    user_id: str = Depends(authenticate_api_key)
+):
+    """Delete a specific memory via Core API."""
+    try:
+        logger.info(f"🗑️ DELETE API: Received delete request for memory {memory_id} by user {user_id}")
+        
+        if not memory_id or not memory_id.strip():
+            raise HTTPException(status_code=400, detail="Memory ID is required for deletion")
+        
+        # Import deletion function
+        from qdrant_db import delete_user_memory
+        
+        logger.info(f"🗑️ DELETE API: Calling delete_user_memory with user_id={user_id}, memory_id={memory_id.strip()}")
+        
+        # Delete the memory
+        success = delete_user_memory(user_id, memory_id.strip())
+        
+        if success:
+            logger.info(f"✅ DELETE API: Successfully deleted memory {memory_id} for user {user_id}")
+            return {
+                "success": True,
+                "message": f"Memory deleted successfully (ID: {memory_id})",
+                "memory_id": memory_id
+            }
+        else:
+            logger.error(f"❌ DELETE API: delete_user_memory returned False for memory {memory_id}")
+            raise HTTPException(status_code=500, detail=f"Failed to delete memory {memory_id}")
+            
+    except ValueError as e:
+        # User validation failed
+        logger.error(f"❌ DELETE API: Invalid user for memory deletion: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException as e:
+        # Re-raise HTTP exceptions as-is
+        logger.error(f"❌ DELETE API: HTTPException - Status: {e.status_code}, Detail: {e.detail}")
+        raise
+    except Exception as e:
+        logger.error(f"❌ DELETE API: Failed to delete memory {memory_id} via Core API: {str(e)}")
+        if "Memory not found" in str(e):
+            raise HTTPException(status_code=404, detail="Memory not found")
+        raise HTTPException(status_code=500, detail=f"Failed to delete memory: {str(e)}")
 
 @app.post("/v1/search")
 async def search_memories_api(

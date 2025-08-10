@@ -77,7 +77,7 @@ def test_url_patterns():
     print("Alpha Tester URL Patterns")
     print("=" * 50)
     
-    base_url = "https://memory.tailb75d54.ts.net"
+    base_url = "https://inmemory.tailb75d54.ts.net"
     # Since we're using MongoDB now, we don't have a static list of approved users
     # Users are approved when they sign in via Google OAuth and get added to MongoDB
     example_users = ["alice", "bob", "test_user"]
@@ -118,7 +118,7 @@ def main():
         print("\nTo start the multi-user server:")
         print("python server.py --host 0.0.0.0 --port 8080")
         print("\nAlpha testers can then connect with:")
-        print("npx install-mcp https://memory.tailb75d54.ts.net/{user_id}/sse --client claude")
+        print("npx install-mcp https://inmemory.tailb75d54.ts.net/{user_id}/sse --client claude")
         
         return True
         

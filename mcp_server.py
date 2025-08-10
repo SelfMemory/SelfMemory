@@ -72,7 +72,15 @@ async def add_memory(
             people_mentioned=people_mentioned,
             topic_category=topic_category,
         )
-        return result
+        
+        # **CRITICAL FIX**: Handle new dictionary format from add_memory_enhanced
+        if isinstance(result, dict):
+            # Extract the string message from the dictionary response
+            return result.get("message", "Memory processed successfully")
+        else:
+            # Backward compatibility with old string format (shouldn't happen now)
+            return result
+        
     except Exception as e:
         logger.error(f"Failed to add enhanced memory via MCP: {str(e)}")
         return f"❌ Error: Failed to add memory - {str(e)}"
@@ -505,6 +513,45 @@ async def search_by_topic(
     except Exception as e:
         logger.error(f"Topic search failed via MCP: {str(e)}")
         return f"❌ Error: Topic search failed - {str(e)}"
+
+@mcp.tool()
+async def delete_memory(
+    memory_id: str = Field(..., description="The ID of the memory to delete"),
+) -> str:
+    """
+    Delete a memory by its ID with proper user authentication.
+    
+    Args:
+        memory_id: The unique identifier of the memory to delete
+        
+    Returns:
+        Formatted result indicating success or failure
+    """
+    try:
+        if not memory_id or not memory_id.strip():
+            return "❌ Error: Memory ID is required for deletion"
+        
+        user_id = get_current_user_id()
+        
+        # Import deletion function
+        from qdrant_db import delete_user_memory
+        
+        # Delete the memory
+        success = delete_user_memory(user_id, memory_id.strip())
+        
+        if success:
+            logger.info(f"Successfully deleted memory {memory_id} for user {user_id}")
+            return f"✅ Memory deleted successfully (ID: {memory_id})"
+        else:
+            return f"❌ Error: Failed to delete memory {memory_id}"
+            
+    except ValueError as e:
+        # User validation failed
+        logger.error(f"Invalid user for memory deletion: {str(e)}")
+        return f"❌ Error: {str(e)}"
+    except Exception as e:
+        logger.error(f"Failed to delete memory {memory_id} via MCP: {str(e)}")
+        return f"❌ Error: Failed to delete memory - {str(e)}"
 
 def create_starlette_app(mcp_server: Server, *, debug: bool = False) -> Starlette:
     """Create a Starlette application that can serve the provided MCP server with SSE."""
