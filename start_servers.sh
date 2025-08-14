@@ -15,6 +15,15 @@ if [ ! -f "proxy_server.py" ]; then
     exit 1
 fi
 
+# Activate Python virtual environment
+echo "🐍 Activating Python virtual environment..."
+if [ -f ".venv/bin/activate" ]; then
+    source .venv/bin/activate
+    echo "   ✅ Virtual environment activated"
+else
+    echo "   ⚠️  Warning: .venv/bin/activate not found, using system Python"
+fi
+
 # Check if Python is available
 if ! command -v python3 &> /dev/null; then
     echo "❌ Error: Python3 is not installed or not in PATH"
@@ -69,7 +78,7 @@ start_server "Core-API-Server" "api_server.py" "8081"
 sleep 3
 
 # 2. MCP Server (port 8080) 
-start_server "MCP-Server" "server.py" "8080"
+start_server "MCP-Server" "enhanced_mcp_server.py" "8080"
 
 # Wait a moment for MCP Server to start
 sleep 3
@@ -102,7 +111,7 @@ check_health() {
 
 # Health checks
 check_health "Core API Server" "http://localhost:8081/v1/health"
-check_health "MCP Server" "http://localhost:8080/health"  
+check_health "MCP Server" "http://localhost:8080/v1/health"
 check_health "Reverse Proxy" "http://localhost:8000/health"
 
 echo ""
