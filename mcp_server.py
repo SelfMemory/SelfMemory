@@ -557,6 +557,15 @@ def create_starlette_app(mcp_server: Server, *, debug: bool = False) -> Starlett
     """Create a Starlette application that can serve the provided MCP server with SSE."""
     sse = SseServerTransport("/messages/")
 
+    async def health_check(request: Request):
+        """Health check endpoint."""
+        from starlette.responses import JSONResponse
+        return JSONResponse({
+            "status": "healthy",
+            "service": "InMemory MCP Server",
+            "version": "1.0.0"
+        })
+
     async def handle_sse(request: Request) -> None:
         # Get Authorization header for API key authentication (like previous version)
         headers = dict(request.headers)
@@ -589,12 +598,13 @@ def create_starlette_app(mcp_server: Server, *, debug: bool = False) -> Starlett
             await mcp_server.run(
                 read_stream,
                 write_stream,
-                mcp_server.create_initialization_options(),
+                mcp_server.create_initialization_options() if hasattr(mcp_server, 'create_initialization_options') else {},
             )
 
     return Starlette(
         debug=debug,
         routes=[
+            Route("/v1/health", endpoint=health_check),  # Health check endpoint
             Route("/sse", endpoint=handle_sse),  # Only GET for SSE
             Mount("/messages/", app=sse.handle_post_message),
         ],

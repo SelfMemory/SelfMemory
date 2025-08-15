@@ -145,6 +145,18 @@ class DatabaseConstants:
     RETRY_ATTEMPTS = 3
 
 
+class EncryptionConstants:
+    """Constants related to memory encryption."""
+
+    ENCRYPTION_SALT = "mem_mcp_salt_2024"
+    ENCRYPTED_FIELDS = [
+        "memory",
+        "tags", 
+        "people_mentioned",
+        "topic_category"
+    ]
+
+
 class LoggingConstants:
     """Constants related to logging configuration."""
 

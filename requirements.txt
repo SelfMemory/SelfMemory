@@ -1,6 +1,7 @@
 fastapi
 fastmcp
-qdrant_client
+qdrant-client
 ollama
 pymongo
 python-dotenv
+cryptography

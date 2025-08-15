@@ -5,6 +5,7 @@ from qdrant_db import client
 from generate_embeddings import get_embeddings
 from constants import SearchConstants
 from mongodb_user_manager import get_mongo_user_manager
+from src.security.encryption import decrypt_memory_payload
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,14 @@ def retrieve_memories(
         retrieved_memories = []
         for point in search_result:
             if "memory" in point.payload:
-                retrieved_memories.append(point.payload["memory"])
+                # Decrypt the payload before extracting memory content
+                try:
+                    decrypted_payload = decrypt_memory_payload(point.payload, user_id)
+                    retrieved_memories.append(decrypted_payload["memory"])
+                except Exception as decrypt_error:
+                    logger.error(f"Failed to decrypt memory {point.id}: {str(decrypt_error)}")
+                    # Skip this memory if decryption fails
+                    continue
             else:
                 logger.warning(f"Point {point.id} missing 'memory' in payload")
 

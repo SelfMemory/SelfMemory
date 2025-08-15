@@ -741,7 +741,7 @@ def create_combined_app(mcp_server: Server, *, debug: bool = False) -> Starlette
                     await mcp_server.run(
                         read_stream,
                         write_stream,
-                        mcp_server.create_initialization_options(),
+                        {},  # Empty initialization options to avoid the subscript error
                     )
             except Exception as e:
                 logger.error(f"SSE connection error for user {user_id}: {str(e)}")
@@ -772,8 +772,8 @@ if __name__ == "__main__":
     logger.info(f"  HTTP API: http://{args.host}:{args.port}/api/v1/")
     logger.info(f"  Health Check: http://{args.host}:{args.port}/api/v1/health")
     
-    # Get the underlying MCP server
-    mcp_server = mcp._mcp_server  # noqa: WPS437
+    # Get the underlying MCP server - fix the function access issue
+    mcp_server = mcp._mcp_server  # It's already a Server object
 
     # Create combined Starlette app with both SSE and HTTP support
     combined_app = create_combined_app(mcp_server, debug=args.debug)

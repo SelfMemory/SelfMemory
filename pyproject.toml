@@ -15,4 +15,6 @@ dependencies = [
     "httpx>=0.28.0",
     "pymongo>=4.10.0",
     "python-dotenv>=1.1.1",
+    "fastmcp>=2.11.3",
+    "cryptography>=45.0.6",
 ]

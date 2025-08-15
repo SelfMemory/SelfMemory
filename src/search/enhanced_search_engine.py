@@ -18,6 +18,7 @@ from constants import (
 from qdrant_db import get_qdrant_client, ensure_user_collection_exists
 from generate_embeddings import get_embeddings
 from src.shared.temporal_utils import TemporalProcessor, TemporalFilter
+from src.security.encryption import decrypt_memory_payload
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ class EnhancedSearchEngine:
                 ).points
 
             # Format results
-            formatted_results = self._format_search_results(search_result)
+            formatted_results = self._format_search_results(search_result, user_id)
 
             logger.info(f"Found {len(formatted_results)} memories matching criteria")
             return formatted_results
@@ -199,7 +200,7 @@ class EnhancedSearchEngine:
                     with_payload=True,
                 )[0]  # scroll returns (points, next_page_offset)
 
-            formatted_results = self._format_search_results(search_result)
+            formatted_results = self._format_search_results(search_result, user_id)
             logger.info(f"Temporal search found {len(formatted_results)} memories")
             return formatted_results
 
@@ -269,7 +270,7 @@ class EnhancedSearchEngine:
                     with_payload=True,
                 )[0]
 
-            formatted_results = self._format_search_results(search_result)
+            formatted_results = self._format_search_results(search_result, user_id)
             logger.info(f"Tag search found {len(formatted_results)} memories")
             return formatted_results
 
@@ -331,7 +332,7 @@ class EnhancedSearchEngine:
                     with_payload=True,
                 )[0]
 
-            formatted_results = self._format_search_results(search_result)
+            formatted_results = self._format_search_results(search_result, user_id)
             logger.info(f"People search found {len(formatted_results)} memories")
             return formatted_results
 
@@ -391,7 +392,7 @@ class EnhancedSearchEngine:
                     with_payload=True,
                 )[0]
 
-            formatted_results = self._format_search_results(search_result)
+            formatted_results = self._format_search_results(search_result, user_id)
             logger.info(f"Topic search found {len(formatted_results)} memories")
             return formatted_results
 
@@ -540,15 +541,16 @@ class EnhancedSearchEngine:
             # Return whatever we managed to get
             return all_memories
 
-    def _format_search_results(self, search_points: List) -> List[Dict[str, Any]]:
+    def _format_search_results(self, search_points: List, user_id: str) -> List[Dict[str, Any]]:
         """
-        Format search results into consistent structure.
+        Format search results into consistent structure with decryption.
 
         Args:
             search_points: Raw search results from Qdrant
+            user_id: User identifier for decryption
 
         Returns:
-            Formatted search results
+            Formatted search results with decrypted content
         """
         formatted_results = []
 
@@ -559,31 +561,40 @@ class EnhancedSearchEngine:
             ):
                 continue
 
-            # Get timestamp with fallback for older memories
-            timestamp = point.payload.get(MetadataConstants.TIMESTAMP_FIELD)
-            
-            # Handle missing timestamps for older memories
-            if not timestamp:
-                logger.warning(f"Memory {point.id} missing timestamp, using fallback")
-                # Use a fallback date for memories without timestamps
-                timestamp = "2024-01-01T00:00:00.000000"  # Fallback for older memories
+            try:
+                # Decrypt the payload before extracting data
+                decrypted_payload = decrypt_memory_payload(point.payload, user_id)
                 
-            result = {
-                "id": point.id,
-                "score": getattr(point, "score", None),
-                "memory": point.payload[MetadataConstants.MEMORY_FIELD],
-                "timestamp": timestamp,
-                "tags": point.payload.get(MetadataConstants.TAGS_FIELD, []),
-                "people_mentioned": point.payload.get(
-                    MetadataConstants.PEOPLE_FIELD, []
-                ),
-                "topic_category": point.payload.get(MetadataConstants.TOPIC_FIELD),
-                "temporal_data": point.payload.get(
-                    MetadataConstants.TEMPORAL_FIELD, {}
-                ),
-            }
+                # Get timestamp with fallback for older memories
+                timestamp = decrypted_payload.get(MetadataConstants.TIMESTAMP_FIELD)
+                
+                # Handle missing timestamps for older memories
+                if not timestamp:
+                    logger.warning(f"Memory {point.id} missing timestamp, using fallback")
+                    # Use a fallback date for memories without timestamps
+                    timestamp = "2024-01-01T00:00:00.000000"  # Fallback for older memories
+                    
+                result = {
+                    "id": point.id,
+                    "score": getattr(point, "score", None),
+                    "memory": decrypted_payload[MetadataConstants.MEMORY_FIELD],
+                    "timestamp": timestamp,
+                    "tags": decrypted_payload.get(MetadataConstants.TAGS_FIELD, []),
+                    "people_mentioned": decrypted_payload.get(
+                        MetadataConstants.PEOPLE_FIELD, []
+                    ),
+                    "topic_category": decrypted_payload.get(MetadataConstants.TOPIC_FIELD),
+                    "temporal_data": decrypted_payload.get(
+                        MetadataConstants.TEMPORAL_FIELD, {}
+                    ),
+                }
 
-            formatted_results.append(result)
+                formatted_results.append(result)
+                
+            except Exception as decrypt_error:
+                logger.error(f"Failed to decrypt memory {point.id}: {str(decrypt_error)}")
+                # Skip this memory if decryption fails
+                continue
 
         return formatted_results
 

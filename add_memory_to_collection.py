@@ -15,6 +15,7 @@ from qdrant_client.models import PointStruct
 from constants import VectorConstants, MetadataConstants, DuplicateConstants
 from src.shared.temporal_utils import TemporalProcessor
 from src.shared.duplicate_detector import DuplicateDetector, DuplicateHandler
+from src.security.encryption import encrypt_memory_payload
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class EnhancedMemoryManager:
 
             # Create comprehensive payload
             payload = self._create_enhanced_payload(
-                memory_content.strip(), current_time, temporal_data, metadata
+                memory_content.strip(), current_time, temporal_data, metadata, user_id
             )
 
             # Ensure user collection exists and get collection name
@@ -177,18 +178,20 @@ class EnhancedMemoryManager:
         timestamp: datetime,
         temporal_data: Dict[str, Any],
         metadata: Dict[str, Any],
+        user_id: str,
     ) -> Dict[str, Any]:
         """
-        Create comprehensive payload with all metadata.
+        Create comprehensive payload with all metadata and encryption.
 
         Args:
             memory_content: The memory text
             timestamp: Creation timestamp
             temporal_data: Rich temporal metadata
             metadata: Additional metadata (tags, people, etc.)
+            user_id: User identifier for encryption
 
         Returns:
-            Complete payload dictionary
+            Complete payload dictionary with encrypted sensitive fields
         """
         payload = {
             MetadataConstants.MEMORY_FIELD: memory_content,
@@ -205,7 +208,10 @@ class EnhancedMemoryManager:
             if field in metadata:
                 payload[field] = metadata[field]
 
-        return payload
+        # Encrypt sensitive fields before storage
+        encrypted_payload = encrypt_memory_payload(payload, user_id)
+        
+        return encrypted_payload
 
 
 # # Legacy function for backward compatibility

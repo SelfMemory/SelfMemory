@@ -127,7 +127,7 @@ async def proxy_request(
 
 @app.api_route("/mcp", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def proxy_mcp_root(request: Request):
-    """Proxy requests to /mcp to MCP server root."""
+    """Proxy requests to /mcp to MCP server root endpoint."""
     return await proxy_request(request, MCP_SERVER_URL, "/")
 
 @app.api_route("/mcp/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
@@ -150,7 +150,7 @@ async def health_check():
     """Health check endpoint for the proxy itself."""
     try:
         # Check if backend servers are accessible
-        mcp_health = await client.get(f"{MCP_SERVER_URL}/health", timeout=5.0)
+        mcp_health = await client.get(f"{MCP_SERVER_URL}/v1/health", timeout=5.0)
         core_health = await client.get(f"{CORE_API_SERVER_URL}/v1/health", timeout=5.0)
         
         return {
