@@ -151,24 +151,55 @@ def encrypt_memory_payload(payload: dict, user_id: str) -> dict:
     Returns:
         Payload with encrypted sensitive fields
     """
-    encryption = get_user_encryption(user_id)
-    encrypted_payload = payload.copy()
+    logger.info(f"🔐 encrypt_memory_payload called for user: {user_id}")
+    logger.info(f"🔐 Payload fields to encrypt: {list(payload.keys())}")
     
-    # Encrypt main memory content
-    if "memory" in payload:
-        encrypted_payload["memory"] = encryption.encrypt_text(payload["memory"])
-    
-    # Encrypt metadata fields
-    if "tags" in payload and payload["tags"]:
-        encrypted_payload["tags"] = encryption.encrypt_list(payload["tags"])
-    
-    if "people_mentioned" in payload and payload["people_mentioned"]:
-        encrypted_payload["people_mentioned"] = encryption.encrypt_list(payload["people_mentioned"])
-    
-    if "topic_category" in payload and payload["topic_category"]:
-        encrypted_payload["topic_category"] = encryption.encrypt_text(payload["topic_category"])
-    
-    return encrypted_payload
+    try:
+        logger.info(f"🔐 Creating encryption instance for user: {user_id}")
+        encryption = get_user_encryption(user_id)
+        logger.info(f"🔐 ✅ Encryption instance created successfully")
+        
+        encrypted_payload = payload.copy()
+        
+        # Encrypt main memory content
+        if "memory" in payload:
+            original_memory = payload["memory"]
+            logger.info(f"🔐 Encrypting main memory content (length: {len(original_memory)})")
+            logger.info(f"🔐 Original memory preview: '{original_memory[:50]}...'")
+            
+            encrypted_memory = encryption.encrypt_text(original_memory)
+            encrypted_payload["memory"] = encrypted_memory
+            
+            logger.info(f"🔐 ✅ Memory content encrypted (new length: {len(encrypted_memory)})")
+            logger.info(f"🔐 Encrypted memory preview: '{encrypted_memory[:50]}...'")
+        else:
+            logger.warning(f"🔐 ⚠️ No 'memory' field found in payload")
+        
+        # Encrypt metadata fields
+        if "tags" in payload and payload["tags"]:
+            logger.info(f"🔐 Encrypting tags: {payload['tags']}")
+            encrypted_payload["tags"] = encryption.encrypt_list(payload["tags"])
+            logger.info(f"🔐 ✅ Tags encrypted")
+        
+        if "people_mentioned" in payload and payload["people_mentioned"]:
+            logger.info(f"🔐 Encrypting people_mentioned: {payload['people_mentioned']}")
+            encrypted_payload["people_mentioned"] = encryption.encrypt_list(payload["people_mentioned"])
+            logger.info(f"🔐 ✅ People mentioned encrypted")
+        
+        if "topic_category" in payload and payload["topic_category"]:
+            logger.info(f"🔐 Encrypting topic_category: '{payload['topic_category']}'")
+            encrypted_payload["topic_category"] = encryption.encrypt_text(payload["topic_category"])
+            logger.info(f"🔐 ✅ Topic category encrypted")
+        
+        logger.info(f"🔐 ✅ encrypt_memory_payload completed successfully")
+        return encrypted_payload
+        
+    except Exception as e:
+        logger.error(f"🔐 ❌ CRITICAL: encrypt_memory_payload failed: {str(e)}")
+        logger.error(f"🔐 ❌ Exception type: {type(e).__name__}")
+        logger.error(f"🔐 ❌ This is a SECURITY ISSUE - payload will be returned unencrypted!")
+        # Re-raise the exception so the caller knows encryption failed
+        raise e
 
 
 def decrypt_memory_payload(payload: dict, user_id: str) -> dict:

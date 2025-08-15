@@ -193,6 +193,10 @@ class EnhancedMemoryManager:
         Returns:
             Complete payload dictionary with encrypted sensitive fields
         """
+        logger.info(f"🔐 Creating payload for encryption - user: {user_id}")
+        logger.info(f"🔐 Memory content length: {len(memory_content)} chars")
+        logger.info(f"🔐 Metadata fields: {list(metadata.keys()) if metadata else 'None'}")
+        
         payload = {
             MetadataConstants.MEMORY_FIELD: memory_content,
             MetadataConstants.TIMESTAMP_FIELD: timestamp.isoformat(),
@@ -208,10 +212,34 @@ class EnhancedMemoryManager:
             if field in metadata:
                 payload[field] = metadata[field]
 
-        # Encrypt sensitive fields before storage
-        encrypted_payload = encrypt_memory_payload(payload, user_id)
+        logger.info(f"🔐 Payload before encryption: {list(payload.keys())}")
+        logger.info(f"🔐 Starting encryption for user: {user_id}")
         
-        return encrypted_payload
+        try:
+            # Encrypt sensitive fields before storage
+            encrypted_payload = encrypt_memory_payload(payload, user_id)
+            logger.info(f"🔐 ✅ Encryption completed successfully")
+            logger.info(f"🔐 Encrypted payload keys: {list(encrypted_payload.keys())}")
+            
+            # Verify encryption worked by checking if content changed
+            original_memory = payload.get(MetadataConstants.MEMORY_FIELD, "")
+            encrypted_memory = encrypted_payload.get(MetadataConstants.MEMORY_FIELD, "")
+            
+            if original_memory == encrypted_memory:
+                logger.error(f"🔐 ❌ WARNING: Memory content appears UNENCRYPTED! Original==Encrypted")
+                logger.error(f"🔐 ❌ Original: '{original_memory[:50]}...'")
+                logger.error(f"🔐 ❌ Encrypted: '{encrypted_memory[:50]}...'")
+            else:
+                logger.info(f"🔐 ✅ Memory content successfully encrypted (content changed)")
+                logger.info(f"🔐 Original length: {len(original_memory)}, Encrypted length: {len(encrypted_memory)}")
+            
+            return encrypted_payload
+            
+        except Exception as e:
+            logger.error(f"🔐 ❌ ENCRYPTION FAILED: {str(e)}")
+            logger.error(f"🔐 ❌ Exception type: {type(e)}")
+            logger.error(f"🔐 ❌ Returning UNENCRYPTED payload - THIS IS A SECURITY ISSUE!")
+            return payload  # Return unencrypted as fallback but log the issue
 
 
 # # Legacy function for backward compatibility
