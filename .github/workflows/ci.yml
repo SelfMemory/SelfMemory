@@ -1,0 +1,377 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  release:
+    types: [ published ]
+
+jobs:
+  lint-and-format:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      
+      - name: Install dependencies
+        run: |
+          uv sync --dev
+      
+      - name: Run ruff linting
+        run: |
+          uv run ruff check .
+      
+      - name: Run ruff formatting check
+        run: |
+          uv run ruff format --check .
+      
+      - name: Run pre-commit hooks
+        run: |
+          uv run pre-commit run --all-files
+
+  test:
+    name: Test Suite
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.12', '3.13']
+      fail-fast: false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      
+      - name: Install dependencies
+        run: |
+          uv sync --dev --python ${{ matrix.python-version }}
+      
+      - name: Run unit tests
+        run: |
+          uv run pytest tests/unit/ -v --tb=short
+      
+      - name: Run integration tests
+        run: |
+          uv run pytest tests/integration/ -v --tb=short
+      
+      - name: Run example tests
+        run: |
+          uv run pytest tests/examples/ -v --tb=short
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-${{ matrix.os }}-${{ matrix.python-version }}
+          path: |
+            pytest-report.xml
+            coverage.xml
+
+  test-coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      
+      - name: Install dependencies
+        run: |
+          uv sync --dev
+          uv add pytest-cov --dev
+      
+      - name: Run tests with coverage
+        run: |
+          uv run pytest --cov=inmemory --cov-report=xml --cov-report=term-missing
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      
+      - name: Install dependencies
+        run: |
+          uv sync --dev
+      
+      - name: Run safety check
+        run: |
+          uv add safety --dev
+          uv run safety check --json || true
+      
+      - name: Run bandit security linter
+        run: |
+          uv add bandit --dev
+          uv run bandit -r inmemory/ -f json || true
+      
+      - name: Scan for secrets
+        run: |
+          # Check for potential secrets in code
+          ! find . -name "*.py" -not -path "./.venv/*" -exec grep -l "password.*=.*['\"].*['\"]" {} \;
+          ! find . -name "*.py" -not -path "./.venv/*" -exec grep -l "secret.*=.*['\"].*['\"]" {} \;
+          ! find . -name "*.py" -not -path "./.venv/*" -exec grep -l "key.*=.*['\"][^$].*['\"]" {} \;
+
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    needs: [lint-and-format, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      
+      - name: Install build dependencies
+        run: |
+          uv sync --dev
+      
+      - name: Build package
+        run: |
+          uv run python -m build
+      
+      - name: Check package
+        run: |
+          uv add twine --dev
+          uv run twine check dist/*
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-packages
+          path: dist/
+          retention-days: 30
+
+  test-install:
+    name: Test Installation
+    runs-on: ubuntu-latest
+    needs: [build]
+    strategy:
+      matrix:
+        install-type: ['basic', 'server', 'enterprise', 'full']
+    
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-packages
+          path: dist/
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      
+      - name: Test basic installation
+        if: matrix.install-type == 'basic'
+        run: |
+          uv pip install dist/*.whl
+          python -c "from inmemory import Memory; print('✅ Basic installation successful')"
+      
+      - name: Test server installation
+        if: matrix.install-type == 'server'
+        run: |
+          uv pip install "dist/*.whl[server]"
+          python -c "from inmemory import Memory; print('✅ Server installation successful')"
+      
+      - name: Test enterprise installation
+        if: matrix.install-type == 'enterprise'
+        run: |
+          uv pip install "dist/*.whl[enterprise]"
+          python -c "from inmemory import Memory; print('✅ Enterprise installation successful')"
+      
+      - name: Test full installation
+        if: matrix.install-type == 'full'
+        run: |
+          uv pip install "dist/*.whl[full]"
+          python -c "from inmemory import Memory; print('✅ Full installation successful')"
+
+  publish-test-pypi:
+    name: Publish to Test PyPI
+    runs-on: ubuntu-latest
+    needs: [build, test-install, security]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-packages
+          path: dist/
+      
+      - name: Publish to Test PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [build, test-install, security]
+    if: github.event_name == 'release' && github.event.action == 'published'
+    
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-packages
+          path: dist/
+      
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.event_name == 'release')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: yourusername/inmemory
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  update-docs:
+    name: Update Documentation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      
+      - name: Install dependencies
+        run: |
+          uv sync --dev
+          uv add mkdocs mkdocs-material --dev
+      
+      - name: Build documentation
+        run: |
+          # Create API documentation if needed
+          echo "Documentation build would go here"
+      
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        if: success()
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/build
+
+  notify:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: [publish-pypi]
+    if: github.event_name == 'release' && github.event.action == 'published'
+    
+    steps:
+      - name: Notify Discord/Slack
+        run: |
+          echo "🎉 InMemory ${{ github.event.release.tag_name }} has been released!"
+          echo "📦 Available on PyPI: https://pypi.org/project/inmemory/"

@@ -33,9 +33,7 @@ class MemoryRequest(BaseModel):
     memory_content: str = Field(..., description="The memory text to store")
     user_id: str = Field(..., description="User identifier")
     tags: str | None = Field("", description="Comma-separated tags")
-    people_mentioned: str | None = Field(
-        "", description="Comma-separated people names"
-    )
+    people_mentioned: str | None = Field("", description="Comma-separated people names")
     topic_category: str | None = Field("", description="Topic category")
     metadata: dict[str, Any] | None = Field(
         default_factory=dict, description="Additional metadata"
@@ -95,9 +93,7 @@ class APIResponse(BaseModel):
 
 
 class MemoryResponse(APIResponse):
-    memory_id: str | None = Field(
-        None, description="ID of the created/modified memory"
-    )
+    memory_id: str | None = Field(None, description="ID of the created/modified memory")
 
 
 class SearchResponse(APIResponse):

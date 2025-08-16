@@ -1,0 +1,118 @@
+name: Bug Report
+description: Report a bug in InMemory
+title: "[BUG] "
+labels: ["bug", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out this form as completely as possible.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please check these boxes before submitting your bug report.
+      options:
+        - label: I have searched existing issues to make sure this is not a duplicate
+          required: true
+        - label: I have tested this with the latest version of InMemory
+          required: true
+        - label: I have provided all the information requested below
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the bug...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Please provide detailed steps to reproduce the issue.
+      placeholder: |
+        1. Initialize Memory with '...'
+        2. Add memory '...'
+        3. Search for '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Describe what you expected to happen...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: Describe what actually happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Please provide information about your environment.
+      value: |
+        - InMemory version: [e.g. 0.1.0]
+        - Python version: [e.g. 3.12.0]
+        - Operating System: [e.g. macOS 14.0]
+        - Storage backend: [e.g. file, mongodb]
+        - Installation method: [e.g. pip install inmemory, pip install inmemory[full]]
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Minimal Code Example
+      description: If applicable, provide a minimal code example that reproduces the issue.
+      render: python
+      placeholder: |
+        from inmemory import Memory
+        
+        memory = Memory()
+        # Your code that reproduces the bug
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Logs/Traceback
+      description: If applicable, provide relevant error messages or stack traces.
+      render: text
+      placeholder: Paste error messages or stack traces here...
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here.
+      placeholder: Any additional information that might be helpful...
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How critical is this issue for your use case?
+      options:
+        - Low - Minor inconvenience
+        - Medium - Affects functionality but has workaround
+        - High - Breaks important functionality
+        - Critical - Prevents usage entirely
+    validations:
+      required: true

@@ -2,7 +2,7 @@
 Main Memory SDK class for InMemory.
 
 This module provides the primary interface for InMemory functionality,
-following the mem0 pattern with a clean, easy-to-use API that works
+following the  pattern with a clean, easy-to-use API that works
 with any configured storage backend.
 """
 

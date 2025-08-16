@@ -1,9 +1,34 @@
 [project]
 name = "inmemory"
 version = "0.1.0"
-description = "Enhanced Memory Management Core Library"
+description = "Enhanced Memory Management for AI Agents with zero-setup simplicity"
 readme = "README.md"
 requires-python = ">=3.12"
+authors = [
+    {name = "InMemory Team", email = "contact@inmemory.dev"}
+]
+maintainers = [
+    {name = "InMemory Team", email = "contact@inmemory.dev"}
+]
+license = "Apache-2.0"
+keywords = [
+    "memory", "ai", "ml", "vector", "search", "embeddings", 
+    "agents", "llm", "artificial-intelligence", "qdrant", "semantic-search"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database :: Database Engines/Servers",
+    "Topic :: Text Processing :: Indexing",
+    "Typing :: Typed"
+]
+
 dependencies = [
     # Core dependencies - zero external databases required
     "qdrant-client>=1.7.0",
@@ -12,6 +37,13 @@ dependencies = [
     "cryptography>=45.0.6",
     "httpx>=0.28.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/inmemory"
+Repository = "https://github.com/yourusername/inmemory"
+Documentation = "https://github.com/yourusername/inmemory#readme"
+Issues = "https://github.com/yourusername/inmemory/issues"
+Changelog = "https://github.com/yourusername/inmemory/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # API server capabilities (main.py)
@@ -173,3 +205,8 @@ docstring-code-format = false
 
 # Set the line length limit used by the formatter.
 docstring-code-line-length = "dynamic"
+
+[dependency-groups]
+dev = [
+    "twine>=6.1.0",
+]

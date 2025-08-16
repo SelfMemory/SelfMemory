@@ -2,7 +2,7 @@
 Inmry Client - Managed solution for InMemory.
 
 This module provides the client interface for the managed InMemory service,
-similar to how mem0 provides MemoryClient for their hosted solution.
+similar to how  provides MemoryClient for their hosted solution.
 """
 
 import hashlib
@@ -56,7 +56,7 @@ class Inmry:
                 "InMemory API Key not provided. Please set INMEM_API_KEY environment variable or provide api_key parameter."
             )
 
-        # Create MD5 hash of API key for user_id (similar to mem0 pattern)
+        # Create MD5 hash of API key for user_id (similar to memory pattern)
         self.user_id = hashlib.md5(self.api_key.encode()).hexdigest()
 
         if client is not None:

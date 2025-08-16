@@ -17,8 +17,8 @@
 #     print("=== Testing Fixed Managed Service ===")
 #     print("Testing API key validation fix...")
 
-#     # Test API key (use your generated key)
-#     api_key = "im_c305c0a3aed70265bd4c881c1e361caa"
+#     # Test API key (get from environment or use placeholder)
+#     api_key = os.getenv("INMEMORY_API_KEY", "im_your_api_key_here")
 
 #     try:
 #         print(f"\n1. Testing Inmry initialization with API key...")

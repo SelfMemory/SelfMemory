@@ -29,9 +29,7 @@ class StorageConfig(BaseModel):
     path: str | None = Field(
         default="~/.inmemory", description="Data directory for file storage"
     )
-    mongodb_uri: str | None = Field(
-        default=None, description="MongoDB connection URI"
-    )
+    mongodb_uri: str | None = Field(default=None, description="MongoDB connection URI")
     database: str | None = Field(default="inmemory", description="Database name")
 
     @validator("type")

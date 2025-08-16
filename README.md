@@ -8,7 +8,6 @@
   <strong>⚡ Zero Dependencies • 🚀 Instant Setup • 💼 Enterprise Ready</strong>
 </p>
 
-InMemory provides intelligent memory capabilities for AI assistants, agents, and applications. Inspired by mem0's architecture but optimized for **instant usability** - no MongoDB, no OAuth setup, no complex configuration required.
 
 ## 🔥 Key Features
 
@@ -343,17 +342,6 @@ class SupportBot:
         return response
 ```
 
-## 🔄 Comparison with mem0
-
-| Feature | InMemory | mem0 |
-|---------|----------|------|
-| **Zero Setup** | ✅ File storage default | ❌ Requires vector DB setup |
-| **Enterprise Ready** | ✅ Optional MongoDB | ✅ Multiple backends |
-| **SDK Quality** | ✅ Clean API | ✅ Excellent SDK |
-| **Installation Modes** | ✅ Progressive complexity | ✅ Optional dependencies |
-| **Dashboard Integration** | ✅ Private dashboard ready | ✅ Hosted platform |
-| **Open Source Friendly** | ✅ No mandatory external deps | ⚠️ Requires vector DB |
-
 ## 📚 Documentation
 
 - **[Installation Guide](docs/installation-guide.md)**: Detailed installation and usage
@@ -399,7 +387,6 @@ python src/server.py
 ## 🎯 Roadmap
 
 - [x] **Storage Abstraction**: File-based and MongoDB backends
-- [x] **Clean SDK**: mem0-inspired API design
 - [x] **CLI Tools**: Easy server management
 - [ ] **PostgreSQL Backend**: Alternative to MongoDB
 - [ ] **TypeScript SDK**: Cross-language support
@@ -432,7 +419,6 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENS
 
 ## 🙏 Acknowledgments
 
-- **mem0.ai**: Inspiration for the flexible architecture pattern
 - **FastAPI**: Excellent API framework
 - **Qdrant**: High-performance vector database
 - **Pydantic**: Data validation and configuration
