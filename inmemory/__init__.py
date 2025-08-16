@@ -8,18 +8,19 @@ and advanced search capabilities.
 __version__ = "0.1.0"
 __author__ = "InMemory Team"
 
-# Import main SDK class (primary interface)
-from .memory import Memory
+# Import main SDK classes
+from .client import AsyncInmry, Inmry  # Managed solution
 
 # Import configuration classes
 from .config import InMemoryConfig, load_config
-
-# Import storage interfaces (for advanced usage)
-from .stores import MemoryStoreInterface, create_store
+from .memory import Memory  # Self-hosted solution
+from .search.enhanced_search_engine import EnhancedSearchEngine
 
 # Import existing classes for backward compatibility
 from .services.add_memory import EnhancedMemoryManager, add_memory_enhanced
-from .search.enhanced_search_engine import EnhancedSearchEngine
+
+# Import storage interfaces (for advanced usage)
+from .stores import MemoryStoreInterface, create_store
 
 # Conditional imports for enterprise features
 try:
@@ -31,8 +32,11 @@ except ImportError:
 
 # Main SDK exports
 __all__ = [
-    # Primary SDK interface
-    "Memory",
+    # Primary SDK interfaces
+    "Memory",  # Self-hosted solution
+    "Inmry",  # Managed solution
+    "AsyncInmry",  # Async managed solution
+    # Configuration
     "InMemoryConfig",
     "load_config",
     # Storage abstraction

@@ -58,7 +58,7 @@ def create_store(storage_type: str = None, **config) -> MemoryStoreInterface:
         file_config = {k: v for k, v in config.items() if k in ["data_dir"]}
         logger.info(f"Creating FileBasedStore with config: {file_config}")
         return FileBasedStore(**file_config)
-    elif storage_type == "mongodb":
+    if storage_type == "mongodb":
         if not _MONGODB_AVAILABLE:
             raise ImportError(
                 "MongoDB storage requires additional dependencies. "
@@ -70,10 +70,9 @@ def create_store(storage_type: str = None, **config) -> MemoryStoreInterface:
         }
         logger.info(f"Creating MongoDBStore with config: {mongo_config}")
         return MongoDBStore(**mongo_config)
-    else:
-        raise ValueError(
-            f"Unsupported storage type: {storage_type}. Supported types: file, mongodb"
-        )
+    raise ValueError(
+        f"Unsupported storage type: {storage_type}. Supported types: file, mongodb"
+    )
 
 
 __all__ = ["MemoryStoreInterface", "FileBasedStore", "create_store"]

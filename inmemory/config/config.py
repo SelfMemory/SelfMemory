@@ -8,7 +8,7 @@ for different deployment modes (file-based, MongoDB enterprise, etc.).
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 try:
     import yaml
@@ -26,13 +26,13 @@ class StorageConfig(BaseModel):
     """Configuration for storage backend."""
 
     type: str = Field(default="file", description="Storage backend type")
-    path: Optional[str] = Field(
+    path: str | None = Field(
         default="~/.inmemory", description="Data directory for file storage"
     )
-    mongodb_uri: Optional[str] = Field(
+    mongodb_uri: str | None = Field(
         default=None, description="MongoDB connection URI"
     )
-    database: Optional[str] = Field(default="inmemory", description="Database name")
+    database: str | None = Field(default="inmemory", description="Database name")
 
     @validator("type")
     def validate_storage_type(cls, v):
@@ -46,7 +46,7 @@ class AuthConfig(BaseModel):
     """Configuration for authentication."""
 
     type: str = Field(default="simple", description="Authentication type")
-    default_user: Optional[str] = Field(
+    default_user: str | None = Field(
         default="default_user", description="Default user for simple auth"
     )
     require_api_key: bool = Field(
@@ -54,8 +54,8 @@ class AuthConfig(BaseModel):
     )
 
     # OAuth configuration
-    google_client_id: Optional[str] = Field(default=None)
-    google_client_secret: Optional[str] = Field(default=None)
+    google_client_id: str | None = Field(default=None)
+    google_client_secret: str | None = Field(default=None)
 
     @validator("type")
     def validate_auth_type(cls, v):
@@ -70,7 +70,7 @@ class QdrantConfig(BaseModel):
 
     host: str = Field(default="localhost", description="Qdrant host")
     port: int = Field(default=6333, description="Qdrant port")
-    api_key: Optional[str] = Field(default=None, description="Qdrant API key")
+    api_key: str | None = Field(default=None, description="Qdrant API key")
     collection_prefix: str = Field(
         default="memories", description="Collection name prefix"
     )
@@ -84,7 +84,7 @@ class EmbeddingConfig(BaseModel):
     ollama_host: str = Field(
         default="http://localhost:11434", description="Ollama host"
     )
-    openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
+    openai_api_key: str | None = Field(default=None, description="OpenAI API key")
 
 
 class ServerConfig(BaseModel):
@@ -105,17 +105,17 @@ class InMemoryConfig(BaseModel):
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary."""
         return self.dict()
 
     @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any]) -> "InMemoryConfig":
+    def from_dict(cls, config_dict: dict[str, Any]) -> "InMemoryConfig":
         """Create configuration from dictionary."""
         return cls(**config_dict)
 
 
-def load_config(config_path: Optional[str] = None) -> InMemoryConfig:
+def load_config(config_path: str | None = None) -> InMemoryConfig:
     """
     Load configuration from file, environment variables, and defaults.
 
@@ -154,7 +154,7 @@ def load_config(config_path: Optional[str] = None) -> InMemoryConfig:
         return get_default_config()
 
 
-def _load_yaml_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+def _load_yaml_config(config_path: str | None = None) -> dict[str, Any]:
     """
     Load configuration from YAML file.
 
@@ -191,7 +191,7 @@ def _load_yaml_config(config_path: Optional[str] = None) -> Dict[str, Any]:
         return {}
 
     try:
-        with open(config_file, "r", encoding="utf-8") as f:
+        with open(config_file, encoding="utf-8") as f:
             config_data = yaml.safe_load(f) or {}
         logger.info(f"Configuration loaded from: {config_file}")
         return config_data
@@ -200,7 +200,7 @@ def _load_yaml_config(config_path: Optional[str] = None) -> Dict[str, Any]:
         return {}
 
 
-def _load_env_config() -> Dict[str, Any]:
+def _load_env_config() -> dict[str, Any]:
     """
     Load configuration from environment variables.
 
@@ -409,14 +409,14 @@ def get_config_for_mode(mode: str) -> InMemoryConfig:
     """
     if mode == "enterprise":
         return get_enterprise_config()
-    elif mode == "server":
+    if mode == "server":
         return InMemoryConfig(
             storage=StorageConfig(type="file"),
             auth=AuthConfig(type="api_key", require_api_key=True),
             server=ServerConfig(host="0.0.0.0", port=8081),
         )
-    else:  # simple
-        return get_default_config()
+    # simple
+    return get_default_config()
 
 
 def validate_config(config: InMemoryConfig) -> bool:

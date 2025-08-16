@@ -6,7 +6,7 @@ must implement to provide user management and authentication capabilities.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class MemoryStoreInterface(ABC):
@@ -48,7 +48,7 @@ class MemoryStoreInterface(ABC):
         pass
 
     @abstractmethod
-    def validate_api_key(self, api_key: str) -> Optional[str]:
+    def validate_api_key(self, api_key: str) -> str | None:
         """
         Validate API key and return associated user_id if valid.
 
@@ -76,7 +76,7 @@ class MemoryStoreInterface(ABC):
         pass
 
     @abstractmethod
-    def get_user_info(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_user_info(self, user_id: str) -> dict[str, Any] | None:
         """
         Get user information and metadata.
 
@@ -89,7 +89,7 @@ class MemoryStoreInterface(ABC):
         pass
 
     @abstractmethod
-    def list_user_api_keys(self, user_id: str) -> list[Dict[str, Any]]:
+    def list_user_api_keys(self, user_id: str) -> list[dict[str, Any]]:
         """
         List all API keys for a user.
 

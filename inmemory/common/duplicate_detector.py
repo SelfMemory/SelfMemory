@@ -6,16 +6,16 @@ Prevents storing similar memories and provides options for handling duplicates.
 import logging
 from typing import Any
 
+# No longer using global MongoDB user manager - using storage abstraction
+from qdrant_client.models import FieldCondition, Filter, MatchValue
+
 from inmemory.common.constants import (
     DuplicateConstants,
     MetadataConstants,
     SearchConstants,
 )
-from inmemory.utils.embeddings import get_embeddings
-
-# No longer using global MongoDB user manager - using storage abstraction
-from qdrant_client.models import FieldCondition, Filter, MatchValue
 from inmemory.repositories.qdrant_db import get_qdrant_client
+from inmemory.utils.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 

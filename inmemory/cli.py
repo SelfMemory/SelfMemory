@@ -11,14 +11,10 @@ import sys
 from pathlib import Path
 
 from .config import (
-    InMemoryConfig,
-    load_config,
-    detect_deployment_mode,
-    get_config_for_mode,
     create_sample_configs,
+    load_config,
 )
 from .memory import Memory
-from .stores import create_store
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +23,7 @@ def serve_command(args):
     """Start the InMemory API server."""
     try:
         import uvicorn
+
         from .main import app
     except ImportError:
         print("❌ Server dependencies not installed. Run: pip install inmemory[server]")
@@ -155,7 +152,7 @@ def test_command(args):
 
         # Test user statistics
         stats = memory.get_user_stats(test_user)
-        print(f"\n📊 Final statistics:")
+        print("\n📊 Final statistics:")
         print(f"  👤 User: {test_user}")
         print(f"  💾 Storage: {stats.get('storage_backend', 'unknown')}")
         print(f"  📝 Memories: {stats.get('memory_count', 0)}")
@@ -187,7 +184,7 @@ def config_command(args):
         print(f"🎯 Embedding Model: {config.embedding.model}")
 
         if args.verbose:
-            print(f"\n📋 Full Configuration:")
+            print("\n📋 Full Configuration:")
             import json
 
             print(json.dumps(config.to_dict(), indent=2))
@@ -214,7 +211,7 @@ def stats_command(args):
             print(f"🟢 Active API Keys: {stats.get('active_api_keys', 0)}")
 
             if args.verbose:
-                print(f"\n📋 Detailed Statistics:")
+                print("\n📋 Detailed Statistics:")
                 import json
 
                 print(json.dumps(stats, indent=2, default=str))

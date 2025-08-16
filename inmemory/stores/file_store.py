@@ -8,11 +8,10 @@ and situations where external databases are not desired.
 
 import json
 import logging
-import os
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .base import MemoryStoreInterface
 
@@ -68,7 +67,7 @@ class FileBasedStore(MemoryStoreInterface):
             if not self.api_keys_file.exists():
                 self._write_json(self.api_keys_file, {})
 
-    def _read_json(self, file_path: Path) -> Dict[str, Any]:
+    def _read_json(self, file_path: Path) -> dict[str, Any]:
         """
         Safely read JSON file with error handling.
 
@@ -80,13 +79,13 @@ class FileBasedStore(MemoryStoreInterface):
         """
         try:
             if file_path.exists():
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     return json.load(f)
         except Exception as e:
             logger.warning(f"Failed to read {file_path}: {e}. Returning empty data.")
         return {}
 
-    def _write_json(self, file_path: Path, data: Dict[str, Any]) -> None:
+    def _write_json(self, file_path: Path, data: dict[str, Any]) -> None:
         """
         Safely write JSON file with atomic operations.
 
@@ -150,7 +149,7 @@ class FileBasedStore(MemoryStoreInterface):
         logger.debug(f"Collection name for user {user_id}: {collection_name}")
         return collection_name
 
-    def validate_api_key(self, api_key: str) -> Optional[str]:
+    def validate_api_key(self, api_key: str) -> str | None:
         """
         Validate API key and return associated user_id.
 
@@ -225,7 +224,7 @@ class FileBasedStore(MemoryStoreInterface):
             logger.error(f"Failed to store API key for user {user_id}: {e}")
             return False
 
-    def get_user_info(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_user_info(self, user_id: str) -> dict[str, Any] | None:
         """
         Get user information from users file.
 
@@ -239,7 +238,7 @@ class FileBasedStore(MemoryStoreInterface):
             users = self._read_json(self.users_file)
             return users.get(user_id)
 
-    def list_user_api_keys(self, user_id: str) -> list[Dict[str, Any]]:
+    def list_user_api_keys(self, user_id: str) -> list[dict[str, Any]]:
         """
         List all API keys for a user (without exposing actual keys).
 
@@ -348,9 +347,8 @@ class FileBasedStore(MemoryStoreInterface):
                     self._write_json(self.users_file, users)
                     logger.info(f"User updated: {user_id}")
                     return True
-                else:
-                    logger.warning(f"Cannot update non-existent user: {user_id}")
-                    return False
+                logger.warning(f"Cannot update non-existent user: {user_id}")
+                return False
 
         except Exception as e:
             logger.error(f"Failed to update user {user_id}: {e}")
@@ -406,7 +404,7 @@ class FileBasedStore(MemoryStoreInterface):
         """
         logger.debug("FileBasedStore connection closed (no-op)")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get storage statistics (useful for debugging/monitoring).
 
@@ -514,14 +512,13 @@ class FileBasedStore(MemoryStoreInterface):
                 # In practice, the user should know their key
                 logger.info(f"User {user_id} has {len(active_keys)} active API keys")
                 return "existing_key_found"
-            else:
-                # Generate new API key
-                new_key = self._generate_default_api_key(user_id)
-                self.store_api_key(
-                    user_id,
-                    new_key,
-                    name="auto_generated",
-                    description="Auto-generated API key for file-based storage",
-                )
-                logger.info(f"Generated new API key for user: {user_id}")
-                return new_key
+            # Generate new API key
+            new_key = self._generate_default_api_key(user_id)
+            self.store_api_key(
+                user_id,
+                new_key,
+                name="auto_generated",
+                description="Auto-generated API key for file-based storage",
+            )
+            logger.info(f"Generated new API key for user: {user_id}")
+            return new_key

@@ -9,12 +9,11 @@ with MongoDB and OAuth integration capabilities.
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
-
-from .base import MemoryStoreInterface
+from typing import Any
 
 # Import existing MongoDB functionality
 from ..repositories.mongodb_user_manager import MongoUserManager
+from .base import MemoryStoreInterface
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class MongoDBStore(MemoryStoreInterface):
     like OAuth integration and scalable user management.
     """
 
-    def __init__(self, mongodb_uri: Optional[str] = None, **config):
+    def __init__(self, mongodb_uri: str | None = None, **config):
         """
         Initialize MongoDB storage backend.
 
@@ -82,7 +81,7 @@ class MongoDBStore(MemoryStoreInterface):
         """
         return self.mongo_manager.get_collection_name(user_id)
 
-    def validate_api_key(self, api_key: str) -> Optional[str]:
+    def validate_api_key(self, api_key: str) -> str | None:
         """
         Validate API key using existing MongoDB logic.
 
@@ -126,15 +125,14 @@ class MongoDBStore(MemoryStoreInterface):
             if result.inserted_id:
                 logger.info(f"API key stored for user: {user_id}")
                 return True
-            else:
-                logger.warning(f"Failed to insert API key for user: {user_id}")
-                return False
+            logger.warning(f"Failed to insert API key for user: {user_id}")
+            return False
 
         except Exception as e:
             logger.error(f"Error storing API key for user {user_id}: {e}")
             return False
 
-    def get_user_info(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_user_info(self, user_id: str) -> dict[str, Any] | None:
         """
         Get user information from MongoDB using existing logic.
 
@@ -146,7 +144,7 @@ class MongoDBStore(MemoryStoreInterface):
         """
         return self.mongo_manager.get_user_info(user_id)
 
-    def list_user_api_keys(self, user_id: str) -> list[Dict[str, Any]]:
+    def list_user_api_keys(self, user_id: str) -> list[dict[str, Any]]:
         """
         List all API keys for a user from MongoDB.
 
@@ -200,9 +198,8 @@ class MongoDBStore(MemoryStoreInterface):
             if result.modified_count > 0:
                 logger.info(f"API key revoked: {api_key[:8]}...")
                 return True
-            else:
-                logger.warning(f"API key not found for revocation: {api_key[:8]}...")
-                return False
+            logger.warning(f"API key not found for revocation: {api_key[:8]}...")
+            return False
 
         except Exception as e:
             logger.error(f"Error revoking API key: {e}")
@@ -238,9 +235,8 @@ class MongoDBStore(MemoryStoreInterface):
             if result.inserted_id:
                 logger.info(f"User created in MongoDB: {user_id}")
                 return True
-            else:
-                logger.warning(f"Failed to create user in MongoDB: {user_id}")
-                return False
+            logger.warning(f"Failed to create user in MongoDB: {user_id}")
+            return False
 
         except Exception as e:
             logger.error(f"Error creating user {user_id}: {e}")
@@ -268,9 +264,8 @@ class MongoDBStore(MemoryStoreInterface):
             if result.modified_count > 0:
                 logger.info(f"User updated in MongoDB: {user_id}")
                 return True
-            else:
-                logger.warning(f"No user found to update: {user_id}")
-                return False
+            logger.warning(f"No user found to update: {user_id}")
+            return False
 
         except Exception as e:
             logger.error(f"Error updating user {user_id}: {e}")
@@ -313,7 +308,7 @@ class MongoDBStore(MemoryStoreInterface):
         except Exception as e:
             logger.error(f"Error closing MongoDB connection: {e}")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get MongoDB storage statistics.
 
@@ -340,7 +335,7 @@ class MongoDBStore(MemoryStoreInterface):
             logger.error(f"Error getting MongoDB stats: {e}")
             return {"storage_type": "mongodb", "error": str(e)}
 
-    def get_api_key_info(self, api_key: str) -> Optional[Dict[str, Any]]:
+    def get_api_key_info(self, api_key: str) -> dict[str, Any] | None:
         """
         Get detailed API key information (MongoDB-specific method).
 

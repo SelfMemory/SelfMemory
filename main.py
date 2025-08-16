@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import logging
 
 from dotenv import load_dotenv
@@ -6,19 +7,18 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-import argparse
 
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from inmemory.config import load_config, detect_deployment_mode, get_config_for_mode
-from inmemory.stores import create_store
+from inmemory.config import detect_deployment_mode, get_config_for_mode
 from inmemory.search.enhanced_search_engine import EnhancedSearchEngine
 
 # Import existing business logic (local imports)
 from inmemory.services.add_memory import add_memory_enhanced
+from inmemory.stores import create_store
 
 # Setup logging
 logging.basicConfig(
