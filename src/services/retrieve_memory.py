@@ -1,11 +1,10 @@
 import logging
-from typing import List, Optional
 
-from qdrant_db import client
-from generate_embeddings import get_embeddings
-from constants import SearchConstants
-from mongodb_user_manager import get_mongo_user_manager
+from src.common.constants import SearchConstants
+from src.repositories.mongodb_user_manager import get_mongo_user_manager
+from src.repositories.qdrant_db import client
 from src.security.encryption import decrypt_memory_payload
+from src.utils.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +12,9 @@ logger = logging.getLogger(__name__)
 def retrieve_memories(
     query_text: str,
     user_id: str,
-    keyword_filter: Optional[str] = None,
+    keyword_filter: str | None = None,
     limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
-) -> List[str]:
+) -> list[str]:
     """
     Retrieve memories from user's collection based on similarity to the query text.
 
@@ -34,7 +33,7 @@ def retrieve_memories(
     """
     if not query_text or not query_text.strip():
         raise ValueError("Query text cannot be empty")
-    
+
     if not user_id:
         raise ValueError("User ID is required for memory retrieval")
 
@@ -44,12 +43,14 @@ def retrieve_memories(
         )
 
     try:
-        logger.info(f"Retrieving memories for user {user_id}, query: '{query_text[:50]}...'")
+        logger.info(
+            f"Retrieving memories for user {user_id}, query: '{query_text[:50]}...'"
+        )
 
         # Get user-specific collection name
         user_manager = get_mongo_user_manager()
         collection_name = user_manager.get_collection_name(user_id)
-        
+
         query_vector = get_embeddings(query_text.strip())
 
         search_result = client.query_points(
@@ -67,7 +68,9 @@ def retrieve_memories(
                     decrypted_payload = decrypt_memory_payload(point.payload, user_id)
                     retrieved_memories.append(decrypted_payload["memory"])
                 except Exception as decrypt_error:
-                    logger.error(f"Failed to decrypt memory {point.id}: {str(decrypt_error)}")
+                    logger.error(
+                        f"Failed to decrypt memory {point.id}: {str(decrypt_error)}"
+                    )
                     # Skip this memory if decryption fails
                     continue
             else:
@@ -86,7 +89,7 @@ def search_memories_with_filter(
     user_id: str,
     keyword_filter: str,
     limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
-) -> List[str]:
+) -> list[str]:
     """
     Search memories with keyword filtering (placeholder for future enhancement).
 

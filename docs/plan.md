@@ -84,7 +84,7 @@ python server.py --host localhost --port 3000 --debug
   - Dynamic collection naming: `memories_{user_id}`
 
 - **Updated URL Routing:**
-  - Changed from `/sse` to `/{user_id}/sse` 
+  - Changed from `/sse` to `/{user_id}/sse`
   - User ID extraction from URL path parameters
   - User validation middleware in SSE handler
   - User context management with global state

@@ -1,8 +1,8 @@
 import logging
-from typing import List
 
 import ollama
-from constants import EmbeddingConstants
+
+from src.common.constants import EmbeddingConstants
 
 logger = logging.getLogger(__name__)
 embedding_client = ollama.Client()
@@ -32,7 +32,7 @@ def generate_embeddings(text: str) -> dict:
         raise Exception(f"Embedding generation failed: {str(e)}")
 
 
-def get_embeddings(text: str) -> List[float]:
+def get_embeddings(text: str) -> list[float]:
     """
     Get embeddings vector for the given text.
 

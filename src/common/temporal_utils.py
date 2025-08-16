@@ -5,8 +5,9 @@ Handles conversion of timestamps to detailed temporal information for enhanced s
 
 import logging
 from datetime import datetime
-from typing import Dict, Any
-from constants import TemporalConstants
+from typing import Any
+
+from src.common.constants import TemporalConstants
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ class TemporalProcessor:
     """
 
     @staticmethod
-    def generate_temporal_metadata(timestamp: datetime = None) -> Dict[str, Any]:
+    def generate_temporal_metadata(timestamp: datetime = None) -> dict[str, Any]:
         """
         Generate comprehensive temporal metadata from a timestamp.
 
@@ -91,7 +92,7 @@ class TemporalProcessor:
         return 1  # Default fallback
 
     @staticmethod
-    def parse_temporal_query(query: str) -> Dict[str, Any]:
+    def parse_temporal_query(query: str) -> dict[str, Any]:
         """
         Parse natural language temporal queries into filter conditions.
 
@@ -163,7 +164,7 @@ class TemporalFilter:
     """
 
     @staticmethod
-    def build_temporal_conditions(filters: Dict[str, Any]) -> Dict[str, Any]:
+    def build_temporal_conditions(filters: dict[str, Any]) -> dict[str, Any]:
         """
         Build Qdrant filter conditions from temporal filters.
 

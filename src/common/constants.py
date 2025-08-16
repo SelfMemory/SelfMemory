@@ -3,8 +3,6 @@ Enhanced Constants for the MCP Memory Server.
 Contains configuration values for embeddings, vector database, search capabilities, and temporal metadata.
 """
 
-from typing import List
-
 
 class EmbeddingConstants:
     """Constants related to embedding generation."""
@@ -149,12 +147,7 @@ class EncryptionConstants:
     """Constants related to memory encryption."""
 
     ENCRYPTION_SALT = "mem_mcp_salt_2024"
-    ENCRYPTED_FIELDS = [
-        "memory",
-        "tags", 
-        "people_mentioned",
-        "topic_category"
-    ]
+    ENCRYPTED_FIELDS = ["memory", "tags", "people_mentioned", "topic_category"]
 
 
 class LoggingConstants:

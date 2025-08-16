@@ -4,17 +4,17 @@ Prevents storing similar memories and provides options for handling duplicates.
 """
 
 import logging
-from typing import List, Dict, Any, Tuple, Optional
-from qdrant_client.models import Filter, FieldCondition, MatchValue
+from typing import Any
 
-from constants import (
+from src.common.constants import (
     DuplicateConstants,
     MetadataConstants,
     SearchConstants,
 )
-from qdrant_db import client
-from generate_embeddings import get_embeddings
-from mongodb_user_manager import get_mongo_user_manager
+from src.utils.embeddings import get_embeddings
+from src.repositories.mongodb_user_manager import get_mongo_user_manager
+from qdrant_client.models import FieldCondition, Filter, MatchValue
+from src.repositories.qdrant_db import client
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,8 @@ class DuplicateDetector:
         )
 
     def check_for_duplicates(
-        self, memory_content: str, user_id: str, metadata: Dict[str, Any] = None
-    ) -> Tuple[bool, List[Dict[str, Any]]]:
+        self, memory_content: str, user_id: str, metadata: dict[str, Any] = None
+    ) -> tuple[bool, list[dict[str, Any]]]:
         """
         Check if a memory is similar to existing memories for a specific user.
 
@@ -56,7 +56,7 @@ class DuplicateDetector:
         """
         if not memory_content or not memory_content.strip():
             raise ValueError("Memory content cannot be empty")
-        
+
         if not user_id:
             raise ValueError("User ID is required for duplicate detection")
 
@@ -88,11 +88,11 @@ class DuplicateDetector:
 
     def _find_similar_memories(
         self,
-        query_vector: List[float],
+        query_vector: list[float],
         memory_content: str,
         user_id: str,
-        metadata: Dict[str, Any] = None,
-    ) -> List[Dict[str, Any]]:
+        metadata: dict[str, Any] = None,
+    ) -> list[dict[str, Any]]:
         """
         Find memories similar to the query vector in user's collection.
 
@@ -109,7 +109,7 @@ class DuplicateDetector:
             # Get user-specific collection name
             user_manager = get_mongo_user_manager()
             collection_name = user_manager.get_collection_name(user_id)
-            
+
             # Build filter conditions if metadata is provided
             # query_filter = self._build_duplicate_filter(metadata) if metadata else None
 
@@ -153,7 +153,7 @@ class DuplicateDetector:
             logger.error(f"Failed to find similar memories: {str(e)}")
             return []
 
-    def _build_duplicate_filter(self, metadata: Dict[str, Any]) -> Filter:
+    def _build_duplicate_filter(self, metadata: dict[str, Any]) -> Filter:
         """
         Build filter conditions to enhance duplicate detection.
 
@@ -202,9 +202,9 @@ class DuplicateHandler:
     def handle_duplicate(
         action: str,
         new_memory: str,
-        existing_memories: List[Dict[str, Any]],
-        new_metadata: Dict[str, Any] = None,
-    ) -> Dict[str, Any]:
+        existing_memories: list[dict[str, Any]],
+        new_metadata: dict[str, Any] = None,
+    ) -> dict[str, Any]:
         """
         Handle detected duplicates based on the specified action.
 
@@ -221,21 +221,20 @@ class DuplicateHandler:
             if action == DuplicateConstants.DUPLICATE_ACTION_SKIP:
                 return DuplicateHandler._skip_duplicate(existing_memories)
 
-            elif action == DuplicateConstants.DUPLICATE_ACTION_MERGE:
+            if action == DuplicateConstants.DUPLICATE_ACTION_MERGE:
                 return DuplicateHandler._merge_duplicate(
                     new_memory, existing_memories, new_metadata
                 )
 
-            elif action == DuplicateConstants.DUPLICATE_ACTION_ADD:
+            if action == DuplicateConstants.DUPLICATE_ACTION_ADD:
                 return DuplicateHandler._add_anyway(new_memory, existing_memories)
 
-            else:
-                logger.warning(f"Unknown duplicate action: {action}")
-                return {
-                    "action": "error",
-                    "message": f"Unknown action: {action}",
-                    "success": False,
-                }
+            logger.warning(f"Unknown duplicate action: {action}")
+            return {
+                "action": "error",
+                "message": f"Unknown action: {action}",
+                "success": False,
+            }
 
         except Exception as e:
             logger.error(f"Failed to handle duplicate: {str(e)}")
@@ -246,7 +245,7 @@ class DuplicateHandler:
             }
 
     @staticmethod
-    def _skip_duplicate(existing_memories: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _skip_duplicate(existing_memories: list[dict[str, Any]]) -> dict[str, Any]:
         """Skip adding the duplicate memory."""
         most_similar = existing_memories[0] if existing_memories else {}
         similarity_score = most_similar.get("score", 0)
@@ -265,9 +264,9 @@ class DuplicateHandler:
     @staticmethod
     def _merge_duplicate(
         new_memory: str,
-        existing_memories: List[Dict[str, Any]],
-        new_metadata: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        existing_memories: list[dict[str, Any]],
+        new_metadata: dict[str, Any],
+    ) -> dict[str, Any]:
         """Merge the new memory with the most similar existing memory."""
         if not existing_memories:
             return {
@@ -285,7 +284,7 @@ class DuplicateHandler:
         # This is a placeholder for the merge logic
         return {
             "action": "merged",
-            "message": f"Memory merged with existing similar memory",
+            "message": "Memory merged with existing similar memory",
             "merged_content": merged_content,
             "original_id": most_similar["id"],
             "success": True,
@@ -293,8 +292,8 @@ class DuplicateHandler:
 
     @staticmethod
     def _add_anyway(
-        new_memory: str, existing_memories: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        new_memory: str, existing_memories: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Add the memory despite similarity to existing memories."""
         most_similar = existing_memories[0] if existing_memories else {}
         return {

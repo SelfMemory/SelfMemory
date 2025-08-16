@@ -3,19 +3,20 @@ Enhanced memory addition system with rich metadata, temporal data, and duplicate
 Handles comprehensive memory storage with all advanced features.
 """
 
-from pydantic import Field
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Any
 
-from qdrant_db import get_qdrant_client, ensure_user_collection_exists
-from generate_embeddings import get_embeddings
+from pydantic import Field
 from qdrant_client.models import PointStruct
-from constants import VectorConstants, MetadataConstants, DuplicateConstants
-from src.shared.temporal_utils import TemporalProcessor
-from src.shared.duplicate_detector import DuplicateDetector, DuplicateHandler
+
+from src.common.constants import DuplicateConstants, MetadataConstants
+from src.common.duplicate_detector import DuplicateDetector
+from src.common.temporal_utils import TemporalProcessor
+from src.repositories.qdrant_db import ensure_user_collection_exists, get_qdrant_client
 from src.security.encryption import encrypt_memory_payload
+from src.utils.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +36,12 @@ class EnhancedMemoryManager:
         self,
         memory_content: str,
         user_id: str,
-        tags: List[str] = None,
-        people_mentioned: List[str] = None,
+        tags: list[str] = None,
+        people_mentioned: list[str] = None,
         topic_category: str = None,
         check_duplicates: bool = True,
         duplicate_action: str = DuplicateConstants.DUPLICATE_ACTION_SKIP,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Add a memory with rich metadata and duplicate detection.
 
@@ -63,7 +64,7 @@ class EnhancedMemoryManager:
             raise ValueError("Memory content cannot be empty")
 
         try:
-            logger.info(f"Adding memory...'")
+            logger.info("Adding memory...'")
 
             # Prepare metadata
             metadata = self._prepare_metadata(tags, people_mentioned, topic_category)
@@ -104,7 +105,7 @@ class EnhancedMemoryManager:
 
             # Ensure user collection exists and get collection name
             collection_name = ensure_user_collection_exists(user_id)
-            
+
             # Generate embedding and store
             memory_id = str(uuid.uuid4())
             embedding_vector = get_embeddings(memory_content.strip())
@@ -119,27 +120,27 @@ class EnhancedMemoryManager:
                 ],
             )
 
-            logger.info(f"I just discovered something new about you!")
+            logger.info("I just discovered something new about you!")
 
             return {
                 "success": True,
                 "action": "added",
                 "memory_id": memory_id,
-                "message": f"Memory successfully added with rich metadata",
+                "message": "Memory successfully added with rich metadata",
                 "metadata": metadata,
                 "temporal_data": temporal_data,
             }
 
         except Exception as e:
             logger.error(f"Failed to add enhanced memory: {str(e)}")
-            raise Exception(f"Our bad, we missed it. Could you say it again?")
+            raise Exception("Our bad, we missed it. Could you say it again?")
 
     def _prepare_metadata(
         self,
-        tags: List[str] = None,
-        people_mentioned: List[str] = None,
+        tags: list[str] = None,
+        people_mentioned: list[str] = None,
         topic_category: str = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Prepare and validate metadata for storage.
 
@@ -176,10 +177,10 @@ class EnhancedMemoryManager:
         self,
         memory_content: str,
         timestamp: datetime,
-        temporal_data: Dict[str, Any],
-        metadata: Dict[str, Any],
+        temporal_data: dict[str, Any],
+        metadata: dict[str, Any],
         user_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create comprehensive payload with all metadata and encryption.
 
@@ -195,8 +196,10 @@ class EnhancedMemoryManager:
         """
         logger.info(f"🔐 Creating payload for encryption - user: {user_id}")
         logger.info(f"🔐 Memory content length: {len(memory_content)} chars")
-        logger.info(f"🔐 Metadata fields: {list(metadata.keys()) if metadata else 'None'}")
-        
+        logger.info(
+            f"🔐 Metadata fields: {list(metadata.keys()) if metadata else 'None'}"
+        )
+
         payload = {
             MetadataConstants.MEMORY_FIELD: memory_content,
             MetadataConstants.TIMESTAMP_FIELD: timestamp.isoformat(),
@@ -214,31 +217,39 @@ class EnhancedMemoryManager:
 
         logger.info(f"🔐 Payload before encryption: {list(payload.keys())}")
         logger.info(f"🔐 Starting encryption for user: {user_id}")
-        
+
         try:
             # Encrypt sensitive fields before storage
             encrypted_payload = encrypt_memory_payload(payload, user_id)
-            logger.info(f"🔐 ✅ Encryption completed successfully")
+            logger.info("🔐 ✅ Encryption completed successfully")
             logger.info(f"🔐 Encrypted payload keys: {list(encrypted_payload.keys())}")
-            
+
             # Verify encryption worked by checking if content changed
             original_memory = payload.get(MetadataConstants.MEMORY_FIELD, "")
             encrypted_memory = encrypted_payload.get(MetadataConstants.MEMORY_FIELD, "")
-            
+
             if original_memory == encrypted_memory:
-                logger.error(f"🔐 ❌ WARNING: Memory content appears UNENCRYPTED! Original==Encrypted")
+                logger.error(
+                    "🔐 ❌ WARNING: Memory content appears UNENCRYPTED! Original==Encrypted"
+                )
                 logger.error(f"🔐 ❌ Original: '{original_memory[:50]}...'")
                 logger.error(f"🔐 ❌ Encrypted: '{encrypted_memory[:50]}...'")
             else:
-                logger.info(f"🔐 ✅ Memory content successfully encrypted (content changed)")
-                logger.info(f"🔐 Original length: {len(original_memory)}, Encrypted length: {len(encrypted_memory)}")
-            
+                logger.info(
+                    "🔐 ✅ Memory content successfully encrypted (content changed)"
+                )
+                logger.info(
+                    f"🔐 Original length: {len(original_memory)}, Encrypted length: {len(encrypted_memory)}"
+                )
+
             return encrypted_payload
-            
+
         except Exception as e:
             logger.error(f"🔐 ❌ ENCRYPTION FAILED: {str(e)}")
             logger.error(f"🔐 ❌ Exception type: {type(e)}")
-            logger.error(f"🔐 ❌ Returning UNENCRYPTED payload - THIS IS A SECURITY ISSUE!")
+            logger.error(
+                "🔐 ❌ Returning UNENCRYPTED payload - THIS IS A SECURITY ISSUE!"
+            )
             return payload  # Return unencrypted as fallback but log the issue
 
 
@@ -281,7 +292,7 @@ def add_memory_enhanced(
     check_duplicates: bool = Field(
         True, description="Check for duplicates (default: True)"
     ),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Enhanced add_memory function with rich metadata support for MCP tools.
 
@@ -313,7 +324,7 @@ def add_memory_enhanced(
         if result["success"]:
             # Handle successful addition
             if result.get("action") == "added":
-                response_parts = [f"I just discovered something new about you!"]
+                response_parts = ["I just discovered something new about you!"]
 
                 if result.get("metadata"):
                     metadata = result["metadata"]
@@ -331,20 +342,22 @@ def add_memory_enhanced(
                 # **CRITICAL FIX**: Return structured data including memory_id
                 return {
                     "success": True,
-                    "memory_id": result.get("memory_id"),  # Include the actual memory ID
+                    "memory_id": result.get(
+                        "memory_id"
+                    ),  # Include the actual memory ID
                     "message": formatted_message,
                     "action": result.get("action"),
                     "metadata": result.get("metadata", {}),
-                    "temporal_data": result.get("temporal_data", {})
+                    "temporal_data": result.get("temporal_data", {}),
                 }
 
             # Handle duplicate detection cases
-            elif (
+            if (
                 result.get("action") == "skipped"
                 and result.get("reason") == "duplicate_detected"
             ):
                 response_parts = [
-                    f"Got it, I already knew this one!",
+                    "Got it, I already knew this one!",
                     # "",
                     # f"💭 Existing similar memory:",
                     # f"   {result.get('existing_memory', 'N/A')[:200]}{'...' if len(result.get('existing_memory', '')) > 200 else ''}",
@@ -356,24 +369,22 @@ def add_memory_enhanced(
                     "memory_id": None,  # No new memory created for duplicates
                     "message": formatted_message,
                     "action": result.get("action"),
-                    "reason": result.get("reason")
+                    "reason": result.get("reason"),
                 }
 
             # Handle other success cases (merge, etc.)
-            else:
-                return {
-                    "success": True,
-                    "memory_id": result.get("memory_id"),
-                    "message": f"✅ {result['message']}",
-                    "action": result.get("action")
-                }
-        else:
             return {
-                "success": False,
-                "memory_id": None,
-                "message": f"⚠️ {result['message']}",
-                "error": result.get("error")
+                "success": True,
+                "memory_id": result.get("memory_id"),
+                "message": f"✅ {result['message']}",
+                "action": result.get("action"),
             }
+        return {
+            "success": False,
+            "memory_id": None,
+            "message": f"⚠️ {result['message']}",
+            "error": result.get("error"),
+        }
 
     except Exception as e:
         logger.error(f"Enhanced add_memory failed: {str(e)}")
@@ -381,7 +392,7 @@ def add_memory_enhanced(
             "success": False,
             "memory_id": None,
             "message": f"❌ Failed to add memory: {str(e)}",
-            "error": str(e)
+            "error": str(e),
         }
 
 

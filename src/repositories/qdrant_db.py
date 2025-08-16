@@ -4,11 +4,11 @@ Handles the connection to the Qdrant vector database.
 """
 
 import logging
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, CollectionStatus
-from qdrant_client.http.exceptions import UnexpectedResponse
 
-from constants import DatabaseConstants, VectorConstants
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams
+
+from src.common.constants import DatabaseConstants, VectorConstants
 
 logger = logging.getLogger(__name__)
 
@@ -79,58 +79,64 @@ def ensure_collection_exists(client: QdrantClient, collection_name: str) -> bool
 def get_qdrant_client() -> QdrantClient:
     """
     Get a Qdrant client instance. Creates new client each time for thread safety.
-    
+
     Returns:
         QdrantClient: Qdrant client instance
     """
     return create_qdrant_client()
 
 
-def delete_memory_point(client: QdrantClient, collection_name: str, point_id: str) -> bool:
+def delete_memory_point(
+    client: QdrantClient, collection_name: str, point_id: str
+) -> bool:
     """
     Delete a specific memory point from Qdrant collection.
-    
+
     Args:
         client: Qdrant client instance
         collection_name: Name of the collection
         point_id: ID of the point to delete
-        
+
     Returns:
         bool: True if deletion was successful
-        
+
     Raises:
         Exception: If deletion fails
     """
     try:
-        logger.info(f"🗑️ Attempting to delete memory point {point_id} from collection {collection_name}")
-        
+        logger.info(
+            f"🗑️ Attempting to delete memory point {point_id} from collection {collection_name}"
+        )
+
         # First, check if the point exists
         try:
             existing_points = client.retrieve(
-                collection_name=collection_name,
-                ids=[point_id],
-                with_payload=False
+                collection_name=collection_name, ids=[point_id], with_payload=False
             )
             logger.info(f"🔍 Found {len(existing_points)} points with ID {point_id}")
-            
+
             if not existing_points:
-                logger.warning(f"❌ Memory point {point_id} not found in collection {collection_name}")
-                raise Exception(f"Memory not found")
-                
+                logger.warning(
+                    f"❌ Memory point {point_id} not found in collection {collection_name}"
+                )
+                raise Exception("Memory not found")
+
         except Exception as retrieve_error:
             logger.error(f"❌ Failed to check if memory exists: {str(retrieve_error)}")
-            raise Exception(f"Memory not found")
-        
+            raise Exception("Memory not found")
+
         # Delete the specific point using Qdrant's delete API
         result = client.delete(
             collection_name=collection_name,
-            points_selector=[point_id]  # Delete by point ID
+            points_selector=[point_id],  # Delete by point ID
         )
-        
+
         logger.info(f"✅ Delete result: {result}")
-        logger.info(f"Successfully deleted memory point {point_id} from collection {collection_name}")
+        logger.info(
+            f"Successfully deleted memory point {point_id} from collection {collection_name}"
+        )
         return True
-        
+
     except Exception as e:
         logger.error(f"❌ Failed to delete memory point {point_id}: {str(e)}")
         raise Exception(f"Memory deletion failed: {str(e)}")
@@ -139,30 +145,30 @@ def delete_memory_point(client: QdrantClient, collection_name: str, point_id: st
 def delete_user_memory(user_id: str, memory_id: str) -> bool:
     """
     Delete a memory for a specific user.
-    
+
     Args:
         user_id: User identifier
         memory_id: Memory ID to delete
-        
+
     Returns:
         bool: True if deletion was successful
-        
+
     Raises:
         Exception: If deletion fails or user is invalid
     """
-    from mongodb_user_manager import get_mongo_user_manager
-    
+    from src.repositories.mongodb_user_manager import get_mongo_user_manager
+
     # Get MongoDB user manager and validate user
     user_manager = get_mongo_user_manager()
     if not user_manager.is_valid_user(user_id):
         raise ValueError(f"Invalid or unauthorized user_id: {user_id}")
-    
+
     collection_name = user_manager.get_collection_name(user_id)
-    
+
     # Create client and delete the memory point
     client = get_qdrant_client()
     result = delete_memory_point(client, collection_name, memory_id)
-    
+
     logger.info(f"Successfully deleted memory {memory_id} for user {user_id}")
     return result
 
@@ -170,29 +176,29 @@ def delete_user_memory(user_id: str, memory_id: str) -> bool:
 def ensure_user_collection_exists(user_id: str) -> str:
     """
     Ensure that the user-specific collection exists, create it if it doesn't.
-    
+
     Args:
         user_id: User identifier to create collection for
-        
+
     Returns:
         str: Name of the user's collection
-        
+
     Raises:
         Exception: If collection creation fails
     """
-    from mongodb_user_manager import get_mongo_user_manager
-    
+    from src.repositories.mongodb_user_manager import get_mongo_user_manager
+
     # Get MongoDB user manager and validate user
     user_manager = get_mongo_user_manager()
     if not user_manager.is_valid_user(user_id):
         raise ValueError(f"Invalid or unauthorized user_id: {user_id}")
-    
+
     collection_name = user_manager.get_collection_name(user_id)
-    
+
     # Create client and ensure collection exists
     client = get_qdrant_client()
     ensure_collection_exists(client, collection_name)
-    
+
     logger.info(f"Ensured Qdrant collection exists: {collection_name}")
     return collection_name
 

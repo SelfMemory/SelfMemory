@@ -70,7 +70,7 @@ python api_server.py --host 0.0.0.0 --port 8081 --debug
 ```bash
 cd mcp
 
-# Install minimal dependencies  
+# Install minimal dependencies
 pip install -r requirements_mcp.txt
 
 # Start MCP server
@@ -104,7 +104,7 @@ QDRANT_PORT=6333
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DB_NAME=inmemory
 
-# API Configuration  
+# API Configuration
 CORE_API_URL=http://localhost:8081
 ```
 

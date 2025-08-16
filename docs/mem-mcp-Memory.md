@@ -88,7 +88,7 @@ Enhanced Memory MCP Server with SSE (Server-Sent Events) transport support for r
 ## Recent Major Changes (SSE Implementation)
 
 ### 1. Transport Layer Conversion
-- **Before:** Simple `mcp.run(transport="sse")` 
+- **Before:** Simple `mcp.run(transport="sse")`
 - **After:** Full Starlette web application with proper SSE routing
 - **Benefits:** Remote connectivity, web service deployment, configurable binding
 
@@ -136,7 +136,7 @@ Enhanced Memory MCP Server with SSE (Server-Sent Events) transport support for r
 # Alice's setup
 npx install-mcp https://inmemory.tailb75d54.ts.net/alice/sse --client claude
 
-# Bob's setup  
+# Bob's setup
 npx install-mcp https://inmemory.tailb75d54.ts.net/bob/sse --client claude
 
 # Charlie's setup
@@ -207,7 +207,7 @@ mem-mcp/
 
 ## Next Development Areas
 - Authentication/authorization for remote access
-- Performance optimization for large memory collections  
+- Performance optimization for large memory collections
 - Additional metadata fields (location, context, etc.)
 - Integration with external knowledge sources
 - Memory categorization and organization features

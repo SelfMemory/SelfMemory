@@ -4,21 +4,18 @@ Supports semantic similarity, temporal filtering, metadata search, and hybrid qu
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Union
-from qdrant_client.models import Filter, FieldCondition, MatchValue, Range, MatchAny
+from typing import Any
 
-from constants import (
-    VectorConstants,
+from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
+
+from src.common.constants import (
     MetadataConstants,
     SearchConstants,
-    TemporalConstants,
-    SearchFilters,
 )
-from qdrant_db import get_qdrant_client, ensure_user_collection_exists
-from generate_embeddings import get_embeddings
-from src.shared.temporal_utils import TemporalProcessor, TemporalFilter
+from src.common.temporal_utils import TemporalFilter, TemporalProcessor
+from src.repositories.qdrant_db import ensure_user_collection_exists, get_qdrant_client
 from src.security.encryption import decrypt_memory_payload
+from src.utils.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +37,13 @@ class EnhancedSearchEngine:
         user_id: str,
         limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
         score_threshold: float = SearchConstants.DEFAULT_SCORE_THRESHOLD,
-        tags: List[str] = None,
-        people_mentioned: List[str] = None,
+        tags: list[str] = None,
+        people_mentioned: list[str] = None,
         topic_category: str = None,
         temporal_filter: str = None,
         include_payload: bool = True,
         include_vectors: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Enhanced memory search with comprehensive filtering options.
 
@@ -73,9 +70,9 @@ class EnhancedSearchEngine:
 
         try:
             if is_empty_query:
-                logger.info(f"Getting all memories (empty query) for user")
+                logger.info("Getting all memories (empty query) for user")
             else:
-                logger.info(f"Searching memories with query")
+                logger.info("Searching memories with query")
 
             # Build comprehensive filter
             search_filter = self._build_comprehensive_filter(
@@ -88,7 +85,7 @@ class EnhancedSearchEngine:
             # Get user collection name and client
             collection_name = ensure_user_collection_exists(user_id)
             client = get_qdrant_client()
-            
+
             if is_empty_query:
                 # For empty queries, use pagination to get ALL memories
                 # This is much more scalable than limiting to just first batch
@@ -96,25 +93,28 @@ class EnhancedSearchEngine:
                     client=client,
                     collection_name=collection_name,
                     search_filter=search_filter,
-                    max_memories=limit * 10,  # Allow up to 10x the requested limit for all memories
+                    max_memories=limit
+                    * 10,  # Allow up to 10x the requested limit for all memories
                     include_payload=include_payload,
-                    include_vectors=include_vectors
+                    include_vectors=include_vectors,
                 )
-                
+
                 # Sort by timestamp in Python (newest first)
                 if search_result:
                     search_result = sorted(
                         search_result,
-                        key=lambda x: x.payload.get(MetadataConstants.TIMESTAMP_FIELD, ""),
-                        reverse=True  # Most recent first
+                        key=lambda x: x.payload.get(
+                            MetadataConstants.TIMESTAMP_FIELD, ""
+                        ),
+                        reverse=True,  # Most recent first
                     )
-                
+
                 # Apply the original limit after sorting
                 search_result = search_result[:limit]
             else:
                 # Generate query embedding for semantic search
                 query_vector = get_embeddings(query.strip())
-                
+
                 # Execute semantic search
                 search_result = client.query_points(
                     collection_name=collection_name,
@@ -142,7 +142,7 @@ class EnhancedSearchEngine:
         user_id: str,
         semantic_query: str = None,
         limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search memories based on temporal criteria with optional semantic filtering.
 
@@ -210,12 +210,12 @@ class EnhancedSearchEngine:
 
     def tag_search(
         self,
-        tags: List[str],
+        tags: list[str],
         user_id: str,
         semantic_query: str = None,
         match_all_tags: bool = False,
         limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search memories by tags with optional semantic filtering.
 
@@ -280,11 +280,11 @@ class EnhancedSearchEngine:
 
     def people_search(
         self,
-        people: List[str],
+        people: list[str],
         user_id: str,
         semantic_query: str = None,
         limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search memories by people mentioned.
 
@@ -346,7 +346,7 @@ class EnhancedSearchEngine:
         user_id: str,
         semantic_query: str = None,
         limit: int = SearchConstants.DEFAULT_SEARCH_LIMIT,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search memories by topic category.
 
@@ -402,11 +402,11 @@ class EnhancedSearchEngine:
 
     def _build_comprehensive_filter(
         self,
-        tags: List[str] = None,
-        people_mentioned: List[str] = None,
+        tags: list[str] = None,
+        people_mentioned: list[str] = None,
         topic_category: str = None,
         temporal_filter: str = None,
-    ) -> Optional[Filter]:
+    ) -> Filter | None:
         """
         Build comprehensive Qdrant filter from multiple criteria.
 
@@ -477,12 +477,12 @@ class EnhancedSearchEngine:
         self,
         client,
         collection_name: str,
-        search_filter: Optional[Filter] = None,
+        search_filter: Filter | None = None,
         max_memories: int = 1000,
         batch_size: int = 100,
         include_payload: bool = True,
         include_vectors: bool = False,
-    ) -> List:
+    ) -> list:
         """
         Get all memories using pagination (based on user's suggested approach).
         This is much more scalable than loading everything at once.
@@ -504,7 +504,9 @@ class EnhancedSearchEngine:
         retrieved_count = 0
 
         try:
-            logger.info(f"Starting paginated retrieval of all memories (max: {max_memories})")
+            logger.info(
+                f"Starting paginated retrieval of all memories (max: {max_memories})"
+            )
 
             while retrieved_count < max_memories:
                 response = client.scroll(
@@ -513,24 +515,30 @@ class EnhancedSearchEngine:
                     offset=offset,
                     scroll_filter=search_filter,
                     with_payload=include_payload,
-                    with_vectors=include_vectors
+                    with_vectors=include_vectors,
                 )
 
                 points, next_offset = response[0], response[1]
-                
+
                 if not points:
-                    logger.info(f"No more memories found. Total retrieved: {retrieved_count}")
+                    logger.info(
+                        f"No more memories found. Total retrieved: {retrieved_count}"
+                    )
                     break
 
                 all_memories.extend(points)
                 retrieved_count += len(points)
                 offset = next_offset
 
-                logger.debug(f"Retrieved batch of {len(points)} memories (total: {retrieved_count})")
+                logger.debug(
+                    f"Retrieved batch of {len(points)} memories (total: {retrieved_count})"
+                )
 
                 # If next_offset is None, we've reached the end
                 if next_offset is None:
-                    logger.info(f"Reached end of collection. Total retrieved: {retrieved_count}")
+                    logger.info(
+                        f"Reached end of collection. Total retrieved: {retrieved_count}"
+                    )
                     break
 
             logger.info(f"Paginated retrieval complete: {len(all_memories)} memories")
@@ -541,7 +549,9 @@ class EnhancedSearchEngine:
             # Return whatever we managed to get
             return all_memories
 
-    def _format_search_results(self, search_points: List, user_id: str) -> List[Dict[str, Any]]:
+    def _format_search_results(
+        self, search_points: list, user_id: str
+    ) -> list[dict[str, Any]]:
         """
         Format search results into consistent structure with decryption.
 
@@ -564,16 +574,20 @@ class EnhancedSearchEngine:
             try:
                 # Decrypt the payload before extracting data
                 decrypted_payload = decrypt_memory_payload(point.payload, user_id)
-                
+
                 # Get timestamp with fallback for older memories
                 timestamp = decrypted_payload.get(MetadataConstants.TIMESTAMP_FIELD)
-                
+
                 # Handle missing timestamps for older memories
                 if not timestamp:
-                    logger.warning(f"Memory {point.id} missing timestamp, using fallback")
+                    logger.warning(
+                        f"Memory {point.id} missing timestamp, using fallback"
+                    )
                     # Use a fallback date for memories without timestamps
-                    timestamp = "2024-01-01T00:00:00.000000"  # Fallback for older memories
-                    
+                    timestamp = (
+                        "2024-01-01T00:00:00.000000"  # Fallback for older memories
+                    )
+
                 result = {
                     "id": point.id,
                     "score": getattr(point, "score", None),
@@ -583,16 +597,20 @@ class EnhancedSearchEngine:
                     "people_mentioned": decrypted_payload.get(
                         MetadataConstants.PEOPLE_FIELD, []
                     ),
-                    "topic_category": decrypted_payload.get(MetadataConstants.TOPIC_FIELD),
+                    "topic_category": decrypted_payload.get(
+                        MetadataConstants.TOPIC_FIELD
+                    ),
                     "temporal_data": decrypted_payload.get(
                         MetadataConstants.TEMPORAL_FIELD, {}
                     ),
                 }
 
                 formatted_results.append(result)
-                
+
             except Exception as decrypt_error:
-                logger.error(f"Failed to decrypt memory {point.id}: {str(decrypt_error)}")
+                logger.error(
+                    f"Failed to decrypt memory {point.id}: {str(decrypt_error)}"
+                )
                 # Skip this memory if decryption fails
                 continue
 

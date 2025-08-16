@@ -184,6 +184,70 @@ Check `mcp-sse/client.py` for a reference implementation of connecting to the SS
 
 ## Development
 
+### Code Quality and Pre-commit Hooks
+
+This project uses **ruff** for code linting and formatting, automatically enforced via pre-commit hooks.
+
+#### Setup Pre-commit Hooks
+
+The hooks are automatically installed when you run:
+```bash
+uv sync  # This installs all dependencies including pre-commit and ruff
+uv run pre-commit install  # This activates the git hooks
+```
+
+#### What the Pre-commit Hooks Do
+
+Every time you commit, the following checks run automatically:
+- **Code formatting** with `ruff format` (auto-fixes)
+- **Code linting** with `ruff check` (auto-fixes safe issues)
+- **Trailing whitespace removal** (auto-fixes)
+- **End of file fixes** (auto-fixes)
+- **YAML validation**
+- **Large file detection**
+- **Merge conflict detection**
+- **Debug statement detection**
+
+#### Manual Code Quality Checks
+
+Run checks manually on all files:
+```bash
+# Run all pre-commit hooks
+uv run pre-commit run --all-files
+
+# Run only ruff checks
+uv run ruff check .
+uv run ruff format .
+
+# Auto-fix issues where possible
+uv run ruff check --fix .
+```
+
+#### When Commits Are Blocked
+
+If your commit is blocked due to code quality issues:
+
+1. **Auto-fixable issues**: The hooks will fix them automatically, then re-add and commit:
+   ```bash
+   git add .
+   git commit -m "Your commit message"
+   ```
+
+2. **Manual fixes required**: Address the remaining issues shown in the error output, then commit again.
+
+3. **Emergency bypass** (not recommended):
+   ```bash
+   git commit --no-verify -m "Emergency commit"
+   ```
+
+#### Ruff Configuration
+
+Ruff settings are configured in `pyproject.toml`:
+- **Line length**: 88 characters (Black-compatible)
+- **Target Python**: 3.12+
+- **Enabled rules**: Pyflakes, pycodestyle, bugbear, isort, pyupgrade, and more
+- **Auto-fixes**: All safe fixes are automatically applied
+
 ### Running Tests
 ```bash
 # Test basic functionality
@@ -197,6 +261,7 @@ tail -f server.log
 1. Add new tools as `@mcp.tool()` decorated functions in `server.py`
 2. Implement business logic in separate modules
 3. Update documentation and tests
+4. Ensure code passes pre-commit hooks before committing
 
 ## Deployment
 

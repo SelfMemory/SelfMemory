@@ -14,7 +14,7 @@ Each alpha tester gets their own personalized URL:
 # Alice
 npx install-mcp https://inmemory.tailb75d54.ts.net/alice/sse --client claude
 
-# Bob  
+# Bob
 npx install-mcp https://inmemory.tailb75d54.ts.net/bob/sse --client claude
 
 # Charlie
@@ -32,7 +32,7 @@ npx install-mcp https://inmemory.tailb75d54.ts.net/test_user/sse --client claude
 ### User Isolation
 - Each user gets their own Qdrant collection: `memories_{user_id}`
 - Alice's memories → `memories_alice` collection
-- Bob's memories → `memories_bob` collection  
+- Bob's memories → `memories_bob` collection
 - Complete data isolation - users cannot see each other's data
 
 ### User Validation
@@ -65,7 +65,7 @@ python server.py --host 0.0.0.0 --port 8080 --debug
 {
   "alpha_users": [
     "alice",
-    "bob", 
+    "bob",
     "charlie",
     "diana",
     "test_user",
@@ -87,7 +87,7 @@ npx install-mcp https://inmemory.tailb75d54.ts.net/new_user/sse --client claude
 - URL: `https://inmemory.tailb75d54.ts.net/sse`
 - Collection: `test_collection_mcps` (shared)
 
-### After (Multi-User)  
+### After (Multi-User)
 - URL: `https://inmemory.tailb75d54.ts.net/{user_id}/sse`
 - Collection: `memories_{user_id}` (isolated)
 
