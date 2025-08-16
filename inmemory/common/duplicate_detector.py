@@ -6,15 +6,15 @@ Prevents storing similar memories and provides options for handling duplicates.
 import logging
 from typing import Any
 
-from src.common.constants import (
+from inmemory.common.constants import (
     DuplicateConstants,
     MetadataConstants,
     SearchConstants,
 )
-from src.utils.embeddings import get_embeddings
-from src.repositories.mongodb_user_manager import get_mongo_user_manager
+from inmemory.utils.embeddings import get_embeddings
+from inmemory.repositories.mongodb_user_manager import get_mongo_user_manager
 from qdrant_client.models import FieldCondition, Filter, MatchValue
-from src.repositories.qdrant_db import client
+from inmemory.repositories.qdrant_db import get_qdrant_client
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +114,7 @@ class DuplicateDetector:
             # query_filter = self._build_duplicate_filter(metadata) if metadata else None
 
             # Search for similar memories in user's collection
+            client = get_qdrant_client()
             search_result = client.query_points(
                 collection_name=collection_name,
                 query=query_vector,

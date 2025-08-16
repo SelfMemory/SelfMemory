@@ -1,10 +1,10 @@
 import logging
 
-from src.common.constants import SearchConstants
-from src.repositories.mongodb_user_manager import get_mongo_user_manager
-from src.repositories.qdrant_db import client
-from src.security.encryption import decrypt_memory_payload
-from src.utils.embeddings import get_embeddings
+from inmemory.common.constants import SearchConstants
+from inmemory.repositories.mongodb_user_manager import get_mongo_user_manager
+from inmemory.repositories.qdrant_db import get_qdrant_client
+from inmemory.security.encryption import decrypt_memory_payload
+from inmemory.utils.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,7 @@ def retrieve_memories(
 
         query_vector = get_embeddings(query_text.strip())
 
+        client = get_qdrant_client()
         search_result = client.query_points(
             collection_name=collection_name,
             query=query_vector,

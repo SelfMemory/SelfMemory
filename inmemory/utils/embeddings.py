@@ -2,7 +2,7 @@ import logging
 
 import ollama
 
-from src.common.constants import EmbeddingConstants
+from inmemory.common.constants import EmbeddingConstants
 
 logger = logging.getLogger(__name__)
 embedding_client = ollama.Client()

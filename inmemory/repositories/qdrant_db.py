@@ -8,7 +8,7 @@ import logging
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
-from src.common.constants import DatabaseConstants, VectorConstants
+from inmemory.common.constants import DatabaseConstants, VectorConstants
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,7 @@ def delete_user_memory(user_id: str, memory_id: str) -> bool:
     Raises:
         Exception: If deletion fails or user is invalid
     """
-    from src.repositories.mongodb_user_manager import get_mongo_user_manager
+    from inmemory.repositories.mongodb_user_manager import get_mongo_user_manager
 
     # Get MongoDB user manager and validate user
     user_manager = get_mongo_user_manager()
@@ -186,7 +186,7 @@ def ensure_user_collection_exists(user_id: str) -> str:
     Raises:
         Exception: If collection creation fails
     """
-    from src.repositories.mongodb_user_manager import get_mongo_user_manager
+    from inmemory.repositories.mongodb_user_manager import get_mongo_user_manager
 
     # Get MongoDB user manager and validate user
     user_manager = get_mongo_user_manager()

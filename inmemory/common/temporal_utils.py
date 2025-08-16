@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from src.common.constants import TemporalConstants
+from inmemory.common.constants import TemporalConstants
 
 logger = logging.getLogger(__name__)
 

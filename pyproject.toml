@@ -1,7 +1,7 @@
 [project]
 name = "inmemory"
 version = "0.1.0"
-description = "Memory Management"
+description = "Enhanced Memory Management Core Library"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -20,6 +20,14 @@ dependencies = [
     "ruff>=0.8.0",
     "pre-commit>=3.6.0",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["inmemory*"]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

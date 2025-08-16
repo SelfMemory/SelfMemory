@@ -8,14 +8,14 @@ from typing import Any
 
 from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
 
-from src.common.constants import (
+from inmemory.common.constants import (
     MetadataConstants,
     SearchConstants,
 )
-from src.common.temporal_utils import TemporalFilter, TemporalProcessor
-from src.repositories.qdrant_db import ensure_user_collection_exists, get_qdrant_client
-from src.security.encryption import decrypt_memory_payload
-from src.utils.embeddings import get_embeddings
+from inmemory.common.temporal_utils import TemporalFilter, TemporalProcessor
+from inmemory.repositories.qdrant_db import ensure_user_collection_exists, get_qdrant_client
+from inmemory.security.encryption import decrypt_memory_payload
+from inmemory.utils.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 
