@@ -1,7 +1,8 @@
 import logging
 
 from inmemory.common.constants import SearchConstants
-from inmemory.repositories.mongodb_user_manager import get_mongo_user_manager
+
+# No longer using global MongoDB user manager - using storage abstraction
 from inmemory.repositories.qdrant_db import get_qdrant_client
 from inmemory.security.encryption import decrypt_memory_payload
 from inmemory.utils.embeddings import get_embeddings
@@ -47,9 +48,9 @@ def retrieve_memories(
             f"Retrieving memories for user {user_id}, query: '{query_text[:50]}...'"
         )
 
-        # Get user-specific collection name
-        user_manager = get_mongo_user_manager()
-        collection_name = user_manager.get_collection_name(user_id)
+        # Get user-specific collection name (same logic as other components)
+        clean_user_id = "".join(c for c in user_id if c.isalnum() or c == "_").lower()
+        collection_name = f"memories_{clean_user_id}"
 
         query_vector = get_embeddings(query_text.strip())
 

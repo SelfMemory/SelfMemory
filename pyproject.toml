@@ -5,21 +5,76 @@ description = "Enhanced Memory Management Core Library"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.116.1",
-    "mcp[cli]>=1.2.1",
-    "starlette>=0.45.0",
-    "uvicorn>=0.34.0",
+    # Core dependencies - zero external databases required
     "qdrant-client>=1.7.0",
-    "ollama>=0.2.0",
     "pydantic>=2.5.0",
-    "httpx>=0.28.0",
-    "pymongo>=4.10.0",
     "python-dotenv>=1.1.1",
-    "fastmcp>=2.11.3",
     "cryptography>=45.0.6",
-    "ruff>=0.8.0",
-    "pre-commit>=3.6.0",
+    "httpx>=0.28.0",
 ]
+
+[project.optional-dependencies]
+# API server capabilities (main.py)
+server = [
+    "fastapi>=0.116.1",
+    "uvicorn>=0.34.0",
+    "starlette>=0.45.0"
+]
+
+# MongoDB backend (current enterprise setup)
+mongodb = [
+    "pymongo>=4.10.0"
+]
+
+# OAuth authentication (Google signin)  
+oauth = [
+    "authlib>=1.3.2",
+    "google-auth>=2.14.1"
+]
+
+# MCP server support
+mcp = [
+    "mcp[cli]>=1.2.1",
+    "fastmcp>=2.11.3"
+]
+
+# Embedding providers
+embedding = [
+    "ollama>=0.2.0"
+]
+
+# YAML configuration support
+yaml = [
+    "pyyaml>=6.0.0"
+]
+
+# Enterprise = MongoDB + OAuth + Server
+enterprise = [
+    "inmemory[server,mongodb,oauth,yaml]"
+]
+
+# Everything including MCP
+full = [
+    "inmemory[server,mongodb,oauth,mcp,embedding,yaml]"
+]
+
+# Development dependencies
+dev = [
+    "ruff>=0.8.0", 
+    "pre-commit>=3.6.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0"
+]
+
+# Testing dependencies  
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.10.0"
+]
+
+[project.scripts]
+inmemory = "inmemory.cli:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]

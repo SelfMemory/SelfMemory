@@ -13,7 +13,10 @@ from inmemory.common.constants import (
     SearchConstants,
 )
 from inmemory.common.temporal_utils import TemporalFilter, TemporalProcessor
-from inmemory.repositories.qdrant_db import ensure_user_collection_exists, get_qdrant_client
+from inmemory.repositories.qdrant_db import (
+    ensure_user_collection_exists,
+    get_qdrant_client,
+)
 from inmemory.security.encryption import decrypt_memory_payload
 from inmemory.utils.embeddings import get_embeddings
 

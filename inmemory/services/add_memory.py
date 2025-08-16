@@ -14,7 +14,10 @@ from qdrant_client.models import PointStruct
 from inmemory.common.constants import DuplicateConstants, MetadataConstants
 from inmemory.common.duplicate_detector import DuplicateDetector
 from inmemory.common.temporal_utils import TemporalProcessor
-from inmemory.repositories.qdrant_db import ensure_user_collection_exists, get_qdrant_client
+from inmemory.repositories.qdrant_db import (
+    ensure_user_collection_exists,
+    get_qdrant_client,
+)
 from inmemory.security.encryption import encrypt_memory_payload
 from inmemory.utils.embeddings import get_embeddings
 

@@ -13,14 +13,12 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from src.repositories.mongodb_user_manager import (
-    get_mongo_user_manager,
-    initialize_mongo_user_manager,
-)
-from src.search.enhanced_search_engine import EnhancedSearchEngine
+from inmemory.config import load_config, detect_deployment_mode, get_config_for_mode
+from inmemory.stores import create_store
+from inmemory.search.enhanced_search_engine import EnhancedSearchEngine
 
 # Import existing business logic (local imports)
-from src.services.add_memory import add_memory_enhanced
+from inmemory.services.add_memory import add_memory_enhanced
 
 # Setup logging
 logging.basicConfig(
@@ -28,13 +26,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize MongoDB user manager
+# Load configuration and initialize storage backend
 try:
-    mongo_user_manager = initialize_mongo_user_manager()
-    logger.info("MongoDB user manager initialized successfully")
+    # Auto-detect deployment mode or use explicit configuration
+    mode = detect_deployment_mode()
+    config = get_config_for_mode(mode)
+    logger.info(f"Deployment mode detected: {mode}")
+    logger.info(f"Using storage backend: {config.storage.type}")
+    logger.info(f"Storage config: {config.storage.dict()}")
+
+    # Initialize storage backend
+    storage_config = config.storage.model_dump()
+    logger.info(f"Creating store with config: {storage_config}")
+    user_store = create_store(**storage_config)
+    logger.info(f"User storage backend initialized: {type(user_store).__name__}")
+
 except Exception as e:
-    logger.error(f"Failed to initialize MongoDB user manager: {e}")
-    raise
+    logger.error(f"Failed to initialize storage backend: {e}")
+    logger.warning("Falling back to file-based storage")
+    try:
+        user_store = create_store("file")
+        logger.info("File-based storage fallback successful")
+    except Exception as fallback_e:
+        logger.error(f"Fallback storage initialization failed: {fallback_e}")
+        raise
 
 # Initialize enhanced search engine
 search_engine = EnhancedSearchEngine()
@@ -108,7 +123,7 @@ class SearchByTopicRequest(BaseModel):
 # Authentication dependency
 def authenticate_api_key(authorization: str = Header(None)) -> str:
     """
-    Authenticate API key, ensure collection exists, and return user_id.
+    Authenticate API key using configurable storage backend.
 
     Args:
         authorization: Authorization header with Bearer token
@@ -128,16 +143,16 @@ def authenticate_api_key(authorization: str = Header(None)) -> str:
         )
 
     api_key = authorization.replace("Bearer ", "")
-    user_manager = get_mongo_user_manager()
-    user_id = user_manager.validate_api_key(api_key)
+
+    # Use configurable storage backend for authentication
+    user_id = user_store.validate_api_key(api_key)
 
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired API key")
 
     # Lazily ensure user collection exists on first API usage
-    # This prevents 'last_used' from being updated during key creation
     try:
-        from src.repositories.qdrant_db import ensure_user_collection_exists
+        from inmemory.repositories.qdrant_db import ensure_user_collection_exists
 
         ensure_user_collection_exists(user_id)
         logger.debug(f"Ensured collection exists for user {user_id}")
@@ -200,7 +215,7 @@ async def ensure_user_collection(
             )
 
         # Import collection creation logic
-        from src.repositories.qdrant_db import ensure_user_collection_exists
+        from inmemory.repositories.qdrant_db import ensure_user_collection_exists
 
         collection_name = ensure_user_collection_exists(request.user_id)
 
@@ -338,7 +353,7 @@ async def delete_memory_api(
             )
 
         # Import deletion function
-        from src.repositories.qdrant_db import delete_user_memory
+        from inmemory.repositories.qdrant_db import delete_user_memory
 
         logger.info(
             f"🗑️ DELETE API: Calling delete_user_memory with user_id={user_id}, memory_id={memory_id.strip()}"

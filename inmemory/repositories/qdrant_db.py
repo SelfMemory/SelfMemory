@@ -156,14 +156,9 @@ def delete_user_memory(user_id: str, memory_id: str) -> bool:
     Raises:
         Exception: If deletion fails or user is invalid
     """
-    from inmemory.repositories.mongodb_user_manager import get_mongo_user_manager
-
-    # Get MongoDB user manager and validate user
-    user_manager = get_mongo_user_manager()
-    if not user_manager.is_valid_user(user_id):
-        raise ValueError(f"Invalid or unauthorized user_id: {user_id}")
-
-    collection_name = user_manager.get_collection_name(user_id)
+    # Clean user_id for collection name (alphanumeric and underscore only)
+    clean_user_id = "".join(c for c in user_id if c.isalnum() or c == "_").lower()
+    collection_name = f"memories_{clean_user_id}"
 
     # Create client and delete the memory point
     client = get_qdrant_client()
@@ -186,14 +181,9 @@ def ensure_user_collection_exists(user_id: str) -> str:
     Raises:
         Exception: If collection creation fails
     """
-    from inmemory.repositories.mongodb_user_manager import get_mongo_user_manager
-
-    # Get MongoDB user manager and validate user
-    user_manager = get_mongo_user_manager()
-    if not user_manager.is_valid_user(user_id):
-        raise ValueError(f"Invalid or unauthorized user_id: {user_id}")
-
-    collection_name = user_manager.get_collection_name(user_id)
+    # Generate collection name directly (same logic as stores)
+    clean_user_id = "".join(c for c in user_id if c.isalnum() or c == "_").lower()
+    collection_name = f"memories_{clean_user_id}"
 
     # Create client and ensure collection exists
     client = get_qdrant_client()

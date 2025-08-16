@@ -10,7 +10,7 @@ from .temporal_utils import TemporalProcessor, TemporalFilter
 
 __all__ = [
     "DuplicateConstants",
-    "MetadataConstants", 
+    "MetadataConstants",
     "SearchConstants",
     "DuplicateDetector",
     "TemporalProcessor",

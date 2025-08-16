@@ -1,336 +1,444 @@
-# Enhanced Memory MCP Server with SSE Support
+# InMemory - Enhanced Memory Management for AI
 
-A powerful memory management MCP (Model Context Protocol) server that supports remote connections via Server-Sent Events (SSE) transport. Store, search, and retrieve memories with rich metadata including tags, people mentions, topic categories, and temporal data.
+<p align="center">
+  <strong>🧠 Long-term memory for AI Agents with zero-setup simplicity</strong>
+</p>
 
-## Features
+<p align="center">
+  <strong>⚡ Zero Dependencies • 🚀 Instant Setup • 💼 Enterprise Ready</strong>
+</p>
 
-- 🌐 **SSE Transport**: Remote client connectivity (Claude Desktop, custom clients)
-- 🧠 **Rich Memory Storage**: Metadata with tags, people, topics, temporal data
-- 🔍 **Advanced Search**: Semantic, temporal, tag-based, and people-based filtering
-- 🚫 **Duplicate Detection**: Prevents storing similar memories
-- ⚙️ **Configurable**: Host/port binding, debug mode
-- 🚀 **Scalable**: Web service deployment ready
+InMemory provides intelligent memory capabilities for AI assistants, agents, and applications. Inspired by mem0's architecture but optimized for **instant usability** - no MongoDB, no OAuth setup, no complex configuration required.
 
-## Quick Start
+## 🔥 Key Features
 
-### 1. Installation
+- **🚀 Zero Setup**: `pip install inmemory` and start using immediately
+- **🏗️ Flexible Architecture**: File-based → API Server → Enterprise MongoDB
+- **🔍 Advanced Search**: Semantic, temporal, tag-based, and people-based filtering
+- **🚫 Duplicate Detection**: Prevents storing similar memories
+- **⚙️ Configurable Backends**: File storage, MongoDB, PostgreSQL (coming soon)
+- **🌐 Multiple Interfaces**: Python SDK, REST API, MCP server
+
+## 🚀 Quick Start
+
+### Instant Usage (Zero Dependencies)
 
 ```bash
-# Install dependencies
-uv sync
-# or
-pip install -e .
+pip install inmemory
 ```
 
-### 2. Start the Server
+```python
+from inmemory import Memory
 
-```bash
-# Default configuration (localhost:8080)
-python server.py
+# Works immediately - no setup required!
+memory = Memory()
 
-# Custom host and port
-python server.py --host 0.0.0.0 --port 3000
-
-# Debug mode
-python server.py --debug
-```
-
-### 3. Connect Clients
-
-- **SSE Endpoint**: `http://your-server-ip:port/sse`
-- **Example**: `http://localhost:8080/sse`
-
-## Memory Management Tools
-
-### 🧠 Add Memory
-Store memories with rich metadata:
-```
-add_memory(
-    memory_content="Meeting notes from project discussion",
-    tags="work,meeting,project-alpha",
-    people_mentioned="John,Sarah",
-    topic_category="work"
+# Add memories with rich metadata
+memory.add(
+    "I love pizza but hate broccoli",
+    user_id="alice",
+    tags="food,preferences"
 )
-```
 
-### 🔍 Search Memories
-Comprehensive search with multiple filters:
-```
-search_memories(
-    query="project updates",
-    limit=5,
+memory.add(
+    "Meeting with Bob and Carol about Q4 planning tomorrow at 3pm",
+    user_id="alice",
     tags="work,meeting",
-    people_mentioned="John",
-    topic_category="work",
-    temporal_filter="this_week"
+    people_mentioned="Bob,Carol",
+    topic_category="planning"
 )
+
+# Search memories
+results = memory.search("pizza", user_id="alice")
+for result in results["results"]:
+    print(f"Memory: {result['memory']}")
+    print(f"Tags: {result['tags']}")
+    print(f"Score: {result['score']}")
+
+# Advanced searches
+work_memories = memory.search_by_tags(["work"], user_id="alice")
+people_memories = memory.search_by_people(["Bob"], user_id="alice")
+recent_memories = memory.temporal_search("today", user_id="alice")
 ```
 
-### ⏰ Temporal Search
-Time-based memory retrieval:
-```
-temporal_search(
-    temporal_query="yesterday",
-    semantic_query="meeting notes",
-    limit=3
-)
-```
-
-### 🏷️ Search by Tags
-Tag-based filtering:
-```
-search_by_tags(
-    tags="work,project",
-    match_all_tags=True,  # AND logic
-    semantic_query="updates"
-)
-```
-
-### 👥 Search by People
-Find memories mentioning specific people:
-```
-search_by_people(
-    people="John,Sarah",
-    semantic_query="project discussion"
-)
-```
-
-### 📂 Search by Topic
-Topic category filtering:
-```
-search_by_topic(
-    topic_category="work",
-    semantic_query="meeting outcomes"
-)
-```
-
-## Supported Temporal Queries
-
-- **Days**: `today`, `yesterday`
-- **Weeks**: `this_week`, `weekends`, `weekdays`
-- **Quarters**: `q1`, `q2`, `q3`, `q4`
-- **Time of day**: `morning`, `afternoon`, `evening`
-- **Days of week**: `monday`, `tuesday`, etc.
-
-## Configuration Options
-
-### Command Line Arguments
+### API Server Mode
 
 ```bash
-python server.py [OPTIONS]
+pip install inmemory[server]
 
-Options:
-  --host TEXT         Host to bind to (default: 0.0.0.0)
-  --port INTEGER      Port to listen on (default: 8080)
-  --debug             Enable debug mode
-  --help              Show help message
+# Start API server (file-based backend)
+inmemory serve --port 8080
+
+# Or with MongoDB backend (requires MongoDB)
+inmemory serve --storage-type mongodb --port 8080
 ```
 
-### Environment Requirements
+### Enterprise Mode (Your Dashboard Integration)
 
-- **Python**: 3.13+
-- **Qdrant**: Vector database for similarity search
-- **Ollama**: Local embeddings model
+```bash
+pip install inmemory[enterprise]
 
-## Client Integration
+# Set environment variables
+export MONGODB_URI="mongodb://localhost:27017/inmemory"
+export GOOGLE_CLIENT_ID="your-google-client-id"
+export GOOGLE_CLIENT_SECRET="your-google-client-secret"
 
-### Claude Desktop Configuration
+# Start enterprise server (unchanged from before)
+python main.py
+```
 
-Add to your MCP settings:
-```json
-{
-  "servers": {
-    "memory-server": {
-      "transport": "sse",
-      "url": "http://localhost:8080/sse"
+## 📦 Installation Options
+
+| Mode | Command | Dependencies | Use Case |
+|------|---------|--------------|----------|
+| **Basic SDK** | `pip install inmemory` | Zero external deps | Development, testing, simple apps |
+| **API Server** | `pip install inmemory[server]` | FastAPI, Uvicorn | Integration, dashboards |
+| **Enterprise** | `pip install inmemory[enterprise]` | MongoDB, OAuth | Production, multi-user |
+| **Full** | `pip install inmemory[full]` | Everything + MCP | Complete installation |
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     InMemory Package                         │
+├─────────────────────────────────────────────────────────────┤
+│  SDK Layer    │ Memory Class (Primary Interface)            │
+│  API Layer    │ FastAPI Server (Optional)                   │
+│  Storage Layer│ File (Default) │ MongoDB (Enterprise)       │
+│  Search Layer │ Enhanced Search Engine + Qdrant            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 💡 Core API Reference
+
+### Memory Class
+
+```python
+from inmemory import Memory
+
+# Initialize with different backends
+memory = Memory()                        # Auto-detect (file by default)
+memory = Memory(storage_type="file")     # Force file storage
+memory = Memory(storage_type="mongodb")  # Force MongoDB (requires deps)
+
+# Memory operations
+result = memory.add(content, user_id, tags=None, people_mentioned=None, topic_category=None)
+results = memory.search(query, user_id, limit=10, tags=None, temporal_filter=None)
+memories = memory.get_all(user_id, limit=100)
+result = memory.delete(memory_id, user_id)
+
+# Advanced search
+results = memory.search_by_tags(["work", "important"], user_id, match_all=True)
+results = memory.search_by_people(["Alice", "Bob"], user_id)
+results = memory.temporal_search("yesterday", user_id, semantic_query="meetings")
+
+# User management
+result = memory.create_user(user_id, email="user@example.com")
+api_key = memory.generate_api_key(user_id, name="my-app")
+keys = memory.list_api_keys(user_id)
+stats = memory.get_user_stats(user_id)
+```
+
+### Configuration
+
+```python
+from inmemory import InMemoryConfig, Memory
+
+# Custom configuration
+config = InMemoryConfig(
+    storage={
+        "type": "file",           # or "mongodb"
+        "path": "~/my-memories"   # for file storage
+    },
+    auth={
+        "type": "simple",         # or "oauth", "api_key"
+        "default_user": "my_user"
+    },
+    qdrant={
+        "host": "localhost",
+        "port": 6333
     }
-  }
-}
+)
+
+memory = Memory(config=config)
 ```
 
-### Custom Client Example
+## 🌐 REST API Endpoints
 
-Check `mcp-sse/client.py` for a reference implementation of connecting to the SSE endpoint.
+When running in server mode (`inmemory serve`), these endpoints are available:
 
-## Architecture
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/memories` | Add new memory |
+| `GET` | `/v1/memories` | Get user's memories |
+| `DELETE` | `/v1/memories/{id}` | Delete specific memory |
+| `POST` | `/v1/search` | Search memories |
+| `POST` | `/v1/temporal-search` | Temporal search |
+| `POST` | `/v1/search-by-tags` | Tag-based search |
+| `POST` | `/v1/search-by-people` | People-based search |
+| `GET` | `/v1/health` | Health check |
 
-```
-┌─────────────────┐    HTTP/SSE    ┌──────────────────┐
-│   MCP Client    │◄──────────────►│   Memory Server  │
-│ (Claude Desktop)│                │   (Starlette)    │
-└─────────────────┘                └──────────────────┘
-                                           │
-                                           ▼
-                                   ┌──────────────────┐
-                                   │  Enhanced Search │
-                                   │     Engine       │
-                                   └──────────────────┘
-                                           │
-                                           ▼
-                                   ┌──────────────────┐
-                                   │  Qdrant Vector   │
-                                   │    Database      │
-                                   └──────────────────┘
-```
+## 🔧 Configuration Options
 
-## Key Files
+### Environment Variables
 
-- **`server.py`**: Main SSE MCP server implementation
-- **`pyproject.toml`**: Project dependencies and configuration
-- **`add_memory_to_collection.py`**: Memory storage with metadata
-- **`src/search/enhanced_search_engine.py`**: Advanced search capabilities
-- **`src/shared/duplicate_detector.py`**: Duplicate prevention
-- **`src/shared/temporal_utils.py`**: Time-based filtering
-
-## Development
-
-### Code Quality and Pre-commit Hooks
-
-This project uses **ruff** for code linting and formatting, automatically enforced via pre-commit hooks.
-
-#### Setup Pre-commit Hooks
-
-The hooks are automatically installed when you run:
 ```bash
-uv sync  # This installs all dependencies including pre-commit and ruff
-uv run pre-commit install  # This activates the git hooks
+# Storage backend
+export INMEMORY_STORAGE_TYPE="file"           # or "mongodb"
+export INMEMORY_DATA_DIR="~/.inmemory"        # for file storage
+export MONGODB_URI="mongodb://localhost:27017/inmemory" # for mongodb
+
+# Server settings
+export INMEMORY_HOST="0.0.0.0"
+export INMEMORY_PORT="8081"
+
+# Qdrant settings
+export QDRANT_HOST="localhost"
+export QDRANT_PORT="6333"
 ```
 
-#### What the Pre-commit Hooks Do
+### YAML Configuration
 
-Every time you commit, the following checks run automatically:
-- **Code formatting** with `ruff format` (auto-fixes)
-- **Code linting** with `ruff check` (auto-fixes safe issues)
-- **Trailing whitespace removal** (auto-fixes)
-- **End of file fixes** (auto-fixes)
-- **YAML validation**
-- **Large file detection**
-- **Merge conflict detection**
-- **Debug statement detection**
+Create `~/.inmemory/config.yaml`:
 
-#### Manual Code Quality Checks
+```yaml
+storage:
+  type: "file"              # or "mongodb"
+  path: "~/.inmemory/data"
 
-Run checks manually on all files:
-```bash
-# Run all pre-commit hooks
-uv run pre-commit run --all-files
+auth:
+  type: "simple"            # or "oauth", "api_key"
+  default_user: "user123"
 
-# Run only ruff checks
-uv run ruff check .
-uv run ruff format .
+qdrant:
+  host: "localhost"
+  port: 6333
 
-# Auto-fix issues where possible
-uv run ruff check --fix .
+embedding:
+  provider: "ollama"
+  model: "nomic-embed-text"
+  ollama_host: "http://localhost:11434"
 ```
 
-#### When Commits Are Blocked
+## 🚀 Deployment
 
-If your commit is blocked due to code quality issues:
-
-1. **Auto-fixable issues**: The hooks will fix them automatically, then re-add and commit:
-   ```bash
-   git add .
-   git commit -m "Your commit message"
-   ```
-
-2. **Manual fixes required**: Address the remaining issues shown in the error output, then commit again.
-
-3. **Emergency bypass** (not recommended):
-   ```bash
-   git commit --no-verify -m "Emergency commit"
-   ```
-
-#### Ruff Configuration
-
-Ruff settings are configured in `pyproject.toml`:
-- **Line length**: 88 characters (Black-compatible)
-- **Target Python**: 3.12+
-- **Enabled rules**: Pyflakes, pycodestyle, bugbear, isort, pyupgrade, and more
-- **Auto-fixes**: All safe fixes are automatically applied
-
-### Running Tests
+### Single File Deployment
 ```bash
-# Test basic functionality
-python server.py --debug
-
-# Monitor logs
-tail -f server.log
-```
-
-### Adding New Features
-1. Add new tools as `@mcp.tool()` decorated functions in `server.py`
-2. Implement business logic in separate modules
-3. Update documentation and tests
-4. Ensure code passes pre-commit hooks before committing
-
-## Deployment
-
-### Local Development
-```bash
-python server.py --host localhost --port 8080 --debug
-```
-
-### Production Deployment
-```bash
-# Bind to all interfaces
-python server.py --host 0.0.0.0 --port 8080
-
-# Using process manager (systemd, supervisor, etc.)
-ExecStart=python /path/to/server.py --host 0.0.0.0 --port 8080
+# Just run the server - file storage included
+inmemory serve --port 8080
 ```
 
 ### Docker Deployment
 ```bash
-# Build image
-docker build -t memory-mcp-server .
+# Simple mode (file storage)
+docker run -p 8080:8080 -v inmemory-data:/root/.inmemory inmemory:latest
 
-# Run container
-docker run -p 8080:8080 memory-mcp-server
+# Enterprise mode (MongoDB)  
+docker-compose up  # Uses provided docker-compose.yml
 ```
 
-## Troubleshooting
-
-### Common Issues
-
-1. **Port already in use**
-   ```bash
-   python server.py --port 8081
-   ```
-
-2. **Cannot connect from remote client**
-   ```bash
-   python server.py --host 0.0.0.0 --port 8080
-   ```
-
-3. **Qdrant connection issues**
-   - Ensure Qdrant is running
-   - Check connection settings in `qdrant_db.py`
-
-4. **Ollama embedding errors**
-   - Verify Ollama is installed and running
-   - Check model availability
-
-### Logs and Debugging
-
-Enable debug mode for detailed logging:
+### Production Deployment
 ```bash
-python server.py --debug
+# Enterprise mode with MongoDB
+export MONGODB_URI="mongodb://prod-mongo:27017/inmemory"
+export GOOGLE_CLIENT_ID="your-prod-client-id"
+export GOOGLE_CLIENT_SECRET="your-prod-client-secret"
+
+inmemory serve --host 0.0.0.0 --port 8080
 ```
 
-## Contributing
+## 🔄 Migration Between Modes
 
-1. Fork the repository
-2. Create a feature branch
-3. Make changes with tests
-4. Update documentation
-5. Submit pull request
+Easily migrate from simple file storage to enterprise MongoDB:
 
-## License
+```python
+from inmemory.stores import FileBasedStore, MongoDBStore
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+# Initialize both backends
+file_store = FileBasedStore()
+mongo_store = MongoDBStore(mongodb_uri="mongodb://localhost:27017")
 
-## Support
+# Migrate all data
+success = mongo_store.migrate_from_file_store(file_store)
+print(f"Migration {'successful' if success else 'failed'}!")
+```
 
-- 📖 Documentation: Check `mem-mcp-Memory.md` for detailed implementation notes
-- 🐛 Issues: Report bugs via GitHub issues
-- 💡 Features: Suggest enhancements via GitHub discussions
+## 🧪 Development & Testing
+
+```bash
+# Install with development tools
+pip install inmemory[dev]
+
+# Run tests
+inmemory test
+
+# Check configuration
+inmemory config
+
+# View storage statistics  
+inmemory stats
+
+# Initialize with sample data
+inmemory init
+```
+
+## 🤝 Integration Examples
+
+### Personal AI Assistant
+```python
+from inmemory import Memory
+from openai import OpenAI
+
+class PersonalAssistant:
+    def __init__(self):
+        self.memory = Memory()
+        self.llm = OpenAI()
+    
+    def chat(self, user_input: str, user_id: str) -> str:
+        # Get relevant memories
+        memories = self.memory.search(user_input, user_id=user_id, limit=5)
+        context = "\n".join([m['memory'] for m in memories['results']])
+        
+        # Generate response with context
+        response = self.llm.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": f"Context: {context}"},
+                {"role": "user", "content": user_input}
+            ]
+        )
+        
+        # Store conversation
+        self.memory.add(f"User: {user_input}", user_id=user_id)
+        self.memory.add(f"Assistant: {response.choices[0].message.content}", user_id=user_id)
+        
+        return response.choices[0].message.content
+```
+
+### Customer Support Bot
+```python
+from inmemory import Memory
+
+class SupportBot:
+    def __init__(self):
+        self.memory = Memory()
+    
+    def handle_ticket(self, customer_id: str, issue: str):
+        # Check customer history
+        history = self.memory.search_by_people([customer_id], user_id="support")
+        similar_issues = self.memory.search(issue, user_id="support", limit=3)
+        
+        # Generate contextual response based on history
+        response = self.generate_response(issue, history, similar_issues)
+        
+        # Store interaction
+        self.memory.add(
+            f"Customer {customer_id} reported: {issue}",
+            user_id="support",
+            tags="ticket,customer_support",
+            people_mentioned=customer_id,
+            topic_category="support"
+        )
+        
+        return response
+```
+
+## 🔄 Comparison with mem0
+
+| Feature | InMemory | mem0 |
+|---------|----------|------|
+| **Zero Setup** | ✅ File storage default | ❌ Requires vector DB setup |
+| **Enterprise Ready** | ✅ Optional MongoDB | ✅ Multiple backends |
+| **SDK Quality** | ✅ Clean API | ✅ Excellent SDK |
+| **Installation Modes** | ✅ Progressive complexity | ✅ Optional dependencies |
+| **Dashboard Integration** | ✅ Private dashboard ready | ✅ Hosted platform |
+| **Open Source Friendly** | ✅ No mandatory external deps | ⚠️ Requires vector DB |
+
+## 📚 Documentation
+
+- **[Installation Guide](docs/installation-guide.md)**: Detailed installation and usage
+- **[Architecture Plan](docs/open-source-architecture-plan.md)**: Technical architecture details
+- **[API Reference](http://localhost:8081/docs)**: Interactive API documentation (when server running)
+
+## 🏢 Enterprise Features
+
+For enterprise deployments, InMemory provides:
+
+- **Multi-user Support**: MongoDB backend with user isolation
+- **OAuth Integration**: Google OAuth for dashboard authentication
+- **Scalable Storage**: MongoDB collections per user
+- **API Key Management**: Secure key generation and management
+- **Dashboard Ready**: REST API for your private dashboard integration
+
+## 🤖 MCP Server Integration
+
+InMemory works seamlessly with MCP (Model Context Protocol) for AI agent integration:
+
+```bash
+# Separate repository for MCP server
+git clone https://github.com/you/inmemory-mcp
+cd inmemory-mcp
+pip install -e .
+
+# Configure to connect to any InMemory API
+export INMEMORY_API_URL="http://localhost:8080"
+python src/server.py
+```
+
+## 🛠️ Requirements
+
+### Minimal Installation
+- **Python**: 3.12+
+- **Qdrant**: Vector database for embeddings
+- **Ollama**: Local embeddings (or OpenAI API key)
+
+### Enterprise Installation
+- **MongoDB**: User management and authentication
+- **Google OAuth**: Dashboard authentication
+
+## 🎯 Roadmap
+
+- [x] **Storage Abstraction**: File-based and MongoDB backends
+- [x] **Clean SDK**: mem0-inspired API design
+- [x] **CLI Tools**: Easy server management
+- [ ] **PostgreSQL Backend**: Alternative to MongoDB
+- [ ] **TypeScript SDK**: Cross-language support
+- [ ] **More Vector DBs**: Chroma, Pinecone integration
+- [ ] **Cloud Storage**: S3, GCS backends
+
+## 🤝 Contributing
+
+We welcome contributions! Please see:
+
+- **Issues**: Report bugs and request features
+- **Pull Requests**: Follow our coding standards (ruff, pre-commit)
+- **Documentation**: Help improve our guides
+
+```bash
+# Development setup
+git clone https://github.com/you/inmemory
+cd inmemory
+pip install -e .[dev]
+pre-commit install
+
+# Run tests
+inmemory test
+pytest
+```
+
+## 📄 License
+
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE.txt) file for details.
+
+## 🙏 Acknowledgments
+
+- **mem0.ai**: Inspiration for the flexible architecture pattern
+- **FastAPI**: Excellent API framework
+- **Qdrant**: High-performance vector database
+- **Pydantic**: Data validation and configuration
+
+---
+
+<p align="center">
+  <strong>Start simple. Scale seamlessly. 🚀</strong>
+</p>
