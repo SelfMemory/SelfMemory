@@ -5,7 +5,7 @@ A comprehensive memory management system with rich metadata, temporal data,
 and advanced search capabilities.
 """
 
-__version__ = "0.1.1"
+__version__ = "0.1.11"
 __author__ = "InMemory Team"
 
 # Import main SDK classes
