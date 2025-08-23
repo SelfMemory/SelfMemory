@@ -30,8 +30,8 @@ Please describe the tests that you ran to verify your changes:
 
 ## Test Configuration
 
-* Python version(s): 
-* Operating System: 
+* Python version(s):
+* Operating System:
 * Storage backend tested: [file/mongodb]
 
 ## Checklist

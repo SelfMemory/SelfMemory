@@ -8,7 +8,7 @@ This folder contains the managed solution backend for InMemory, providing REST A
 ### `__init__.py`
 - **Purpose**: Package initialization for the API module
 - **Exports**: `create_app`, `InMemoryAPI`
-- **Important functions**: 
+- **Important functions**:
   - Module-level imports to make API classes available
 
 ### `server.py`

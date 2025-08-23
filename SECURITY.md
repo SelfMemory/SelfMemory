@@ -223,5 +223,5 @@ We appreciate the security research community and thank all researchers who resp
 
 ---
 
-**Last Updated**: January 17, 2025  
+**Last Updated**: January 17, 2025
 **Next Review**: April 17, 2025

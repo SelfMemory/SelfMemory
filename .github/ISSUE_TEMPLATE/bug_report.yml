@@ -85,7 +85,7 @@ body:
       render: python
       placeholder: |
         from inmemory import Memory
-        
+
         memory = Memory()
         # Your code that reproduces the bug
 

@@ -15,10 +15,10 @@ We welcome contributions to InMemory! This document provides guidelines for cont
    # Create virtual environment
    python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   
+
    # Install development dependencies
    pip install -e .[dev,test]
-   
+
    # Install pre-commit hooks
    pre-commit install
    ```
@@ -154,18 +154,18 @@ git commit -m "feat!: redesign configuration API"
    ```markdown
    ## Description
    Brief description of changes made.
-   
+
    ## Type of Change
    - [ ] Bug fix (non-breaking change)
    - [ ] New feature (non-breaking change)
    - [ ] Breaking change (fix or feature causing existing functionality to change)
    - [ ] Documentation update
-   
+
    ## Testing
    - [ ] Tests pass locally
    - [ ] New tests added for new functionality
    - [ ] Documentation updated
-   
+
    ## Related Issues
    Fixes #(issue number)
    ```
