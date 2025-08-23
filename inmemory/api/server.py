@@ -107,7 +107,7 @@ class InMemoryAPI:
             if user_id:
                 logger.info(f"Valid API key for user: {user_id}")
                 return user_id
-            logger.warning(f"Invalid API key attempted: {api_key[:8]}...")
+            logger.warning("Invalid API key attempted.")
             return None
 
         except Exception as e:
