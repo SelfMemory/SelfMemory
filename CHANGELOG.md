@@ -7,12 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Initial PyPI release preparation
-- Comprehensive test suite with unit, integration, and example tests
-- Contributing guidelines and community documentation
-- Security audit and cleanup
-- CI/CD pipeline setup
+## [0.1.1] - 2025-01-23
+
+### Fixed
+- **Code Quality**: Fixed all 96 linting errors identified by ruff
+- **Exception Handling**: Improved exception chaining with proper `from e` or `from None` usage (B904)
+- **Import Management**: Cleaned up unused imports and conditional imports (F401, F821)
+- **Path Handling**: Modernized path operations using pathlib instead of os.path (PTH118, PTH120, PTH110)
+- **Code Style**: Applied consistent formatting and removed trailing whitespace
+- **Type Annotations**: Updated isinstance calls to use modern union syntax (UP038)
+
+### Changed
+- **Pre-commit Hooks**: Enhanced pre-commit configuration for better code quality
+- **Version Consistency**: Synchronized version numbers across pyproject.toml and __init__.py
+- **Build System**: Prepared package for PyPI distribution with proper metadata
+
+### Technical Improvements
+- All ruff linting rules now pass without errors
+- Improved exception handling throughout the codebase
+- Better error messages and debugging information
+- Consistent code formatting across all Python files
 
 ## [0.1.0] - 2025-01-17
 
