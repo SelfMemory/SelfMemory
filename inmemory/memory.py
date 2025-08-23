@@ -4,7 +4,6 @@ Main Memory SDK class for InMemory.
 This module provides the primary interface for local InMemory functionality,
 with a zero-setup API for direct usage without authentication.
 
-This follows the mem0 pattern: Memory (local) vs Inmemory (managed).
 """
 
 import logging
@@ -127,7 +126,7 @@ class Memory:
         else:
             self.db_config = self.config.vector_store.__dict__
 
-        # Initialize using factory pattern (like mem0) - NO FALLBACKS
+        # Initialize using factory pattern - NO FALLBACKS
         # Initialize embedding provider first
         self.embedding_provider = get_embedding_provider(
             embedding_provider, self.config
@@ -505,7 +504,7 @@ class AsyncMemory:
             embedding: Optional embedding configuration. Defaults to embedded mode.
             db: Optional database configuration. Defaults to embedded ChromaDB.
         """
-        # Create inmemory directory similar to mem0's approach
+        # Create inmemory directory
         self.inmemory_dir = Path(tempfile.gettempdir()) / "inmemory"
         self.inmemory_dir.mkdir(parents=True, exist_ok=True)
 

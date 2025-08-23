@@ -15,7 +15,6 @@
 - **🔍 Advanced Search**: Semantic similarity with ChromaDB embeddings
 - **🌐 Two Usage Modes**: Direct library usage OR REST API server
 - **💼 Dashboard Ready**: MongoDB authentication + clean REST endpoints
-- **📦 mem0 Compatible**: Same patterns as mem0 (Memory vs MemoryClient)
 
 ## 🚀 Quick Start
 

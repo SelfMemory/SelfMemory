@@ -4,7 +4,7 @@ A FastAPI REST API server for InMemory that uses the `inmemory` library internal
 
 ## Overview
 
-This server provides REST endpoints for the InMemory memory management system, following the mem0 architecture pattern:
+This server provides REST endpoints for the InMemory memory management system:
 
 - **Library First**: Uses the `inmemory` library (from parent directory) internally
 - **Clean Separation**: Server logic separate from library logic
@@ -152,16 +152,6 @@ The server uses MongoDB for API key validation (shared with dashboard):
 1. Dashboard creates API keys → MongoDB
 2. Server validates API keys → MongoDB
 3. Memory operations → Local ChromaDB
-
-## Comparison with mem0
-
-| Feature | mem0/server | inmemory/server |
-|---------|-------------|-----------------|
-| **Library Import** | `from mem0 import Memory` | `from inmemory import Memory` |
-| **Server Pattern** | Separate server/ folder | Separate server/ folder |
-| **Storage** | PostgreSQL/Neo4j | ChromaDB (embedded) |
-| **Authentication** | Built-in | MongoDB (shared) |
-| **Zero Setup** | ✅ | ✅ |
 
 ## Dashboard Integration
 

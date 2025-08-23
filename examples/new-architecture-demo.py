@@ -2,7 +2,6 @@
 """
 InMemory New Architecture Demo
 
-This demonstrates the new mem0-compatible architecture with:
 1. Memory (zero-setup local)
 2. AsyncMemory (async local)
 3. InmemoryClient (managed service)
@@ -127,7 +126,6 @@ def main():
     print("=" * 60)
     print()
 
-    print("Following mem0 pattern:")
     print("- Memory, AsyncMemory (local/zero-setup)")
     print("- InmemoryClient, AsyncInmemoryClient (managed/authenticated)")
     print()
@@ -153,7 +151,6 @@ def main():
     print("✅ Clean separation: Library vs Server")
     print("✅ Zero setup: Memory() works immediately")
     print("✅ Dashboard ready: InmemoryClient() for API integration")
-    print("✅ mem0 compatible: Same class naming patterns")
     print("✅ Two distribution modes: pip install + server deployment")
 
 

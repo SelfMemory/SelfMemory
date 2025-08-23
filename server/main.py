@@ -1,8 +1,7 @@
 """
 InMemory Server - FastAPI REST API for InMemory
 
-This server imports and uses the inmemory library to provide REST endpoints,
-following the mem0 server pattern of separating library from server concerns.
+This server imports and uses the inmemory library to provide REST endpoints
 """
 
 import logging
