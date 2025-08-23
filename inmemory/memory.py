@@ -1,97 +1,164 @@
 """
 Main Memory SDK class for InMemory.
 
-This module provides the primary interface for InMemory functionality,
-following the  pattern with a clean, easy-to-use API that works
-with any configured storage backend.
+This module provides the primary interface for local InMemory functionality,
+with a zero-setup API for direct usage without authentication.
+
+This follows the mem0 pattern: Memory (local) vs Inmemory (managed).
 """
 
 import logging
-import os
+import tempfile
+import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
-from .config import (
-    InMemoryConfig,
-    detect_deployment_mode,
-    get_config_for_mode,
-    load_config,
-)
-from .search.enhanced_search_engine import EnhancedSearchEngine
-from .services.add_memory import add_memory_enhanced
-from .stores import create_store
+from .config import InMemoryConfig
+from .embeddings import get_embedding_provider
+from .vector_stores import get_vector_store_provider
 
 logger = logging.getLogger(__name__)
 
 
 class Memory:
     """
-    Main Memory class providing the primary SDK interface.
+    Local Memory class for direct usage without authentication.
 
-    This class abstracts away storage backend complexity and provides
-    a clean, consistent API regardless of whether file-based storage
-    or enterprise MongoDB is used.
+    This class provides zero-setup functionality with embedded vector stores.
+    No API keys, no user management, no external database setup required.
+    Perfect for development, testing, and privacy-focused applications.
 
     Examples:
-        Basic usage (zero setup):
+        Zero-setup usage (works immediately):
         >>> memory = Memory()
         >>> memory.add("I love pizza")
         >>> results = memory.search("pizza")
 
-        With custom configuration:
-        >>> config = InMemoryConfig(storage={"type": "mongodb"})
-        >>> memory = Memory(config=config)
-
-        Auto-detected mode:
-        >>> memory = Memory()  # Detects based on environment
+        Custom configuration:
+        >>> memory = Memory(
+        ...     embedding={"provider": "ollama", "model": "nomic-embed-text"},
+        ...     db={"provider": "chroma", "path": "/tmp/my_memories"}
+        ... )
     """
 
     def __init__(
         self,
         config: InMemoryConfig | None = None,
-        storage_type: str | None = None,
-        auto_detect: bool = True,
+        embedding: dict[str, Any] | None = None,
+        db: dict[str, Any] | None = None,
     ):
         """
-        Initialize Memory with storage backend and configuration.
+        Initialize Memory with zero-setup defaults or custom configuration.
 
         Args:
-            config: Optional configuration object
-            storage_type: Force specific storage type ("file" or "mongodb")
-            auto_detect: Whether to auto-detect deployment mode
+            config: Optional InMemoryConfig instance for full configuration
+            embedding: Optional embedding configuration. Defaults to embedded mode.
+            db: Optional database configuration. Defaults to embedded ChromaDB.
+
+        Examples:
+            Zero setup:
+            >>> memory = Memory()  # Uses embedded ChromaDB + local embeddings
+
+            With config:
+            >>> config = InMemoryConfig(vector_store="qdrant", embedding="ollama")
+            >>> memory = Memory(config=config)
+
+            Custom providers (legacy):
+            >>> memory = Memory(
+            ...     embedding={"provider": "ollama", "model": "nomic-embed-text"},
+            ...     db={"provider": "qdrant", "host": "localhost", "port": 6333}
+            ... )
         """
-        # Load configuration
-        if config is None:
-            if auto_detect and not storage_type:
-                mode = detect_deployment_mode()
-                config = get_config_for_mode(mode)
-                logger.info(f"Auto-detected deployment mode: {mode}")
+        # Load configuration (priority: config param > legacy params > defaults)
+        if config:
+            self.config = config
+        else:
+            # Create config from legacy parameters or defaults
+            self.config = InMemoryConfig()
+            if embedding:
+                self.config.embedding = embedding
+            if db:
+                self.config.vector_store = db
+
+        # Set up zero-setup defaults if no config provided
+        if not embedding and not db and not config:
+            # Zero setup mode - use ChromaDB embedded
+            embedding_provider = "chroma"
+            vector_store_provider = "chroma"
+            collection_name = "inmemory_memories"
+        else:
+            # Use configured providers - handle both dict and Pydantic model
+            if isinstance(self.config.embedding, dict):
+                embedding_provider = self.config.embedding.get("provider", "ollama")
             else:
-                config = load_config()
+                embedding_provider = getattr(
+                    self.config.embedding, "provider", "ollama"
+                )
 
-        # Override storage type if explicitly provided
-        if storage_type:
-            config.storage.type = storage_type
+            if isinstance(self.config.vector_store, dict):
+                vector_store_provider = self.config.vector_store.get(
+                    "provider", "qdrant"
+                )
+                # Use collection_name from config if provided
+                collection_name = self.config.vector_store.get(
+                    "collection_name", "inmemory_memories"
+                )
+            else:
+                vector_store_provider = getattr(
+                    self.config.vector_store, "provider", "qdrant"
+                )
+                collection_name = getattr(
+                    self.config.vector_store, "collection_name", "inmemory_memories"
+                )
 
-        self.config = config
+        # Store config for reference - convert to dict for backward compatibility
+        if isinstance(self.config.embedding, dict):
+            self.embedding_config = self.config.embedding
+        elif hasattr(self.config.embedding, "model_dump"):
+            self.embedding_config = self.config.embedding.model_dump()
+        else:
+            self.embedding_config = self.config.embedding.__dict__
 
-        # Initialize storage backend
-        try:
-            storage_config = config.storage.dict()
-            self.store = create_store(**storage_config)
-            logger.info(f"Memory initialized with {config.storage.type} storage")
-        except Exception as e:
-            logger.error(f"Failed to initialize storage backend: {e}")
-            # Fallback to file-based storage
-            logger.warning("Falling back to file-based storage")
-            self.store = create_store("file")
+        if isinstance(self.config.vector_store, dict):
+            self.db_config = self.config.vector_store
+        elif hasattr(self.config.vector_store, "model_dump"):
+            self.db_config = self.config.vector_store.model_dump()
+        else:
+            self.db_config = self.config.vector_store.__dict__
 
-        # Initialize search engine
-        self.search_engine = EnhancedSearchEngine()
+        # Initialize using factory pattern (like mem0) - NO FALLBACKS
+        # Initialize embedding provider first
+        self.embedding_provider = get_embedding_provider(
+            embedding_provider, self.config
+        )
 
-        # Set default user for simplified API
-        self.default_user = os.getenv("INMEMORY_USER", "default")
+        # Get actual embedding dimensions from provider
+        if hasattr(self.embedding_provider, "embedding_dims"):
+            embedding_dims = self.embedding_provider.embedding_dims
+        elif hasattr(self.embedding_provider, "model_dims"):
+            embedding_dims = self.embedding_provider.model_dims
+        else:
+            # Test with a sample text to get dimensions
+            try:
+                test_embedding = self.embedding_provider.embed("test")
+                embedding_dims = len(test_embedding)
+            except Exception:
+                embedding_dims = 768  # Default for nomic-embed-text
 
+        logger.info(f"Using embedding dimensions: {embedding_dims}")
+
+        # Initialize vector store provider with correct dimensions
+        self.vector_store = get_vector_store_provider(
+            provider=vector_store_provider,
+            collection_name=collection_name,
+            embedding_model_dims=embedding_dims,
+            config=self.config,
+        )
+
+        logger.info(
+            f"Memory SDK initialized: {embedding_provider} + {vector_store_provider}"
+        )
         logger.info("Memory SDK initialized successfully")
 
     def add(
@@ -117,34 +184,42 @@ class Memory:
 
         Examples:
             >>> memory = Memory()
+            >>> memory.add("I love pizza", tags="food,personal")
             >>> memory.add("Meeting notes from project discussion",
             ...           tags="work,meeting",
             ...           people_mentioned="Sarah,Mike")
         """
         try:
-            # Use default user for all operations
-            user_id = self.default_user
+            # Generate embedding using provider
+            embedding = self.embedding_provider.embed(memory_content)
 
-            # Ensure user exists in storage backend
-            if not self.store.validate_user(user_id):
-                logger.info(f"Auto-creating default user: {user_id}")
-                self.store.create_user(user_id)
+            # Prepare payload for vector store
+            payload = {
+                "data": memory_content,
+                "tags": tags or "",
+                "people_mentioned": people_mentioned or "",
+                "topic_category": topic_category or "",
+                "created_at": datetime.now().isoformat(),
+            }
 
-            # Use existing add_memory_enhanced logic
-            result = add_memory_enhanced(
-                memory_content=memory_content,
-                user_id=user_id,
-                tags=tags or "",
-                people_mentioned=people_mentioned or "",
-                topic_category=topic_category or "",
+            # Add custom metadata if provided
+            if metadata:
+                payload.update(metadata)
+
+            # Generate unique ID
+            memory_id = str(uuid.uuid4())
+
+            # Insert using vector store provider
+            self.vector_store.insert(
+                vectors=[embedding], payloads=[payload], ids=[memory_id]
             )
 
-            # Add any additional metadata
-            if metadata and isinstance(result, dict):
-                result.setdefault("metadata", {}).update(metadata)
-
-            logger.info(f"Memory added: {memory_content[:50]}...")
-            return result if isinstance(result, dict) else {"message": result}
+            logger.info(f"Memory added via factory providers: {memory_content[:50]}...")
+            return {
+                "success": True,
+                "memory_id": memory_id,
+                "message": "Memory added successfully",
+            }
 
         except Exception as e:
             logger.error(f"Failed to add memory: {e}")
@@ -161,7 +236,7 @@ class Memory:
         threshold: float | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         """
-        Search memories with various filters.
+        Search memories with semantic similarity.
 
         Args:
             query: Search query string
@@ -178,34 +253,45 @@ class Memory:
         Examples:
             >>> memory = Memory()
             >>> results = memory.search("pizza")
-            >>> results = memory.search("meetings", tags=["work"], limit=5)
+            >>> results = memory.search("meetings", limit=5)
         """
         try:
-            # Use default user for all operations
-            user_id = self.default_user
+            # Generate embedding for query
+            query_embedding = self.embedding_provider.embed(query)
 
-            # Validate user
-            if not self.store.validate_user(user_id):
-                logger.warning(f"Default user not found: {user_id}")
-                return {"results": []}
+            # Build filters for vector store
+            filters = {}
+            if topic_category:
+                filters["topic_category"] = topic_category
+            if tags:
+                filters["tags"] = tags
+            if people_mentioned:
+                filters["people_mentioned"] = people_mentioned
 
-            # Use existing search engine
-            results = self.search_engine.search_memories(
-                query=query,
-                user_id=user_id,
-                limit=limit,
-                tags=tags,
-                people_mentioned=people_mentioned,
-                topic_category=topic_category,
-                temporal_filter=temporal_filter,
+            # Search using vector store provider (match Qdrant API)
+            results = self.vector_store.search(
+                query=query, vectors=query_embedding, limit=limit, filters=filters
             )
 
-            # Apply threshold filtering if specified
-            if threshold and results:
-                results = [r for r in results if r.get("score", 0) >= threshold]
+            # Format Qdrant results to match expected structure
+            formatted_results = []
+            if results:
+                for point in results:
+                    result = {
+                        "id": str(point.id),
+                        "content": point.payload.get("data", ""),
+                        "score": point.score,
+                        "metadata": point.payload,
+                    }
 
-            logger.info(f"Search completed: {len(results or [])} results")
-            return {"results": results or []}
+                    # Apply threshold filtering if specified
+                    if threshold is None or result["score"] >= threshold:
+                        formatted_results.append(result)
+
+            logger.info(
+                f"Search completed via factory providers: {len(formatted_results)} results"
+            )
+            return {"results": formatted_results}
 
         except Exception as e:
             logger.error(f"Search failed: {e}")
@@ -230,27 +316,11 @@ class Memory:
             >>> recent_memories = memory.get_all(limit=10)
         """
         try:
-            # Use default user for all operations
-            user_id = self.default_user
+            # Get all memories from vector store provider - NO FALLBACKS
+            results = self.vector_store.get_all(limit=limit, offset=offset)
 
-            # Validate user
-            if not self.store.validate_user(user_id):
-                logger.warning(f"Default user not found: {user_id}")
-                return {"results": []}
-
-            # Use search with empty query to get all memories
-            results = self.search_engine.search_memories(
-                query="",  # Empty query gets most recent
-                user_id=user_id,
-                limit=limit + offset,
-            )
-
-            # Apply manual offset
-            if results and offset > 0:
-                results = results[offset:]
-
-            logger.info(f"Retrieved {len(results or [])} memories")
-            return {"results": results or []}
+            logger.info(f"Retrieved {len(results)} memories via factory providers")
+            return {"results": results}
 
         except Exception as e:
             logger.error(f"Failed to get memories: {e}")
@@ -267,18 +337,12 @@ class Memory:
             Dict: Deletion result
         """
         try:
-            # Use default user for all operations
-            user_id = self.default_user
-
-            # Import deletion function
-            from .repositories.qdrant_db import delete_user_memory
-
-            success = delete_user_memory(user_id, memory_id)
+            # Delete using vector store provider - NO FALLBACKS
+            success = self.vector_store.delete(memory_id)
 
             if success:
-                logger.info(f"Memory {memory_id} deleted")
+                logger.info(f"Memory {memory_id} deleted via factory providers")
                 return {"success": True, "message": "Memory deleted successfully"}
-            logger.warning(f"Failed to delete memory {memory_id}")
             return {
                 "success": False,
                 "error": "Memory not found or deletion failed",
@@ -296,318 +360,50 @@ class Memory:
             Dict: Deletion result with count of deleted memories
         """
         try:
-            # Get all memories first
-            all_memories = self.get_all(limit=10000)  # Large limit
-            memory_ids = [m.get("id") for m in all_memories.get("results", [])]
+            # Get current count before deletion
+            current_memories = self.get_all(limit=10000)
+            memory_count = len(current_memories.get("results", []))
 
-            deleted_count = 0
-            for memory_id in memory_ids:
-                if memory_id:
-                    result = self.delete(memory_id)
-                    if result.get("success", False):
-                        deleted_count += 1
+            # Delete all using vector store provider - NO FALLBACKS
+            success = self.vector_store.delete_all()
 
-            logger.info(f"Deleted {deleted_count} memories")
-            return {
-                "success": True,
-                "deleted_count": deleted_count,
-                "message": f"Deleted {deleted_count} memories",
-            }
+            if success:
+                logger.info(f"Deleted {memory_count} memories via factory providers")
+                return {
+                    "success": True,
+                    "deleted_count": memory_count,
+                    "message": f"Deleted {memory_count} memories",
+                }
+            return {"success": False, "error": "Delete all operation failed"}
 
         except Exception as e:
             logger.error(f"Failed to delete all memories: {e}")
             return {"success": False, "error": str(e)}
 
-    def temporal_search(
-        self,
-        temporal_query: str,
-        semantic_query: str | None = None,
-        limit: int = 10,
-    ) -> dict[str, list[dict[str, Any]]]:
+    def get_stats(self) -> dict[str, Any]:
         """
-        Search memories using temporal queries.
-
-        Args:
-            temporal_query: Temporal query (e.g., "yesterday", "this_week")
-            semantic_query: Optional semantic search query
-            limit: Maximum number of results
+        Get statistics for memories.
 
         Returns:
-            Dict: Search results
-
-        Examples:
-            >>> memory = Memory()
-            >>> results = memory.temporal_search("yesterday")
-            >>> results = memory.temporal_search("this_week", semantic_query="meetings")
+            Dict: Statistics including memory count, provider info, etc.
         """
         try:
-            # Use default user for all operations
-            user_id = self.default_user
-
-            results = self.search_engine.temporal_search(
-                temporal_query=temporal_query,
-                user_id=user_id,
-                semantic_query=semantic_query,
-                limit=limit,
-            )
-
-            return {"results": results or []}
-
-        except Exception as e:
-            logger.error(f"Temporal search failed: {e}")
-            return {"results": []}
-
-    def search_by_tags(
-        self,
-        tags: str | list[str],
-        semantic_query: str | None = None,
-        match_all: bool = False,
-        limit: int = 10,
-    ) -> dict[str, list[dict[str, Any]]]:
-        """
-        Search memories by tags.
-
-        Args:
-            tags: Tags to search for (string or list)
-            semantic_query: Optional semantic search query
-            match_all: Whether all tags must match (AND) vs any tag (OR)
-            limit: Maximum number of results
-
-        Returns:
-            Dict: Search results
-
-        Examples:
-            >>> memory = Memory()
-            >>> results = memory.search_by_tags("work")
-            >>> results = memory.search_by_tags(["work", "meeting"], match_all=True)
-        """
-        try:
-            # Use default user for all operations
-            user_id = self.default_user
-
-            if isinstance(tags, str):
-                tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
-            else:
-                tag_list = tags
-
-            results = self.search_engine.tag_search(
-                tags=tag_list,
-                user_id=user_id,
-                semantic_query=semantic_query,
-                match_all_tags=match_all,
-                limit=limit,
-            )
-
-            return {"results": results or []}
-
-        except Exception as e:
-            logger.error(f"Tag search failed: {e}")
-            return {"results": []}
-
-    def search_by_people(
-        self,
-        people: str | list[str],
-        semantic_query: str | None = None,
-        limit: int = 10,
-    ) -> dict[str, list[dict[str, Any]]]:
-        """
-        Search memories by people mentioned.
-
-        Args:
-            people: People to search for (string or list)
-            semantic_query: Optional semantic search query
-            limit: Maximum number of results
-
-        Returns:
-            Dict: Search results
-
-        Examples:
-            >>> memory = Memory()
-            >>> results = memory.search_by_people("Sarah")
-            >>> results = memory.search_by_people(["Sarah", "Mike"])
-        """
-        try:
-            # Use default user for all operations
-            user_id = self.default_user
-
-            if isinstance(people, str):
-                people_list = [
-                    person.strip() for person in people.split(",") if person.strip()
-                ]
-            else:
-                people_list = people
-
-            results = self.search_engine.people_search(
-                people=people_list,
-                user_id=user_id,
-                semantic_query=semantic_query,
-                limit=limit,
-            )
-
-            return {"results": results or []}
-
-        except Exception as e:
-            logger.error(f"People search failed: {e}")
-            return {"results": []}
-
-    def get_user_stats(self, user_id: str) -> dict[str, Any]:
-        """
-        Get statistics for a user's memories.
-
-        Args:
-            user_id: User identifier
-
-        Returns:
-            Dict: User statistics including memory count, storage info, etc.
-        """
-        try:
-            # Get user info from store
-            user_info = self.store.get_user_info(user_id)
-
-            # Get memory count via search
-            all_memories = self.get_all(user_id, limit=1000)  # Sample count
-            memory_count = len(all_memories.get("results", []))
-
-            # Get storage stats
-            storage_stats = (
-                self.store.get_stats() if hasattr(self.store, "get_stats") else {}
+            # Get count from vector store provider - NO FALLBACKS
+            memory_count = (
+                self.vector_store.count() if hasattr(self.vector_store, "count") else 0
             )
 
             return {
-                "user_id": user_id,
+                "embedding_provider": self.embedding_config["provider"],
+                "embedding_model": self.embedding_config.get("model", "unknown"),
+                "vector_store": self.db_config["provider"],
                 "memory_count": memory_count,
-                "user_info": user_info,
-                "storage_backend": self.config.storage.type,
-                "storage_stats": storage_stats,
+                "status": "healthy",
             }
 
         except Exception as e:
-            logger.error(f"Failed to get stats for user {user_id}: {e}")
-            return {"user_id": user_id, "error": str(e)}
-
-    def create_user(self, user_id: str, **user_data) -> dict[str, Any]:
-        """
-        Create a new user with optional metadata.
-
-        Args:
-            user_id: User identifier
-            **user_data: Additional user information
-
-        Returns:
-            Dict: Creation result
-        """
-        try:
-            success = self.store.create_user(user_id, **user_data)
-
-            if success:
-                # Ensure Qdrant collection exists
-                from .repositories.qdrant_db import ensure_user_collection_exists
-
-                collection_name = ensure_user_collection_exists(user_id)
-
-                logger.info(
-                    f"User created: {user_id} with collection: {collection_name}"
-                )
-                return {
-                    "success": True,
-                    "user_id": user_id,
-                    "collection_name": collection_name,
-                }
-            return {"success": False, "error": "Failed to create user"}
-
-        except Exception as e:
-            logger.error(f"Failed to create user {user_id}: {e}")
-            return {"success": False, "error": str(e)}
-
-    def generate_api_key(self, user_id: str, name: str = "default") -> dict[str, Any]:
-        """
-        Generate a new API key for a user.
-
-        Args:
-            user_id: User identifier
-            name: Optional name for the API key
-
-        Returns:
-            Dict: API key information
-        """
-        try:
-            import secrets
-
-            # Generate secure API key
-            api_key = f"im_{secrets.token_urlsafe(32)}"
-
-            # Store in backend
-            success = self.store.store_api_key(
-                user_id, api_key, name=name, created_via="sdk"
-            )
-
-            if success:
-                logger.info(f"API key generated for user {user_id}")
-                return {
-                    "success": True,
-                    "api_key": api_key,
-                    "name": name,
-                    "user_id": user_id,
-                }
-            return {"success": False, "error": "Failed to store API key"}
-
-        except Exception as e:
-            logger.error(f"Failed to generate API key for user {user_id}: {e}")
-            return {"success": False, "error": str(e)}
-
-    def list_api_keys(self, user_id: str) -> list[dict[str, Any]]:
-        """
-        List API keys for a user.
-
-        Args:
-            user_id: User identifier
-
-        Returns:
-            List[Dict]: List of API key metadata (without actual keys)
-        """
-        try:
-            return self.store.list_user_api_keys(user_id)
-        except Exception as e:
-            logger.error(f"Failed to list API keys for user {user_id}: {e}")
-            return []
-
-    def revoke_api_key(self, api_key: str) -> dict[str, Any]:
-        """
-        Revoke an API key.
-
-        Args:
-            api_key: API key to revoke
-
-        Returns:
-            Dict: Revocation result
-        """
-        try:
-            success = self.store.revoke_api_key(api_key)
-
-            if success:
-                return {"success": True, "message": "API key revoked"}
-            return {"success": False, "error": "API key not found"}
-
-        except Exception as e:
-            logger.error(f"Failed to revoke API key: {e}")
-            return {"success": False, "error": str(e)}
-
-    def get_config(self) -> dict[str, Any]:
-        """
-        Get current configuration (safe for external consumption).
-
-        Returns:
-            Dict: Current configuration without sensitive data
-        """
-        config_dict = self.config.to_dict()
-
-        # Remove sensitive information
-        if "mongodb_uri" in config_dict.get("storage", {}):
-            config_dict["storage"]["mongodb_uri"] = "***HIDDEN***"
-        if "google_client_secret" in config_dict.get("auth", {}):
-            config_dict["auth"]["google_client_secret"] = "***HIDDEN***"
-
-        return config_dict
+            logger.error(f"Failed to get stats: {e}")
+            return {"error": str(e)}
 
     def health_check(self) -> dict[str, Any]:
         """
@@ -618,23 +414,32 @@ class Memory:
         """
         health = {
             "status": "healthy",
-            "storage_backend": self.config.storage.type,
+            "storage_type": self.db_config.get("provider", "unknown"),
+            "embedding_model": self.embedding_config.get("model", "unknown"),
+            "embedding_provider": self.embedding_config.get("provider", "unknown"),
             "timestamp": datetime.now().isoformat(),
         }
 
         try:
-            # Check storage backend
-            storage_stats = (
-                self.store.get_stats() if hasattr(self.store, "get_stats") else {}
-            )
-            health["storage"] = {"status": "healthy", "stats": storage_stats}
+            # Test vector store connectivity - NO FALLBACKS
+            if hasattr(self.vector_store, "health_check"):
+                vector_health = self.vector_store.health_check()
+                health.update(vector_health)
+            elif hasattr(self.vector_store, "count"):
+                count = self.vector_store.count()
+                health["memory_count"] = count
+                health["vector_store_status"] = "connected"
+            else:
+                health["vector_store_status"] = "available"
 
-            # Check search engine (basic test)
-            # This could be expanded to test actual functionality
-            health["search_engine"] = {"status": "healthy"}
+            # Test embedding provider
+            if hasattr(self.embedding_provider, "health_check"):
+                embedding_health = self.embedding_provider.health_check()
+                health.update(embedding_health)
+            else:
+                health["embedding_provider_status"] = "available"
 
-            # Check Qdrant connectivity
-            health["vector_db"] = {"status": "unknown"}  # Could test connection
+            logger.info("Health check passed via factory providers")
 
         except Exception as e:
             health["status"] = "unhealthy"
@@ -650,7 +455,13 @@ class Memory:
         Should be called when Memory instance is no longer needed.
         """
         try:
-            self.store.close_connection()
+            # Clean up vector store and embedding providers
+            if hasattr(self, "vector_store") and hasattr(self.vector_store, "close"):
+                self.vector_store.close()
+            if hasattr(self, "embedding_provider") and hasattr(
+                self.embedding_provider, "close"
+            ):
+                self.embedding_provider.close()
             logger.info("Memory SDK connections closed")
         except Exception as e:
             logger.error(f"Error closing connections: {e}")
@@ -665,4 +476,370 @@ class Memory:
 
     def __repr__(self) -> str:
         """String representation of Memory instance."""
-        return f"Memory(storage={self.config.storage.type})"
+        return f"Memory(embedding={self.embedding_config['provider']}, db={self.db_config['provider']})"
+
+
+class AsyncMemory:
+    """
+    Async version of the local Memory class for direct usage without authentication.
+
+    This class provides the same zero-setup functionality as Memory but with
+    async/await support for non-blocking operations.
+
+    Examples:
+        Async zero-setup usage:
+        >>> async with AsyncMemory() as memory:
+        ...     await memory.add("I love pizza")
+        ...     results = await memory.search("pizza")
+    """
+
+    def __init__(
+        self,
+        embedding: dict[str, Any] | None = None,
+        db: dict[str, Any] | None = None,
+    ):
+        """
+        Initialize AsyncMemory with zero-setup defaults or custom configuration.
+
+        Args:
+            embedding: Optional embedding configuration. Defaults to embedded mode.
+            db: Optional database configuration. Defaults to embedded ChromaDB.
+        """
+        # Create inmemory directory similar to mem0's approach
+        self.inmemory_dir = Path(tempfile.gettempdir()) / "inmemory"
+        self.inmemory_dir.mkdir(parents=True, exist_ok=True)
+
+        # Set up zero-setup defaults with embedded storage
+        self.embedding_config = embedding or {
+            "provider": "chroma",  # ChromaDB has built-in embeddings
+            "model": "all-MiniLM-L6-v2",  # Default sentence-transformers model
+        }
+
+        self.db_config = db or {
+            "provider": "chroma",
+            "path": str(self.inmemory_dir / "vector_store"),
+        }
+
+        # Initialize ChromaDB with embedded embeddings (zero-setup)
+        try:
+            import chromadb
+
+            # Create embedded ChromaDB client
+            self.chroma_client = chromadb.PersistentClient(
+                path=self.db_config.get("path", str(self.inmemory_dir / "chroma_db"))
+            )
+
+            # Get or create collection
+            collection_name = "inmemory_memories"
+            try:
+                self.collection = self.chroma_client.get_collection(collection_name)
+            except Exception:
+                # Collection doesn't exist, create it
+                self.collection = self.chroma_client.create_collection(
+                    name=collection_name,
+                    metadata={"description": "InMemory local storage"},
+                )
+
+            logger.info("ChromaDB initialized successfully (embedded mode)")
+
+        except ImportError:
+            logger.error("ChromaDB not installed. Install with: pip install chromadb")
+            raise ValueError(
+                "ChromaDB required for local Memory. Install with: pip install chromadb"
+            ) from None
+        except Exception as e:
+            logger.error(f"Failed to initialize ChromaDB: {e}")
+            raise ValueError(f"Failed to initialize ChromaDB: {e}") from e
+
+        logger.info("AsyncMemory SDK initialized successfully (zero-setup mode)")
+
+    async def add(
+        self,
+        memory_content: str,
+        tags: str | None = None,
+        people_mentioned: str | None = None,
+        topic_category: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Async add a new memory to storage.
+
+        Args:
+            memory_content: The memory text to store
+            tags: Optional comma-separated tags
+            people_mentioned: Optional comma-separated people names
+            topic_category: Optional topic category
+            metadata: Optional additional metadata
+
+        Returns:
+            Dict: Result information including memory_id and status
+        """
+        try:
+            # Generate unique ID
+            memory_id = str(uuid.uuid4())
+
+            # Prepare metadata for ChromaDB
+            chroma_metadata = {
+                "tags": tags or "",
+                "people_mentioned": people_mentioned or "",
+                "topic_category": topic_category or "",
+                "created_at": datetime.now().isoformat(),
+            }
+
+            # Add custom metadata fields if provided
+            if metadata:
+                for key, value in metadata.items():
+                    # ChromaDB metadata values must be strings, ints, floats, or bools
+                    if isinstance(value, str | int | float | bool) or value is None:
+                        chroma_metadata[f"custom_{key}"] = value
+
+            # Add to ChromaDB collection (uses built-in embeddings)
+            # Note: ChromaDB operations are sync, we're just providing async interface
+            self.collection.add(
+                documents=[memory_content], metadatas=[chroma_metadata], ids=[memory_id]
+            )
+
+            logger.info(f"Memory added: {memory_content[:50]}...")
+            return {
+                "success": True,
+                "memory_id": memory_id,
+                "message": "Memory added successfully",
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to add memory: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def search(
+        self,
+        query: str,
+        limit: int = 10,
+        tags: list[str] | None = None,
+        people_mentioned: list[str] | None = None,
+        topic_category: str | None = None,
+        temporal_filter: str | None = None,
+        threshold: float | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """
+        Async search memories with semantic similarity.
+
+        Args:
+            query: Search query string
+            limit: Maximum number of results
+            tags: Optional list of tags to filter by
+            people_mentioned: Optional list of people to filter by
+            topic_category: Optional topic category filter
+            temporal_filter: Optional temporal filter (e.g., "today", "this_week")
+            threshold: Optional minimum similarity score
+
+        Returns:
+            Dict: Search results with "results" key containing list of memories
+        """
+        try:
+            # Build ChromaDB where filters
+            where_filters = {}
+            if topic_category:
+                where_filters["topic_category"] = topic_category
+
+            # Search in ChromaDB collection
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=limit,
+                where=where_filters if where_filters else None,
+            )
+
+            # Format results to match expected structure
+            formatted_results = []
+            if results and results.get("ids") and results["ids"][0]:
+                for i in range(len(results["ids"][0])):
+                    result = {
+                        "id": results["ids"][0][i],
+                        "content": results["documents"][0][i],
+                        "score": 1.0
+                        - results["distances"][0][
+                            i
+                        ],  # Convert distance to similarity score
+                        "metadata": results["metadatas"][0][i]
+                        if results.get("metadatas")
+                        else {},
+                    }
+
+                    # Apply threshold filtering if specified
+                    if threshold is None or result["score"] >= threshold:
+                        formatted_results.append(result)
+
+            logger.info(f"Search completed: {len(formatted_results)} results")
+            return {"results": formatted_results}
+
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            return {"results": []}
+
+    async def get_all(
+        self, limit: int = 100, offset: int = 0
+    ) -> dict[str, list[dict[str, Any]]]:
+        """
+        Async get all memories.
+
+        Args:
+            limit: Maximum number of memories to return
+            offset: Number of memories to skip
+
+        Returns:
+            Dict: All memories with "results" key
+        """
+        try:
+            # Get all memories from ChromaDB collection
+            results = self.collection.get(limit=limit, offset=offset)
+
+            # Format results
+            formatted_results = []
+            if results and results.get("ids"):
+                for i in range(len(results["ids"])):
+                    result = {
+                        "id": results["ids"][i],
+                        "content": results["documents"][i]
+                        if results.get("documents")
+                        else "",
+                        "metadata": results["metadatas"][i]
+                        if results.get("metadatas")
+                        else {},
+                    }
+                    formatted_results.append(result)
+
+            logger.info(f"Retrieved {len(formatted_results)} memories")
+            return {"results": formatted_results}
+
+        except Exception as e:
+            logger.error(f"Failed to get memories: {e}")
+            return {"results": []}
+
+    async def delete(self, memory_id: str) -> dict[str, Any]:
+        """
+        Async delete a specific memory.
+
+        Args:
+            memory_id: Memory identifier to delete
+
+        Returns:
+            Dict: Deletion result
+        """
+        try:
+            # Delete from ChromaDB collection
+            self.collection.delete(ids=[memory_id])
+
+            logger.info(f"Memory {memory_id} deleted")
+            return {"success": True, "message": "Memory deleted successfully"}
+
+        except Exception as e:
+            logger.error(f"Error deleting memory {memory_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def delete_all(self) -> dict[str, Any]:
+        """
+        Async delete all memories.
+
+        Returns:
+            Dict: Deletion result with count of deleted memories
+        """
+        try:
+            # Get current count before deletion
+            current_memories = await self.get_all(limit=10000)
+            memory_count = len(current_memories.get("results", []))
+
+            # Delete the collection and recreate it
+            collection_name = "inmemory_memories"
+            self.chroma_client.delete_collection(collection_name)
+
+            # Recreate the collection
+            self.collection = self.chroma_client.create_collection(
+                name=collection_name, metadata={"description": "InMemory local storage"}
+            )
+
+            logger.info(f"Deleted {memory_count} memories")
+            return {
+                "success": True,
+                "deleted_count": memory_count,
+                "message": f"Deleted {memory_count} memories",
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to delete all memories: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def get_stats(self) -> dict[str, Any]:
+        """
+        Async get statistics for memories.
+
+        Returns:
+            Dict: Statistics including memory count, provider info, etc.
+        """
+        try:
+            # Get memory count
+            all_memories = await self.get_all(limit=1)  # Just get count
+
+            return {
+                "embedding_provider": self.embedding_config["provider"],
+                "embedding_model": self.embedding_config.get("model", "unknown"),
+                "vector_store": self.db_config["provider"],
+                "memory_count": len(all_memories.get("results", [])),
+                "status": "healthy",
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get stats: {e}")
+            return {"error": str(e)}
+
+    async def health_check(self) -> dict[str, Any]:
+        """
+        Async perform health check on all components.
+
+        Returns:
+            Dict: Health check results
+        """
+        health = {
+            "status": "healthy",
+            "storage_type": "embedded_chromadb",
+            "embedding_model": self.embedding_config.get("model", "built-in"),
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        try:
+            # Test ChromaDB connectivity
+            count = self.collection.count()
+            health["memory_count"] = count
+            health["collection_name"] = "inmemory_memories"
+            health["storage_path"] = self.db_config.get("path")
+
+            logger.info("Health check passed")
+
+        except Exception as e:
+            health["status"] = "unhealthy"
+            health["error"] = str(e)
+            logger.error(f"Health check failed: {e}")
+
+        return health
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit with cleanup."""
+        await self.close()
+
+    async def close(self) -> None:
+        """
+        Close connections and cleanup resources.
+
+        Should be called when AsyncMemory instance is no longer needed.
+        """
+        try:
+            # ChromaDB handles cleanup automatically
+            logger.info("AsyncMemory SDK connections closed")
+        except Exception as e:
+            logger.error(f"Error closing connections: {e}")
+
+    def __repr__(self) -> str:
+        """String representation of AsyncMemory instance."""
+        return f"AsyncMemory(embedding={self.embedding_config['provider']}, db={self.db_config['provider']})"

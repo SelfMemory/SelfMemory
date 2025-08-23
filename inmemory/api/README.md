@@ -13,7 +13,7 @@ The InMemory API server provides a hosted solution where users can:
 ## Architecture
 
 ```
-Client (Inmry) → HTTP API → InMemory Core → Storage Backend
+Client (Inmemory) → HTTP API → InMemory Core → Storage Backend
 ```
 
 ### Components
@@ -27,7 +27,7 @@ Client (Inmry) → HTTP API → InMemory Core → Storage Backend
 
 ### Authentication
 - `GET /v1/ping/` - Health check (no auth)
-- `GET /v1/health/` - Detailed health check (no auth) 
+- `GET /v1/health/` - Detailed health check (no auth)
 - `POST /v1/auth/generate-key/` - Generate new API key
 - `DELETE /v1/auth/revoke-key/` - Revoke current API key
 
@@ -70,17 +70,17 @@ run_server(host="0.0.0.0", port=8000, debug=True)
 
 ```python
 import os
-from inmemory import Inmry
+from inmemory import Inmemory
 
 # Set your API key
 os.environ["INMEM_API_KEY"] = "your-api-key"
 
 # Initialize client
-inmry = Inmry()
+inmemory = Inmemory()
 
 # Use the same interface as self-hosted
-result = inmry.add("I love pizza", user_id="john")
-results = inmry.search("pizza", user_id="john")
+result = inmemory.add("I love pizza", user_id="john")
+results = inmemory.search("pizza", user_id="john")
 ```
 
 ## Authentication

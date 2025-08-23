@@ -3,14 +3,22 @@ MongoDB-based User Management for Multi-User Memory MCP Server.
 Replaces the JSON-based user management with MongoDB integration.
 """
 
+import contextlib
 import logging
 import os
 from datetime import datetime
 from typing import Any
 
-from pymongo import MongoClient
-
 logger = logging.getLogger(__name__)
+
+# Conditional import of pymongo
+try:
+    from pymongo import MongoClient
+
+    PYMONGO_AVAILABLE = True
+except ImportError:
+    PYMONGO_AVAILABLE = False
+    MongoClient = None
 
 
 class MongoUserManager:
@@ -89,12 +97,9 @@ class MongoUserManager:
 
             user = None
             if len(user_id) == 24:
-                try:
+                with contextlib.suppress(Exception):
                     # Try as ObjectId first (NextAuth MongoDB adapter stores _id as ObjectId)
                     user = self.users.find_one({"_id": ObjectId(user_id)})
-                except:
-                    # If ObjectId conversion fails, try as string
-                    pass
 
             # If not found by ObjectId, try by string id field
             if not user:

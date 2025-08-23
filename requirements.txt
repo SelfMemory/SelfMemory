@@ -1,9 +1,28 @@
-ollama
-cryptography
-fastapi>=0.104.1
-uvicorn>=0.24.0
-python-dotenv>=1.0.0
-pydantic>=2.0.0
-httpx>=0.28.0
-pymongo>=4.0.0
+# Core dependencies - aligned with pyproject.toml for Python 3.10+ support
 qdrant-client>=1.6.0
+pydantic>=2.0.0,<3.0.0
+python-dotenv>=1.0.0
+cryptography>=40.0.0
+httpx>=0.25.0
+
+# Server dependencies
+fastapi>=0.100.0
+uvicorn>=0.20.0
+starlette>=0.27.0
+
+# MongoDB backend
+pymongo>=4.0.0
+
+# OAuth authentication
+authlib>=1.2.0
+google-auth>=2.15.0
+
+# Embedding providers
+ollama>=0.1.0
+
+# YAML configuration support
+pyyaml>=6.0.0
+
+# MCP server support (Python 3.10+ only)
+mcp[cli]>=1.0.0
+fastmcp>=2.0.0

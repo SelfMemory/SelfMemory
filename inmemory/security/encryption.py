@@ -69,7 +69,7 @@ class MemoryEncryption:
             return base64.urlsafe_b64encode(encrypted_bytes).decode()
         except Exception as e:
             logger.error(f"Encryption failed for user {self.user_id}: {str(e)}")
-            raise Exception(f"Encryption failed: {str(e)}")
+            raise Exception(f"Encryption failed: {str(e)}") from e
 
     def decrypt_text(self, encrypted_text: str) -> str:
         """
@@ -93,7 +93,7 @@ class MemoryEncryption:
             return decrypted_bytes.decode()
         except Exception as e:
             logger.error(f"Decryption failed for user {self.user_id}: {str(e)}")
-            raise Exception(f"Decryption failed: {str(e)}")
+            raise Exception(f"Decryption failed: {str(e)}") from e
 
     def encrypt_list(self, text_list: list[str]) -> list[str]:
         """

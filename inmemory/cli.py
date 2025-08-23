@@ -24,7 +24,10 @@ def serve_command(args):
     try:
         import uvicorn
 
-        from .main import app
+        from .api.server import create_app
+
+        # Import to verify dependencies are available
+        create_app()
     except ImportError:
         print("❌ Server dependencies not installed. Run: pip install inmemory[server]")
         sys.exit(1)
@@ -233,7 +236,7 @@ def main():
         epilog="""
 Examples:
   inmemory serve                    # Start API server (auto-detect mode)
-  inmemory serve --storage file     # Start with file backend  
+  inmemory serve --storage file     # Start with file backend
   inmemory serve --storage mongodb  # Start with MongoDB backend
   inmemory init                     # Initialize in current directory
   inmemory test                     # Test functionality

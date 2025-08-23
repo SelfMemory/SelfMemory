@@ -83,7 +83,7 @@ def retrieve_memories(
 
     except Exception as e:
         logger.error(f"Failed to retrieve memories: {str(e)}")
-        raise Exception(f"Memory retrieval failed: {str(e)}")
+        raise Exception(f"Memory retrieval failed: {str(e)}") from e
 
 
 def search_memories_with_filter(

@@ -7,7 +7,15 @@ enterprise backends like MongoDB without requiring external dependencies.
 """
 
 from .base import MemoryStoreInterface
-from .file_store import FileBasedStore
+
+# Always available - file-based storage
+try:
+    from .file_store import FileBasedStore
+
+    _FILE_AVAILABLE = True
+except ImportError:
+    FileBasedStore = None
+    _FILE_AVAILABLE = False
 
 # Optional imports (only available with extras)
 try:

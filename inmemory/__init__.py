@@ -8,12 +8,18 @@ and advanced search capabilities.
 __version__ = "0.1.0"
 __author__ = "InMemory Team"
 
-# Import main SDK classes
-from .client import AsyncInmry, Inmry  # Managed solution
+# Import main SDK classes - following mem0 pattern
+from .client import (
+    AsyncInmemoryClient,
+    InmemoryClient,
+)  # Managed solutions (like mem0.MemoryClient, mem0.AsyncMemoryClient)
 
 # Import configuration classes
 from .config import InMemoryConfig, load_config
-from .memory import Memory  # Self-hosted solution
+from .memory import (
+    AsyncMemory,
+    Memory,
+)  # Self-hosted solutions (like mem0.Memory, mem0.AsyncMemory)
 from .search.enhanced_search_engine import EnhancedSearchEngine
 
 # Import existing classes for backward compatibility
@@ -28,14 +34,16 @@ try:
 
     _MONGODB_AVAILABLE = True
 except ImportError:
+    MongoUserManager = None
     _MONGODB_AVAILABLE = False
 
-# Main SDK exports
+# Main SDK exports - following mem0 pattern exactly
 __all__ = [
-    # Primary SDK interfaces
-    "Memory",  # Self-hosted solution
-    "Inmry",  # Managed solution
-    "AsyncInmry",  # Async managed solution
+    # Primary SDK interfaces (mem0 pattern)
+    "Memory",  # Self-hosted solution (like mem0.Memory)
+    "AsyncMemory",  # Async self-hosted solution (like mem0.AsyncMemory)
+    "InmemoryClient",  # Managed solution (like mem0.MemoryClient)
+    "AsyncInmemoryClient",  # Async managed solution (like mem0.AsyncMemoryClient)
     # Configuration
     "InMemoryConfig",
     "load_config",

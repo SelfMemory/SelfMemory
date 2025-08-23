@@ -1,40 +1,35 @@
+"""
+Embeddings utilities - now uses the pluggable embeddings system.
+
+This module provides backward compatibility for existing code while
+using the new pluggable embeddings architecture.
+"""
+
 import logging
 
-import ollama
-
-from inmemory.common.constants import EmbeddingConstants
+from inmemory.config.config import load_config
+from inmemory.embeddings import get_embedding_provider
 
 logger = logging.getLogger(__name__)
-embedding_client = ollama.Client()
+
+# Global embedding provider instance
+_embedding_provider = None
 
 
-def generate_embeddings(text: str) -> dict:
-    """
-    Generate embeddings for the given text using Ollama.
-
-    Args:
-        text: The input text to generate embeddings for
-
-    Returns:
-        Dictionary containing embeddings and metadata
-
-    Raises:
-        Exception: If embedding generation fails
-    """
-    try:
-        logger.debug(f"Generating embeddings for text of length {len(text)}")
-        return ollama.embed(
-            model=EmbeddingConstants.EMBEDDING_MODEL,
-            input=text,
+def _get_embedding_provider():
+    """Get or create the global embedding provider."""
+    global _embedding_provider
+    if _embedding_provider is None:
+        config = load_config()
+        _embedding_provider = get_embedding_provider(
+            provider=config.embedding.provider, config=config
         )
-    except Exception as e:
-        logger.error(f"Failed to generate embeddings: {str(e)}")
-        raise Exception(f"Embedding generation failed: {str(e)}")
+    return _embedding_provider
 
 
 def get_embeddings(text: str) -> list[float]:
     """
-    Get embeddings vector for the given text.
+    Get embeddings vector for the given text using the configured provider.
 
     Args:
         text: The input text to get embeddings for
@@ -50,11 +45,41 @@ def get_embeddings(text: str) -> list[float]:
         raise ValueError("Text cannot be empty")
 
     try:
-        embeddings_response = generate_embeddings(text.strip())
-        return embeddings_response["embeddings"][0]
+        provider = _get_embedding_provider()
+        return provider.embed(text.strip())
     except Exception as e:
-        logger.error(f"Failed to extract embeddings: {str(e)}")
-        raise
+        logger.error(f"Failed to generate embeddings: {str(e)}")
+        raise Exception(f"Embedding generation failed: {str(e)}") from e
+
+
+def generate_embeddings(text: str) -> dict:
+    """
+    Generate embeddings for the given text using the configured provider.
+
+    This function is kept for backward compatibility.
+
+    Args:
+        text: The input text to generate embeddings for
+
+    Returns:
+        Dictionary containing embeddings and metadata
+
+    Raises:
+        Exception: If embedding generation fails
+    """
+    try:
+        logger.debug(f"Generating embeddings for text of length {len(text)}")
+        embeddings = get_embeddings(text)
+        return {"embeddings": [embeddings]}
+    except Exception as e:
+        logger.error(f"Failed to generate embeddings: {str(e)}")
+        raise Exception(f"Embedding generation failed: {str(e)}") from e
+
+
+# Backwards compatibility functions
+def get_embedding_client():
+    """Get the embedding provider instance for backward compatibility."""
+    return _get_embedding_provider()
 
 
 if __name__ == "__main__":

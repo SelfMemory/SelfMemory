@@ -32,7 +32,7 @@ def create_qdrant_client() -> QdrantClient:
         return client
     except Exception as e:
         logger.error(f"Failed to connect to Qdrant: {str(e)}")
-        raise Exception(f"Database connection failed: {str(e)}")
+        raise Exception(f"Database connection failed: {str(e)}") from e
 
 
 def ensure_collection_exists(client: QdrantClient, collection_name: str) -> bool:
@@ -73,7 +73,7 @@ def ensure_collection_exists(client: QdrantClient, collection_name: str) -> bool
 
     except Exception as e:
         logger.error(f"Failed to ensure collection exists: {str(e)}")
-        raise Exception(f"Collection management failed: {str(e)}")
+        raise Exception(f"Collection management failed: {str(e)}") from e
 
 
 def get_qdrant_client() -> QdrantClient:
@@ -123,7 +123,7 @@ def delete_memory_point(
 
         except Exception as retrieve_error:
             logger.error(f"❌ Failed to check if memory exists: {str(retrieve_error)}")
-            raise Exception("Memory not found")
+            raise Exception("Memory not found") from retrieve_error
 
         # Delete the specific point using Qdrant's delete API
         result = client.delete(
@@ -139,7 +139,7 @@ def delete_memory_point(
 
     except Exception as e:
         logger.error(f"❌ Failed to delete memory point {point_id}: {str(e)}")
-        raise Exception(f"Memory deletion failed: {str(e)}")
+        raise Exception(f"Memory deletion failed: {str(e)}") from e
 
 
 def delete_user_memory(user_id: str, memory_id: str) -> bool:

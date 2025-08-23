@@ -1,21 +1,22 @@
 """
-Inmry Client - Managed solution for InMemory.
+Inmemory Client - Managed solution for InMemory.
 
 This module provides the client interface for the managed InMemory service,
 similar to how  provides MemoryClient for their hosted solution.
 """
 
-import hashlib
 import logging
 import os
 from typing import Any
 
 import httpx
 
+from .common.constants import APIConstants
+
 logger = logging.getLogger(__name__)
 
 
-class Inmry:
+class InmemoryClient:
     """Client for interacting with the managed InMemory API.
 
     This class provides methods to create, retrieve, search, and delete
@@ -25,7 +26,6 @@ class Inmry:
         api_key (str): The API key for authenticating with the InMemory API.
         host (str): The base URL for the InMemory API.
         client (httpx.Client): The HTTP client used for making API requests.
-        user_id (str): Unique identifier for the user.
     """
 
     def __init__(
@@ -34,14 +34,15 @@ class Inmry:
         host: str | None = None,
         client: httpx.Client | None = None,
     ):
-        """Initialize the Inmry client.
+        """Initialize the Inmemory client.
 
         Args:
             api_key: The API key for authenticating with the InMemory API. If not
                      provided, it will attempt to use the INMEM_API_KEY
                      environment variable.
-            host: The base URL for the InMemory API. Defaults to
-                  "https://api.inmemory.ai".
+            host: The base URL for the InMemory API. Defaults to the value from
+                  APIConstants.DEFAULT_API_HOST, with support for INMEMORY_API_HOST
+                  environment variable override.
             client: A custom httpx.Client instance. If provided, it will be
                     used instead of creating a new one.
 
@@ -49,15 +50,15 @@ class Inmry:
             ValueError: If no API key is provided or found in the environment.
         """
         self.api_key = api_key or os.getenv("INMEM_API_KEY")
-        self.host = host or "https://api.inmemory.ai"
+        # Priority order: explicit host -> env var -> constants default
+        self.host = (
+            host or os.getenv("INMEMORY_API_HOST") or APIConstants.DEFAULT_API_HOST
+        )
 
         if not self.api_key:
             raise ValueError(
                 "InMemory API Key not provided. Please set INMEM_API_KEY environment variable or provide api_key parameter."
             )
-
-        # Create MD5 hash of API key for user_id (similar to memory pattern)
-        self.user_id = hashlib.md5(self.api_key.encode()).hexdigest()
 
         if client is not None:
             self.client = client
@@ -66,7 +67,6 @@ class Inmry:
             self.client.headers.update(
                 {
                     "Authorization": f"Bearer {self.api_key}",
-                    "InMemory-User-ID": self.user_id,
                     "Content-Type": "application/json",
                 }
             )
@@ -75,15 +75,14 @@ class Inmry:
                 base_url=self.host,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
-                    "InMemory-User-ID": self.user_id,
                     "Content-Type": "application/json",
                 },
-                timeout=300,
+                timeout=APIConstants.DEFAULT_TIMEOUT,
             )
 
         # Validate API key on initialization
         self.user_info = self._validate_api_key()
-        logger.info(f"Inmry client initialized for user: {self.user_id}")
+        logger.info("Inmemory client initialized")
 
     def _validate_api_key(self) -> dict[str, Any]:
         """Validate the API key by making a test request."""
@@ -93,10 +92,9 @@ class Inmry:
             auth_info = response.json()
 
             # The /v1/auth/validate endpoint returns validation status
-            # Return it in the expected format for compatibility
             if auth_info.get("valid", False):
                 return {
-                    "user_id": auth_info.get("user_id"),
+                    "valid": True,
                     "created_at": None,  # Not provided by this endpoint
                     "last_used": None,  # Not provided by this endpoint
                     "usage_count": 0,  # Not provided by this endpoint
@@ -109,14 +107,13 @@ class Inmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            raise ValueError(f"API key validation failed: {error_message}")
+            raise ValueError(f"API key validation failed: {error_message}") from None
         except Exception as e:
-            raise ValueError(f"Failed to connect to InMemory API: {str(e)}")
+            raise ValueError(f"Failed to connect to InMemory API: {str(e)}") from e
 
     def add(
         self,
         memory_content: str,
-        user_id: str,
         tags: str | None = None,
         people_mentioned: str | None = None,
         topic_category: str | None = None,
@@ -126,7 +123,6 @@ class Inmry:
 
         Args:
             memory_content: The memory text to store
-            user_id: User identifier
             tags: Optional comma-separated tags
             people_mentioned: Optional comma-separated people names
             topic_category: Optional topic category
@@ -136,16 +132,14 @@ class Inmry:
             Dict: Result information including memory_id and status
 
         Examples:
-            >>> inmry = Inmry()
-            >>> inmry.add("Meeting notes from project discussion",
-            ...           user_id="john",
+            >>> inmemory = Inmemory()
+            >>> inmemory.add("Meeting notes from project discussion",
             ...           tags="work,meeting",
             ...           people_mentioned="Sarah,Mike")
         """
         try:
             payload = {
                 "memory_content": memory_content,
-                "user_id": user_id,
                 "tags": tags or "",
                 "people_mentioned": people_mentioned or "",
                 "topic_category": topic_category or "",
@@ -156,7 +150,7 @@ class Inmry:
             response.raise_for_status()
 
             result = response.json()
-            logger.info(f"Memory added for user {user_id}: {memory_content[:50]}...")
+            logger.info(f"Memory added: {memory_content[:50]}...")
             return result
 
         except httpx.HTTPStatusError as e:
@@ -165,16 +159,15 @@ class Inmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            logger.error(f"Failed to add memory for user {user_id}: {error_message}")
+            logger.error(f"Failed to add memory: {error_message}")
             return {"success": False, "error": error_message}
         except Exception as e:
-            logger.error(f"Failed to add memory for user {user_id}: {e}")
+            logger.error(f"Failed to add memory: {e}")
             return {"success": False, "error": str(e)}
 
     def search(
         self,
         query: str,
-        user_id: str,
         limit: int = 10,
         tags: list[str] | None = None,
         people_mentioned: list[str] | None = None,
@@ -186,7 +179,6 @@ class Inmry:
 
         Args:
             query: Search query string
-            user_id: User identifier
             limit: Maximum number of results
             tags: Optional list of tags to filter by
             people_mentioned: Optional list of people to filter by
@@ -198,15 +190,13 @@ class Inmry:
             Dict: Search results with "results" key containing list of memories
 
         Examples:
-            >>> inmry = Inmry()
-            >>> results = inmry.search("pizza", user_id="john")
-            >>> results = inmry.search("meetings", user_id="john",
-            ...                        tags=["work"], limit=5)
+            >>> inmemory = Inmemory()
+            >>> results = inmemory.search("pizza")
+            >>> results = inmemory.search("meetings", tags=["work"], limit=5)
         """
         try:
             payload = {
                 "query": query,
-                "user_id": user_id,
                 "limit": limit,
                 "tags": ",".join(tags) if tags else "",
                 "people_mentioned": ",".join(people_mentioned)
@@ -221,9 +211,7 @@ class Inmry:
             response.raise_for_status()
 
             result = response.json()
-            logger.info(
-                f"Search completed for user {user_id}: {len(result.get('results', []))} results"
-            )
+            logger.info(f"Search completed: {len(result.get('results', []))} results")
             return result
 
         except httpx.HTTPStatusError as e:
@@ -232,19 +220,18 @@ class Inmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            logger.error(f"Search failed for user {user_id}: {error_message}")
+            logger.error(f"Search failed: {error_message}")
             return {"results": [], "error": error_message}
         except Exception as e:
-            logger.error(f"Search failed for user {user_id}: {e}")
+            logger.error(f"Search failed: {e}")
             return {"results": [], "error": str(e)}
 
     def get_all(
-        self, user_id: str, limit: int = 100, offset: int = 0
+        self, limit: int = 100, offset: int = 0
     ) -> dict[str, list[dict[str, Any]]]:
-        """Get all memories for a user.
+        """Get all memories.
 
         Args:
-            user_id: User identifier
             limit: Maximum number of memories to return
             offset: Number of memories to skip
 
@@ -252,13 +239,12 @@ class Inmry:
             Dict: All memories with "results" key
 
         Examples:
-            >>> inmry = Inmry()
-            >>> all_memories = inmry.get_all("john")
-            >>> recent_memories = inmry.get_all("john", limit=10)
+            >>> inmemory = Inmemory()
+            >>> all_memories = inmemory.get_all()
+            >>> recent_memories = inmemory.get_all(limit=10)
         """
         try:
             params = {
-                "user_id": user_id,
                 "limit": limit,
                 "offset": offset,
             }
@@ -267,9 +253,7 @@ class Inmry:
             response.raise_for_status()
 
             result = response.json()
-            logger.info(
-                f"Retrieved {len(result.get('results', []))} memories for user {user_id}"
-            )
+            logger.info(f"Retrieved {len(result.get('results', []))} memories")
             return result
 
         except httpx.HTTPStatusError as e:
@@ -278,30 +262,27 @@ class Inmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            logger.error(f"Failed to get memories for user {user_id}: {error_message}")
+            logger.error(f"Failed to get memories: {error_message}")
             return {"results": [], "error": error_message}
         except Exception as e:
-            logger.error(f"Failed to get memories for user {user_id}: {e}")
+            logger.error(f"Failed to get memories: {e}")
             return {"results": [], "error": str(e)}
 
-    def delete(self, memory_id: str, user_id: str) -> dict[str, Any]:
+    def delete(self, memory_id: str) -> dict[str, Any]:
         """Delete a specific memory.
 
         Args:
             memory_id: Memory identifier to delete
-            user_id: User identifier (for authorization)
 
         Returns:
             Dict: Deletion result
         """
         try:
-            response = self.client.delete(
-                f"/v1/memories/{memory_id}", params={"user_id": user_id}
-            )
+            response = self.client.delete(f"/v1/memories/{memory_id}")
             response.raise_for_status()
 
             result = response.json()
-            logger.info(f"Memory {memory_id} deleted for user {user_id}")
+            logger.info(f"Memory {memory_id} deleted")
             return result
 
         except httpx.HTTPStatusError as e:
@@ -310,29 +291,24 @@ class Inmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            logger.error(
-                f"Error deleting memory {memory_id} for user {user_id}: {error_message}"
-            )
+            logger.error(f"Error deleting memory {memory_id}: {error_message}")
             return {"success": False, "error": error_message}
         except Exception as e:
-            logger.error(f"Error deleting memory {memory_id} for user {user_id}: {e}")
+            logger.error(f"Error deleting memory {memory_id}: {e}")
             return {"success": False, "error": str(e)}
 
-    def delete_all(self, user_id: str) -> dict[str, Any]:
-        """Delete all memories for a user.
-
-        Args:
-            user_id: User identifier
+    def delete_all(self) -> dict[str, Any]:
+        """Delete all memories.
 
         Returns:
             Dict: Deletion result with count of deleted memories
         """
         try:
-            response = self.client.delete("/v1/memories/", params={"user_id": user_id})
+            response = self.client.delete("/v1/memories/")
             response.raise_for_status()
 
             result = response.json()
-            logger.info(f"All memories deleted for user {user_id}")
+            logger.info("All memories deleted")
             return result
 
         except httpx.HTTPStatusError as e:
@@ -341,18 +317,15 @@ class Inmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            logger.error(
-                f"Failed to delete all memories for user {user_id}: {error_message}"
-            )
+            logger.error(f"Failed to delete all memories: {error_message}")
             return {"success": False, "error": error_message}
         except Exception as e:
-            logger.error(f"Failed to delete all memories for user {user_id}: {e}")
+            logger.error(f"Failed to delete all memories: {e}")
             return {"success": False, "error": str(e)}
 
     def temporal_search(
         self,
         temporal_query: str,
-        user_id: str,
         semantic_query: str | None = None,
         limit: int = 10,
     ) -> dict[str, list[dict[str, Any]]]:
@@ -360,7 +333,6 @@ class Inmry:
 
         Args:
             temporal_query: Temporal query (e.g., "yesterday", "this_week")
-            user_id: User identifier
             semantic_query: Optional semantic search query
             limit: Maximum number of results
 
@@ -370,7 +342,6 @@ class Inmry:
         try:
             payload = {
                 "temporal_query": temporal_query,
-                "user_id": user_id,
                 "semantic_query": semantic_query,
                 "limit": limit,
             }
@@ -387,16 +358,15 @@ class Inmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            logger.error(f"Temporal search failed for user {user_id}: {error_message}")
+            logger.error(f"Temporal search failed: {error_message}")
             return {"results": [], "error": error_message}
         except Exception as e:
-            logger.error(f"Temporal search failed for user {user_id}: {e}")
+            logger.error(f"Temporal search failed: {e}")
             return {"results": [], "error": str(e)}
 
     def search_by_tags(
         self,
         tags: str | list[str],
-        user_id: str,
         semantic_query: str | None = None,
         match_all: bool = False,
         limit: int = 10,
@@ -405,7 +375,6 @@ class Inmry:
 
         Args:
             tags: Tags to search for (string or list)
-            user_id: User identifier
             semantic_query: Optional semantic search query
             match_all: Whether all tags must match (AND) vs any tag (OR)
             limit: Maximum number of results
@@ -421,7 +390,6 @@ class Inmry:
 
             payload = {
                 "tags": tag_list,
-                "user_id": user_id,
                 "semantic_query": semantic_query,
                 "match_all": match_all,
                 "limit": limit,
@@ -439,16 +407,15 @@ class Inmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            logger.error(f"Tag search failed for user {user_id}: {error_message}")
+            logger.error(f"Tag search failed: {error_message}")
             return {"results": [], "error": error_message}
         except Exception as e:
-            logger.error(f"Tag search failed for user {user_id}: {e}")
+            logger.error(f"Tag search failed: {e}")
             return {"results": [], "error": str(e)}
 
     def search_by_people(
         self,
         people: str | list[str],
-        user_id: str,
         semantic_query: str | None = None,
         limit: int = 10,
     ) -> dict[str, list[dict[str, Any]]]:
@@ -456,7 +423,6 @@ class Inmry:
 
         Args:
             people: People to search for (string or list)
-            user_id: User identifier
             semantic_query: Optional semantic search query
             limit: Maximum number of results
 
@@ -473,7 +439,6 @@ class Inmry:
 
             payload = {
                 "people": people_list,
-                "user_id": user_id,
                 "semantic_query": semantic_query,
                 "limit": limit,
             }
@@ -490,23 +455,20 @@ class Inmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            logger.error(f"People search failed for user {user_id}: {error_message}")
+            logger.error(f"People search failed: {error_message}")
             return {"results": [], "error": error_message}
         except Exception as e:
-            logger.error(f"People search failed for user {user_id}: {e}")
+            logger.error(f"People search failed: {e}")
             return {"results": [], "error": str(e)}
 
-    def get_user_stats(self, user_id: str) -> dict[str, Any]:
-        """Get statistics for a user's memories.
-
-        Args:
-            user_id: User identifier
+    def get_stats(self) -> dict[str, Any]:
+        """Get statistics for memories.
 
         Returns:
-            Dict: User statistics including memory count, usage info, etc.
+            Dict: Statistics including memory count, usage info, etc.
         """
         try:
-            response = self.client.get(f"/v1/users/{user_id}/stats")
+            response = self.client.get("/v1/stats")
             response.raise_for_status()
 
             result = response.json()
@@ -518,11 +480,11 @@ class Inmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            logger.error(f"Failed to get stats for user {user_id}: {error_message}")
-            return {"user_id": user_id, "error": error_message}
+            logger.error(f"Failed to get stats: {error_message}")
+            return {"error": error_message}
         except Exception as e:
-            logger.error(f"Failed to get stats for user {user_id}: {e}")
-            return {"user_id": user_id, "error": str(e)}
+            logger.error(f"Failed to get stats: {e}")
+            return {"error": str(e)}
 
     def health_check(self) -> dict[str, Any]:
         """Perform health check on the managed service.
@@ -548,11 +510,11 @@ class Inmry:
     def close(self) -> None:
         """Close the HTTP client connection.
 
-        Should be called when Inmry instance is no longer needed.
+        Should be called when Inmemory instance is no longer needed.
         """
         try:
             self.client.close()
-            logger.info("Inmry client connection closed")
+            logger.info("Inmemory client connection closed")
         except Exception as e:
             logger.error(f"Error closing client connection: {e}")
 
@@ -565,14 +527,14 @@ class Inmry:
         self.close()
 
     def __repr__(self) -> str:
-        """String representation of Inmry instance."""
-        return f"Inmry(host={self.host}, user_id={self.user_id[:8]}...)"
+        """String representation of InmemoryClient instance."""
+        return f"InmemoryClient(host={self.host})"
 
 
-class AsyncInmry:
+class AsyncInmemoryClient:
     """Asynchronous client for interacting with the managed InMemory API.
 
-    This class provides asynchronous versions of all Inmry methods.
+    This class provides asynchronous versions of all InmemoryClient methods.
     It uses httpx.AsyncClient for making non-blocking API requests.
     """
 
@@ -582,7 +544,7 @@ class AsyncInmry:
         host: str | None = None,
         client: httpx.AsyncClient | None = None,
     ):
-        """Initialize the AsyncInmry client.
+        """Initialize the AsyncInmemory client.
 
         Args:
             api_key: The API key for authenticating with the InMemory API.
@@ -593,15 +555,15 @@ class AsyncInmry:
             ValueError: If no API key is provided or found in the environment.
         """
         self.api_key = api_key or os.getenv("INMEM_API_KEY")
-        self.host = host or "https://api.inmemory.ai"
+        # Priority order: explicit host -> env var -> constants default
+        self.host = (
+            host or os.getenv("INMEMORY_API_HOST") or APIConstants.DEFAULT_API_HOST
+        )
 
         if not self.api_key:
             raise ValueError(
                 "InMemory API Key not provided. Please set INMEM_API_KEY environment variable or provide api_key parameter."
             )
-
-        # Create MD5 hash of API key for user_id
-        self.user_id = hashlib.md5(self.api_key.encode()).hexdigest()
 
         if client is not None:
             self.async_client = client
@@ -610,7 +572,6 @@ class AsyncInmry:
             self.async_client.headers.update(
                 {
                     "Authorization": f"Bearer {self.api_key}",
-                    "InMemory-User-ID": self.user_id,
                     "Content-Type": "application/json",
                 }
             )
@@ -619,13 +580,12 @@ class AsyncInmry:
                 base_url=self.host,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
-                    "InMemory-User-ID": self.user_id,
                     "Content-Type": "application/json",
                 },
-                timeout=300,
+                timeout=APIConstants.DEFAULT_TIMEOUT,
             )
 
-        logger.info(f"AsyncInmry client initialized for user: {self.user_id}")
+        logger.info("AsyncInmemoryClient initialized")
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -645,10 +605,9 @@ class AsyncInmry:
             auth_info = response.json()
 
             # The /v1/auth/validate endpoint returns validation status
-            # Return it in the expected format for compatibility
             if auth_info.get("valid", False):
                 return {
-                    "user_id": auth_info.get("user_id"),
+                    "valid": True,
                     "created_at": None,  # Not provided by this endpoint
                     "last_used": None,  # Not provided by this endpoint
                     "usage_count": 0,  # Not provided by this endpoint
@@ -661,17 +620,13 @@ class AsyncInmry:
                 error_message = error_data.get("detail", str(e))
             except Exception:
                 error_message = str(e)
-            raise ValueError(f"API key validation failed: {error_message}")
+            raise ValueError(f"API key validation failed: {error_message}") from None
         except Exception as e:
-            raise ValueError(f"Failed to connect to InMemory API: {str(e)}")
-
-    # Add all the async versions of the methods here...
-    # For brevity, I'll add a few key ones and note that others follow the same pattern
+            raise ValueError(f"Failed to connect to InMemory API: {str(e)}") from e
 
     async def add(
         self,
         memory_content: str,
-        user_id: str,
         tags: str | None = None,
         people_mentioned: str | None = None,
         topic_category: str | None = None,
@@ -681,7 +636,6 @@ class AsyncInmry:
         try:
             payload = {
                 "memory_content": memory_content,
-                "user_id": user_id,
                 "tags": tags or "",
                 "people_mentioned": people_mentioned or "",
                 "topic_category": topic_category or "",
@@ -692,40 +646,188 @@ class AsyncInmry:
             response.raise_for_status()
 
             result = response.json()
-            logger.info(f"Memory added for user {user_id}: {memory_content[:50]}...")
+            logger.info(f"Memory added: {memory_content[:50]}...")
             return result
 
         except Exception as e:
-            logger.error(f"Failed to add memory for user {user_id}: {e}")
+            logger.error(f"Failed to add memory: {e}")
             return {"success": False, "error": str(e)}
 
     async def search(
-        self, query: str, user_id: str, limit: int = 10, **kwargs
+        self,
+        query: str,
+        limit: int = 10,
+        tags: list[str] | None = None,
+        people_mentioned: list[str] | None = None,
+        topic_category: str | None = None,
+        temporal_filter: str | None = None,
+        threshold: float | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         """Async version of search method."""
         try:
-            payload = {"query": query, "user_id": user_id, "limit": limit, **kwargs}
+            payload = {
+                "query": query,
+                "limit": limit,
+                "tags": ",".join(tags) if tags else "",
+                "people_mentioned": ",".join(people_mentioned)
+                if people_mentioned
+                else "",
+                "topic_category": topic_category or "",
+                "temporal_filter": temporal_filter or "",
+                "threshold": threshold or 0.0,
+            }
 
-            response = await self.async_client.post(
-                "/v1/memories/search/", json=payload
-            )
+            response = await self.async_client.post("/v1/search/", json=payload)
             response.raise_for_status()
 
             result = response.json()
             return result
 
         except Exception as e:
-            logger.error(f"Search failed for user {user_id}: {e}")
+            logger.error(f"Search failed: {e}")
             return {"results": [], "error": str(e)}
+
+    async def get_all(
+        self, limit: int = 100, offset: int = 0
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Async version of get_all method."""
+        try:
+            params = {"limit": limit, "offset": offset}
+            response = await self.async_client.get("/v1/memories/", params=params)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to get memories: {e}")
+            return {"results": [], "error": str(e)}
+
+    async def delete(self, memory_id: str) -> dict[str, Any]:
+        """Async version of delete method."""
+        try:
+            response = await self.async_client.delete(f"/v1/memories/{memory_id}")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to delete memory {memory_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def delete_all(self) -> dict[str, Any]:
+        """Async version of delete_all method."""
+        try:
+            response = await self.async_client.delete("/v1/memories/")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to delete all memories: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def temporal_search(
+        self,
+        temporal_query: str,
+        semantic_query: str | None = None,
+        limit: int = 10,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Async version of temporal_search method."""
+        try:
+            payload = {
+                "temporal_query": temporal_query,
+                "semantic_query": semantic_query,
+                "limit": limit,
+            }
+            response = await self.async_client.post(
+                "/v1/memories/temporal-search/", json=payload
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Temporal search failed: {e}")
+            return {"results": [], "error": str(e)}
+
+    async def search_by_tags(
+        self,
+        tags: str | list[str],
+        semantic_query: str | None = None,
+        match_all: bool = False,
+        limit: int = 10,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Async version of search_by_tags method."""
+        try:
+            if isinstance(tags, str):
+                tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+            else:
+                tag_list = tags
+
+            payload = {
+                "tags": tag_list,
+                "semantic_query": semantic_query,
+                "match_all": match_all,
+                "limit": limit,
+            }
+            response = await self.async_client.post(
+                "/v1/memories/tag-search/", json=payload
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Tag search failed: {e}")
+            return {"results": [], "error": str(e)}
+
+    async def search_by_people(
+        self,
+        people: str | list[str],
+        semantic_query: str | None = None,
+        limit: int = 10,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Async version of search_by_people method."""
+        try:
+            if isinstance(people, str):
+                people_list = [
+                    person.strip() for person in people.split(",") if person.strip()
+                ]
+            else:
+                people_list = people
+
+            payload = {
+                "people": people_list,
+                "semantic_query": semantic_query,
+                "limit": limit,
+            }
+            response = await self.async_client.post(
+                "/v1/memories/people-search/", json=payload
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"People search failed: {e}")
+            return {"results": [], "error": str(e)}
+
+    async def get_stats(self) -> dict[str, Any]:
+        """Async version of get_stats method."""
+        try:
+            response = await self.async_client.get("/v1/stats")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to get stats: {e}")
+            return {"error": str(e)}
+
+    async def health_check(self) -> dict[str, Any]:
+        """Async version of health_check method."""
+        try:
+            response = await self.async_client.get("/v1/health")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return {"status": "unhealthy", "error": str(e), "service": "managed"}
 
     async def close(self) -> None:
         """Close the async HTTP client connection."""
         try:
             await self.async_client.aclose()
-            logger.info("AsyncInmry client connection closed")
+            logger.info("AsyncInmemory client connection closed")
         except Exception as e:
             logger.error(f"Error closing async client connection: {e}")
 
     def __repr__(self) -> str:
-        """String representation of AsyncInmry instance."""
-        return f"AsyncInmry(host={self.host}, user_id={self.user_id[:8]}...)"
+        """String representation of AsyncInmemoryClient instance."""
+        return f"AsyncInmemoryClient(host={self.host})"

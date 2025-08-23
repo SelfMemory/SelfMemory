@@ -136,7 +136,7 @@ class EnhancedMemoryManager:
 
         except Exception as e:
             logger.error(f"Failed to add enhanced memory: {str(e)}")
-            raise Exception("Our bad, we missed it. Could you say it again?")
+            raise Exception("Our bad, we missed it. Could you say it again?") from e
 
     def _prepare_metadata(
         self,

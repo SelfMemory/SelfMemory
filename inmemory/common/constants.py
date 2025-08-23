@@ -13,7 +13,7 @@ class EmbeddingConstants:
 class VectorConstants:
     """Constants related to vector database operations."""
 
-    VECTOR_DIMENSION = 1024  # Dimension of the embedding vectors
+    VECTOR_DIMENSION = 768  # Dimension of the embedding vectors
     VECTOR_TYPE = "float"  # Type of the vector, typically 'float' for embeddings
     VECTOR_NAME = "embedding"  # Name of the vector field in the database
     # Collection names are now per-user via mongodb_user_manager.get_collection_name(user_id)
@@ -148,6 +148,16 @@ class EncryptionConstants:
 
     ENCRYPTION_SALT = "mem_mcp_salt_2024"
     ENCRYPTED_FIELDS = ["memory", "tags", "people_mentioned", "topic_category"]
+
+
+class APIConstants:
+    """Constants related to API client configuration."""
+
+    DEFAULT_API_HOST = "https://inmemory.tailb75d54.ts.net"
+    DEFAULT_TIMEOUT = 300
+    CONNECTION_TIMEOUT = 30
+    RETRY_ATTEMPTS = 3
+    API_KEY_PREFIX = "im_"
 
 
 class LoggingConstants:

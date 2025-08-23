@@ -85,7 +85,7 @@ class DuplicateDetector:
 
         except Exception as e:
             logger.error(f"Failed to check for duplicates: {str(e)}")
-            raise Exception(f"Duplicate detection failed: {str(e)}")
+            raise Exception(f"Duplicate detection failed: {str(e)}") from e
 
     def _find_similar_memories(
         self,

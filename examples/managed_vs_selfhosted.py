@@ -1,52 +1,68 @@
 """
-Examples showing the difference between managed (Inmry) and self-hosted (Memory) solutions.
+Examples showing the difference between managed (Inmemory) and self-hosted (Memory) solutions.
 
 This demonstrates the two deployment options for InMemory:
-1. Managed solution using Inmry (connects to hosted API)
+1. Managed solution using Inmemory (connects to hosted API)
 2. Self-hosted solution using Memory (runs locally)
 """
 
-from inmemory import Inmry, Memory
+from inmemory import Inmemory, Memory
 
 
 def selfhosted_example():
-    """Example using self-hosted Memory class."""
-    print("=== Self-Hosted Example ===")
+    """Example using self-hosted Memory class with simplified API."""
+    print("=== Self-Hosted Example (Local) ===")
 
-    # Initialize self-hosted memory (no API key needed)
-    memory = Memory()
+    try:
+        # Initialize self-hosted memory with explicit configuration
+        memory = Memory(
+            embedding={
+                "provider": "ollama",
+                "model": "nomic-embed-text",
+                "url": "http://localhost:11434",
+            },
+            db={"provider": "qdrant", "url": "http://localhost:6333"},
+        )
 
-    # Add some memories - CLEAN API with NO user_id needed!
-    result = memory.add(
-        memory_content="I had lunch with Sarah today at the Italian restaurant",
-        tags="food,meeting",
-        people_mentioned="Sarah",
-        topic_category="personal",
-    )
-    print(f"Added memory: {result}")
+        # Add some memories - CLEAN API with NO user_id needed!
+        result = memory.add(
+            memory_content="I had lunch with Sarah today at the Italian restaurant",
+            tags="food,meeting",
+            people_mentioned="Sarah",
+            topic_category="personal",
+        )
+        print(f"Added memory: {result}")
 
-    result = memory.add(
-        memory_content="Completed the quarterly report for Q3 2024",
-        tags="work,report",
-        topic_category="business",
-    )
-    print(f"Added memory: {result}")
+        result = memory.add(
+            memory_content="Completed the quarterly report for Q3 2024",
+            tags="work,report",
+            topic_category="business",
+        )
+        print(f"Added memory: {result}")
 
-    # Search memories - CLEAN API with NO user_id needed!
-    results = memory.search("lunch")
-    print(f"Search results: {len(results['results'])} memories found")
-    for mem in results["results"]:
-        print(f"  - {mem.get('content', 'N/A')}")
+        # Search memories - CLEAN API with NO user_id needed!
+        results = memory.search("lunch")
+        print(f"Search results: {len(results['results'])} memories found")
+        for mem in results["results"]:
+            print(f"  - {mem.get('content', 'N/A')}")
 
-    # Get all memories - CLEAN API with NO user_id needed!
-    all_memories = memory.get_all()
-    print(f"Total memories: {len(all_memories['results'])}")
+        # Get all memories - CLEAN API with NO user_id needed!
+        all_memories = memory.get_all()
+        print(f"Total memories: {len(all_memories['results'])}")
 
-    print("Self-hosted example completed!\n")
+        print("✅ Self-hosted example completed!\n")
+
+    except Exception as e:
+        print(f"❌ Self-hosted example failed: {e}")
+        print("Requirements for self-hosted:")
+        print("  - Ollama running: http://localhost:11434")
+        print("  - Qdrant running: http://localhost:6333")
+        print("  - Model available: ollama pull nomic-embed-text")
+        print()
 
 
 def managed_example():
-    """Example using managed Inmry class."""
+    """Example using managed Inmemory class."""
     print("=== Managed Solution Example ===")
 
     # For this example, we'll simulate having an API key
@@ -58,10 +74,10 @@ def managed_example():
     try:
         # Initialize managed client (requires API key)
         # os.environ["INMEM_API_KEY"] = "your-api-key"  # Set your API key
-        inmry = Inmry()  # Will look for INMEM_API_KEY environment variable
+        inmemory = Inmemory()  # Will look for INMEM_API_KEY environment variable
 
         # Add some memories - CLEAN API with NO user_id needed!
-        result = inmry.add(
+        result = inmemory.add(
             memory_content="Meeting with the development team about the new features",
             tags="work,meeting,development",
             people_mentioned="Bob,Charlie",
@@ -70,11 +86,11 @@ def managed_example():
         print(f"Added memory: {result}")
 
         # Search memories - CLEAN API with NO user_id needed!
-        results = inmry.search("development")
+        results = inmemory.search("development")
         print(f"Search results: {len(results['results'])} memories found")
 
         # Get user stats - user derived from API key
-        stats = inmry.get_user_stats()
+        stats = inmemory.get_user_stats()
         print(f"User stats: {stats}")
 
         print("Managed example completed!")
@@ -98,7 +114,7 @@ def compare_interfaces():
 
     print("\nManaged initialization:")
     print("  os.environ['INMEM_API_KEY'] = 'your-api-key'")
-    print("  inmry = Inmry()  # API key from environment")
+    print("  inmemory = Inmemory()  # API key from environment")
 
     print("\nBoth have identical CLEAN methods (NO user_id needed!):")
     methods = [
@@ -119,9 +135,9 @@ def compare_interfaces():
 
     print("\nKey differences:")
     print("- Memory: Runs locally, stores data in local files/database")
-    print("- Inmry: Connects to hosted API, data managed in the cloud")
+    print("- Inmemory: Connects to hosted API, data managed in the cloud")
     print("- Memory: Zero setup, full control")
-    print("- Inmry: Requires API key, managed service benefits")
+    print("- Inmemory: Requires API key, managed service benefits")
 
 
 def deployment_options():

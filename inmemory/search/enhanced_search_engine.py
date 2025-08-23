@@ -137,7 +137,7 @@ class EnhancedSearchEngine:
 
         except Exception as e:
             logger.error(f"Enhanced search failed: {str(e)}")
-            raise Exception(f"Memory search failed: {str(e)}")
+            raise Exception(f"Memory search failed: {str(e)}") from e
 
     def temporal_search(
         self,
@@ -209,7 +209,7 @@ class EnhancedSearchEngine:
 
         except Exception as e:
             logger.error(f"Temporal search failed: {str(e)}")
-            raise Exception(f"Temporal search failed: {str(e)}")
+            raise Exception(f"Temporal search failed: {str(e)}") from e
 
     def tag_search(
         self,
@@ -279,7 +279,7 @@ class EnhancedSearchEngine:
 
         except Exception as e:
             logger.error(f"Tag search failed: {str(e)}")
-            raise Exception(f"Tag search failed: {str(e)}")
+            raise Exception(f"Tag search failed: {str(e)}") from e
 
     def people_search(
         self,
@@ -341,7 +341,7 @@ class EnhancedSearchEngine:
 
         except Exception as e:
             logger.error(f"People search failed: {str(e)}")
-            raise Exception(f"People search failed: {str(e)}")
+            raise Exception(f"People search failed: {str(e)}") from e
 
     def topic_search(
         self,
@@ -401,7 +401,7 @@ class EnhancedSearchEngine:
 
         except Exception as e:
             logger.error(f"Topic search failed: {str(e)}")
-            raise Exception(f"Topic search failed: {str(e)}")
+            raise Exception(f"Topic search failed: {str(e)}") from e
 
     def _build_comprehensive_filter(
         self,

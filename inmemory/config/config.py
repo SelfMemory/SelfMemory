@@ -63,26 +63,64 @@ class AuthConfig(BaseModel):
         return v
 
 
-class QdrantConfig(BaseModel):
-    """Configuration for Qdrant vector database."""
+class VectorStoreConfig(BaseModel):
+    """Configuration for vector store providers."""
 
-    host: str = Field(default="localhost", description="Qdrant host")
-    port: int = Field(default=6333, description="Qdrant port")
-    api_key: str | None = Field(default=None, description="Qdrant API key")
-    collection_prefix: str = Field(
-        default="memories", description="Collection name prefix"
+    provider: str = Field(default="qdrant", description="Vector store provider")
+    collection_name: str = Field(default="memories", description="Collection name")
+
+    # Qdrant specific
+    qdrant_url: str | None = Field(default=None, description="Qdrant URL")
+    qdrant_host: str = Field(default="localhost", description="Qdrant host")
+    qdrant_port: int = Field(default=6333, description="Qdrant port")
+    qdrant_api_key: str | None = Field(default=None, description="Qdrant API key")
+    qdrant_path: str | None = Field(
+        default=None, description="Qdrant local storage path"
     )
+
+    # ChromaDB specific
+    chroma_host: str | None = Field(default=None, description="ChromaDB host")
+    chroma_port: int | None = Field(default=None, description="ChromaDB port")
+    chroma_path: str | None = Field(
+        default=None, description="ChromaDB local storage path"
+    )
+
+    @validator("provider")
+    def validate_provider(cls, v):
+        supported_providers = ["qdrant", "chroma", "chromadb"]
+        if v not in supported_providers:
+            raise ValueError(
+                f"Vector store provider must be one of: {supported_providers}"
+            )
+        return v
 
 
 class EmbeddingConfig(BaseModel):
     """Configuration for embedding generation."""
 
     provider: str = Field(default="ollama", description="Embedding provider")
-    model: str = Field(default="nomic-embed-text", description="Embedding model")
-    ollama_host: str = Field(
-        default="http://localhost:11434", description="Ollama host"
+    embedding_model: str = Field(
+        default="nomic-embed-text", description="Embedding model"
     )
+    embedding_dims: int = Field(default=512, description="Embedding dimensions")
+
+    # Ollama specific
+    ollama_base_url: str = Field(
+        default="http://localhost:11434", description="Ollama base URL"
+    )
+
+    # OpenAI specific
     openai_api_key: str | None = Field(default=None, description="OpenAI API key")
+    openai_base_url: str | None = Field(default=None, description="OpenAI base URL")
+
+    @validator("provider")
+    def validate_provider(cls, v):
+        supported_providers = ["ollama", "openai"]
+        if v not in supported_providers:
+            raise ValueError(
+                f"Embedding provider must be one of: {supported_providers}"
+            )
+        return v
 
 
 class ServerConfig(BaseModel):
@@ -99,7 +137,7 @@ class InMemoryConfig(BaseModel):
 
     storage: StorageConfig = Field(default_factory=StorageConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
-    qdrant: QdrantConfig = Field(default_factory=QdrantConfig)
+    vector_store: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
 
@@ -189,7 +227,7 @@ def _load_yaml_config(config_path: str | None = None) -> dict[str, Any]:
         return {}
 
     try:
-        with open(config_file, encoding="utf-8") as f:
+        with config_file.open(encoding="utf-8") as f:
             config_data = yaml.safe_load(f) or {}
         logger.info(f"Configuration loaded from: {config_file}")
         return config_data
@@ -362,13 +400,13 @@ def create_sample_configs():
     try:
         # Write simple config
         if not simple_config_path.exists():
-            with open(simple_config_path, "w") as f:
+            with simple_config_path.open("w") as f:
                 yaml.dump(simple_config, f, default_flow_style=False, indent=2)
             logger.info(f"Sample simple config created: {simple_config_path}")
 
         # Write enterprise config
         if not enterprise_config_path.exists():
-            with open(enterprise_config_path, "w") as f:
+            with enterprise_config_path.open("w") as f:
                 yaml.dump(enterprise_config, f, default_flow_style=False, indent=2)
             logger.info(f"Sample enterprise config created: {enterprise_config_path}")
 
@@ -429,15 +467,15 @@ def validate_config(config: InMemoryConfig) -> bool:
     """
     try:
         # Validate storage backend
-        if config.storage.type == "mongodb":
-            if not config.storage.mongodb_uri:
-                logger.error("MongoDB URI required for mongodb storage type")
-                return False
+        if config.storage.type == "mongodb" and not config.storage.mongodb_uri:
+            logger.error("MongoDB URI required for mongodb storage type")
+            return False
 
         # Validate authentication
-        if config.auth.type == "oauth":
-            if not config.auth.google_client_id or not config.auth.google_client_secret:
-                logger.warning("OAuth configured but Google credentials missing")
+        if config.auth.type == "oauth" and (
+            not config.auth.google_client_id or not config.auth.google_client_secret
+        ):
+            logger.warning("OAuth configured but Google credentials missing")
 
         # Validate Qdrant connectivity (optional check)
         # This could be extended to actually test connections

@@ -1,0 +1,26 @@
+# Server-specific requirements for InMemory Server
+# Install these to run the server: pip install -r server/requirements.txt
+
+# Core InMemory library (will be installed from parent directory)
+# -e ..  # This would install the inmemory package in development mode
+
+# FastAPI server requirements
+fastapi>=0.100.0
+uvicorn>=0.20.0
+python-dotenv>=1.0.0
+
+# Authentication and MongoDB (shared with dashboard)
+pymongo>=4.0.0
+
+# HTTP client for potential external calls
+httpx>=0.25.0
+
+# ChromaDB for local storage (zero-setup)
+chromadb>=0.4.0
+
+# Embedding models (optional, ChromaDB can use built-in)
+sentence-transformers>=2.0.0
+
+# Development dependencies (optional)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0

@@ -5,22 +5,21 @@
 </p>
 
 <p align="center">
-  <strong>⚡ Zero Dependencies • 🚀 Instant Setup • 💼 Enterprise Ready</strong>
+  <strong>⚡ Zero Setup • 🚀 Instant Library • 💼 REST API Ready</strong>
 </p>
-
 
 ## 🔥 Key Features
 
 - **🚀 Zero Setup**: `pip install inmemory` and start using immediately
-- **🏗️ Flexible Architecture**: File-based → API Server → Enterprise MongoDB
-- **🔍 Advanced Search**: Semantic, temporal, tag-based, and people-based filtering
-- **🚫 Duplicate Detection**: Prevents storing similar memories
-- **⚙️ Configurable Backends**: File storage, MongoDB, PostgreSQL (coming soon)
-- **🌐 Multiple Interfaces**: Python SDK, REST API, MCP server
+- **🏗️ Dual Architecture**: Local Memory class + Managed InmemoryClient
+- **🔍 Advanced Search**: Semantic similarity with ChromaDB embeddings
+- **🌐 Two Usage Modes**: Direct library usage OR REST API server
+- **💼 Dashboard Ready**: MongoDB authentication + clean REST endpoints
+- **📦 mem0 Compatible**: Same patterns as mem0 (Memory vs MemoryClient)
 
 ## 🚀 Quick Start
 
-### Instant Usage (Zero Dependencies)
+### Zero-Setup Library Usage
 
 ```bash
 pip install inmemory
@@ -32,59 +31,62 @@ from inmemory import Memory
 # Works immediately - no setup required!
 memory = Memory()
 
-# Add memories with rich metadata
+# Add memories with metadata
 memory.add(
     "I love pizza but hate broccoli",
-    user_id="alice",
     tags="food,preferences"
 )
 
 memory.add(
     "Meeting with Bob and Carol about Q4 planning tomorrow at 3pm",
-    user_id="alice",
     tags="work,meeting",
     people_mentioned="Bob,Carol",
     topic_category="planning"
 )
 
 # Search memories
-results = memory.search("pizza", user_id="alice")
+results = memory.search("pizza")
 for result in results["results"]:
-    print(f"Memory: {result['memory']}")
-    print(f"Tags: {result['tags']}")
+    print(f"Memory: {result['content']}")
     print(f"Score: {result['score']}")
 
-# Advanced searches
-work_memories = memory.search_by_tags(["work"], user_id="alice")
-people_memories = memory.search_by_people(["Bob"], user_id="alice")
-recent_memories = memory.temporal_search("today", user_id="alice")
+# Health check
+health = memory.health_check()
+print(f"Status: {health['status']}")
 ```
 
-### API Server Mode
+### Managed Client Usage (Dashboard Integration)
 
-```bash
-pip install inmemory[server]
+```python
+from inmemory import InmemoryClient
 
-# Start API server (file-based backend)
-inmemory serve --port 8080
+# Connect to managed service
+client = InmemoryClient(
+    api_key="your_api_key",
+    host="http://localhost:8081"
+)
 
-# Or with MongoDB backend (requires MongoDB)
-inmemory serve --storage-type mongodb --port 8080
+# Same API as Memory, but with authentication
+client.add("Meeting notes from dashboard", tags="dashboard")
+results = client.search("meeting notes")
 ```
 
-### Enterprise Mode (Your Dashboard Integration)
+### REST API Server Mode
 
 ```bash
-pip install inmemory[enterprise]
-
-# Set environment variables
-export MONGODB_URI="mongodb://localhost:27017/inmemory"
-export GOOGLE_CLIENT_ID="your-google-client-id"
-export GOOGLE_CLIENT_SECRET="your-google-client-secret"
-
-# Start enterprise server (unchanged from before)
+# Start the server (from inmemory-core directory)
+cd server/
 python main.py
+
+# Or with custom configuration
+MONGODB_URI=mongodb://localhost:27017/inmemory python main.py
 ```
+
+Server runs on http://localhost:8081 with endpoints:
+- `POST /v1/memories` - Add memory
+- `GET /v1/memories` - Get all memories
+- `POST /v1/search` - Search memories
+- `DELETE /v1/memories/{id}` - Delete memory
 
 ## 📦 Installation Options
 
@@ -232,7 +234,7 @@ inmemory serve --port 8080
 # Simple mode (file storage)
 docker run -p 8080:8080 -v inmemory-data:/root/.inmemory inmemory:latest
 
-# Enterprise mode (MongoDB)  
+# Enterprise mode (MongoDB)
 docker-compose up  # Uses provided docker-compose.yml
 ```
 
@@ -274,7 +276,7 @@ inmemory test
 # Check configuration
 inmemory config
 
-# View storage statistics  
+# View storage statistics
 inmemory stats
 
 # Initialize with sample data
@@ -292,12 +294,12 @@ class PersonalAssistant:
     def __init__(self):
         self.memory = Memory()
         self.llm = OpenAI()
-    
+
     def chat(self, user_input: str, user_id: str) -> str:
         # Get relevant memories
         memories = self.memory.search(user_input, user_id=user_id, limit=5)
         context = "\n".join([m['memory'] for m in memories['results']])
-        
+
         # Generate response with context
         response = self.llm.chat.completions.create(
             model="gpt-4o-mini",
@@ -306,11 +308,11 @@ class PersonalAssistant:
                 {"role": "user", "content": user_input}
             ]
         )
-        
+
         # Store conversation
         self.memory.add(f"User: {user_input}", user_id=user_id)
         self.memory.add(f"Assistant: {response.choices[0].message.content}", user_id=user_id)
-        
+
         return response.choices[0].message.content
 ```
 
@@ -321,15 +323,15 @@ from inmemory import Memory
 class SupportBot:
     def __init__(self):
         self.memory = Memory()
-    
+
     def handle_ticket(self, customer_id: str, issue: str):
         # Check customer history
         history = self.memory.search_by_people([customer_id], user_id="support")
         similar_issues = self.memory.search(issue, user_id="support", limit=3)
-        
+
         # Generate contextual response based on history
         response = self.generate_response(issue, history, similar_issues)
-        
+
         # Store interaction
         self.memory.add(
             f"Customer {customer_id} reported: {issue}",
@@ -338,7 +340,7 @@ class SupportBot:
             people_mentioned=customer_id,
             topic_category="support"
         )
-        
+
         return response
 ```
 
@@ -376,7 +378,7 @@ python src/server.py
 ## 🛠️ Requirements
 
 ### Minimal Installation
-- **Python**: 3.12+
+- **Python**: 3.10+ (supports Python 3.10, 3.11, 3.12, 3.13)
 - **Qdrant**: Vector database for embeddings
 - **Ollama**: Local embeddings (or OpenAI API key)
 

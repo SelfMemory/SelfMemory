@@ -73,7 +73,7 @@ class TemporalProcessor:
 
         except Exception as e:
             logger.error(f"Failed to generate temporal metadata: {str(e)}")
-            raise Exception(f"Temporal processing failed: {str(e)}")
+            raise Exception(f"Temporal processing failed: {str(e)}") from e
 
     @staticmethod
     def _get_quarter(month: int) -> int:
