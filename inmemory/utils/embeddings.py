@@ -1,14 +1,14 @@
 """
-Embeddings utilities - now uses the pluggable embeddings system.
+Embeddings utilities - now uses the new embeddings architecture.
 
 This module provides backward compatibility for existing code while
-using the new pluggable embeddings architecture.
+using the new direct import embeddings architecture.
 """
 
 import logging
+import os
 
-from inmemory.config.config import load_config
-from inmemory.embeddings import get_embedding_provider
+from inmemory.configs import InMemoryConfig
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +17,67 @@ _embedding_provider = None
 
 
 def _get_embedding_provider():
-    """Get or create the global embedding provider."""
+    """Get or create the global embedding provider using new architecture."""
     global _embedding_provider
     if _embedding_provider is None:
-        config = load_config()
-        _embedding_provider = get_embedding_provider(
-            provider=config.embedding.provider, config=config
-        )
+        config = InMemoryConfig()
+        
+        # Determine provider from config or environment
+        provider = getattr(config.embedding, 'provider', 'ollama').lower()
+        
+        # Use direct imports based on provider
+        if provider == "openai":
+            from inmemory.embeddings.openai import OpenAIEmbedding
+            from inmemory.embeddings.configs import OpenAIEmbedderConfig
+            
+            embedding_config = OpenAIEmbedderConfig(
+                api_key=getattr(config.embedding, 'api_key', os.getenv('OPENAI_API_KEY')),
+                model=getattr(config.embedding, 'model', 'text-embedding-3-small')
+            )
+            _embedding_provider = OpenAIEmbedding(embedding_config)
+            
+        elif provider == "azure_openai":
+            from inmemory.embeddings.azure_openai import AzureOpenAIEmbedding
+            from inmemory.embeddings.configs import AzureOpenAIEmbedderConfig
+            
+            embedding_config = AzureOpenAIEmbedderConfig(
+                api_key=getattr(config.embedding, 'api_key', os.getenv('AZURE_OPENAI_API_KEY')),
+                azure_endpoint=getattr(config.embedding, 'azure_endpoint', os.getenv('AZURE_OPENAI_ENDPOINT')),
+                model=getattr(config.embedding, 'model', 'text-embedding-3-small'),
+                deployment_name=getattr(config.embedding, 'deployment_name', None)
+            )
+            _embedding_provider = AzureOpenAIEmbedding(embedding_config)
+            
+        elif provider == "huggingface":
+            from inmemory.embeddings.huggingface import HuggingFaceEmbedding
+            from inmemory.embeddings.configs import HuggingFaceEmbedderConfig
+            
+            embedding_config = HuggingFaceEmbedderConfig(
+                model=getattr(config.embedding, 'model', 'sentence-transformers/all-MiniLM-L6-v2'),
+                api_key=getattr(config.embedding, 'api_key', os.getenv('HUGGINGFACE_API_KEY')),
+                use_local=getattr(config.embedding, 'use_local', True)
+            )
+            _embedding_provider = HuggingFaceEmbedding(embedding_config)
+            
+        elif provider == "mock":
+            from inmemory.embeddings.mock import MockEmbedding
+            from inmemory.embeddings.configs import MockEmbedderConfig
+            
+            embedding_config = MockEmbedderConfig(
+                embedding_dims=getattr(config.embedding, 'embedding_dims', 768)
+            )
+            _embedding_provider = MockEmbedding(embedding_config)
+            
+        else:  # Default to ollama
+            from inmemory.embeddings.ollama import OllamaEmbedding
+            from inmemory.embeddings.configs import OllamaEmbedderConfig
+            
+            embedding_config = OllamaEmbedderConfig(
+                model=getattr(config.embedding, 'model', 'nomic-embed-text'),
+                ollama_base_url=getattr(config.embedding, 'ollama_base_url', 'http://localhost:11434')
+            )
+            _embedding_provider = OllamaEmbedding(embedding_config)
+    
     return _embedding_provider
 
 

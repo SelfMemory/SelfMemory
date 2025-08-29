@@ -1,7 +1,7 @@
-from typing import Literal
+from typing import Literal, Optional
 
-from inmemory.config.config import InMemoryConfig
 from inmemory.embeddings.base import EmbeddingBase
+from inmemory.embeddings.configs import BaseEmbedderConfig
 
 try:
     from ollama import Client
@@ -13,58 +13,37 @@ except ImportError:
         "  • poetry: poetry add ollama\n"
         "  • pipenv: pipenv install ollama\n"
         "  • conda: conda install -c conda-forge ollama\n"
-        "Or install the full inmemory package with embedding support:\n"
-        "  • pip install 'inmemory[embedding]'\n"
-        "  • uv add 'inmemory[embedding]'"
     ) from None
 
 
 class OllamaEmbedding(EmbeddingBase):
-    def __init__(self, config: InMemoryConfig | None = None):
+    def __init__(self, config: Optional[BaseEmbedderConfig] = None):
         super().__init__(config)
-
-        self.model = (
-            getattr(config, "embedding_model", "nomic-embed-text")
-            if config
-            else "nomic-embed-text"
-        )
-        self.ollama_base_url = (
-            getattr(config, "ollama_base_url", "http://localhost:11434")
-            if config
-            else "http://localhost:11434"
-        )
-
-        self.client = Client(host=self.ollama_base_url)
-        self._ensure_model_exists()
-
-        # Auto-detect actual embedding dimensions from the model
-        if config and hasattr(config, "embedding_dims") and config.embedding_dims:
-            self.embedding_dims = config.embedding_dims
+        
+        # Use config or defaults
+        if config is None:
+            self.config = BaseEmbedderConfig()
         else:
-            # Auto-detect dimensions by testing the model
-            try:
-                test_embedding = self.client.embeddings(
-                    model=self.model, prompt="test"
-                )["embedding"]
-                self.embedding_dims = len(test_embedding)
-                print(
-                    f"🔍 Auto-detected embedding dimensions for {self.model}: {self.embedding_dims}"
-                )
-            except Exception as e:
-                print(f"⚠️  Could not auto-detect dimensions, using default 768: {e}")
-                self.embedding_dims = 768  # Default for nomic-embed-text
+            self.config = config
+
+        # Set defaults if not provided
+        self.config.model = self.config.model or "nomic-embed-text"
+        self.config.embedding_dims = self.config.embedding_dims or 768
+
+        self.client = Client(host=self.config.ollama_base_url)
+        self._ensure_model_exists()
 
     def _ensure_model_exists(self):
         """
         Ensure the specified model exists locally. If not, pull it from Ollama.
         """
         local_models = self.client.list()["models"]
-        if not any(model.get("name") == self.model for model in local_models):
-            self.client.pull(self.model)
+        if not any(model.get("name") == self.config.model or model.get("model") == self.config.model for model in local_models):
+            self.client.pull(self.config.model)
 
     def embed(
-        self, text, memory_action: Literal["add", "search", "update"] | None = None
-    ):
+        self, text: str, memory_action: Optional[Literal["add", "search", "update"]] = None
+    ) -> list[float]:
         """
         Get the embedding for the given text using Ollama.
 
@@ -72,7 +51,7 @@ class OllamaEmbedding(EmbeddingBase):
             text (str): The text to embed.
             memory_action (optional): The type of embedding to use. Must be one of "add", "search", or "update". Defaults to None.
         Returns:
-            list: The embedding vector.
+            list[float]: The embedding vector.
         """
-        response = self.client.embeddings(model=self.model, prompt=text)
+        response = self.client.embeddings(model=self.config.model, prompt=text)
         return response["embedding"]

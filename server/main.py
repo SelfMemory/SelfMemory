@@ -55,14 +55,18 @@ try:
     memory_instance = Memory(
         db={
             "provider": "qdrant",
-            "host": "localhost",
-            "port": 6333,
-            "collection_name": "memories_68a9b5b25a3190e71a79b4fd",  # Existing dashboard collection
+            "config": {
+                "host": "localhost",
+                "port": 6333,
+                "collection_name": "memories_68a9b5b25a3190e71a79b4fd",  # Existing dashboard collection
+            },
         },
         embedding={
             "provider": "ollama",
-            "model": "nomic-embed-text",
-            "ollama_host": "http://localhost:11434",
+            "config": {
+                "model": "nomic-embed-text",
+                "ollama_host": "http://localhost:11434",
+            },
         },
     )
     logger.info("Memory instance initialized with Qdrant (existing memories)")

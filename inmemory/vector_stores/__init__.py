@@ -1,10 +1,10 @@
 """
-Vector stores module for various vector database providers.
+Vector stores module for Qdrant vector database provider.
 
-Provides a factory pattern for creating vector store instances.
+Provides a factory pattern for creating Qdrant vector store instances.
 """
 
-from inmemory.config.config import InMemoryConfig
+from inmemory.configs import InMemoryConfig
 from inmemory.vector_stores.base import VectorStoreBase
 
 
@@ -16,27 +16,27 @@ def get_vector_store_provider(
     **kwargs,
 ) -> VectorStoreBase:
     """
-    Factory function to get vector store provider instance.
+    Factory function to get Qdrant vector store provider instance.
 
     Args:
-        provider (str): The vector store provider name ('qdrant', 'chroma', etc.)
+        provider (str): The vector store provider name (only 'qdrant' supported)
         collection_name (str): Name of the collection
         embedding_model_dims (int): Dimensions of the embedding model
         config (Optional[InMemoryConfig]): Configuration for the provider
         **kwargs: Additional provider-specific parameters
 
     Returns:
-        VectorStoreBase: An instance of the specified vector store provider
+        VectorStoreBase: An instance of the Qdrant vector store provider
 
     Raises:
-        ValueError: If the provider is not supported
+        ValueError: If the provider is not 'qdrant'
     """
     provider = provider.lower()
 
     if provider == "qdrant":
         from inmemory.vector_stores.qdrant import Qdrant
 
-        # Extract connection parameters from config if it's from Memory class dict config
+        # Extract connection parameters from config if provided
         qdrant_params = kwargs.copy()
 
         if config and hasattr(config, "vector_store"):
@@ -59,23 +59,18 @@ def get_vector_store_provider(
                 qdrant_params["url"] = vs_config["url"]
             if "api_key" in vs_config:
                 qdrant_params["api_key"] = vs_config["api_key"]
+            if "path" in vs_config:
+                qdrant_params["path"] = vs_config["path"]
+            if "on_disk" in vs_config:
+                qdrant_params["on_disk"] = vs_config["on_disk"]
 
         return Qdrant(
             collection_name=collection_name,
             embedding_model_dims=embedding_model_dims,
-            config=config,
             **qdrant_params,
         )
-    if provider == "chroma" or provider == "chromadb":
-        from inmemory.vector_stores.chroma import ChromaDB
-
-        return ChromaDB(
-            collection_name=collection_name,
-            embedding_model_dims=embedding_model_dims,
-            config=config,
-            **kwargs,
-        )
-    raise ValueError(f"Unsupported vector store provider: {provider}")
+    
+    raise ValueError(f"Unsupported vector store provider: {provider}. Only 'qdrant' is supported.")
 
 
 __all__ = [

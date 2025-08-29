@@ -16,7 +16,7 @@ If you discover a security vulnerability in InMemory, please report it to us in 
 
 ### How to Report
 
-1. **Email**: Send details to `security@inmemory.dev`
+1. **Email**: Send details to `info@cpluz.com`
 2. **Subject**: Include "SECURITY" in the subject line
 3. **Details**: Provide as much information as possible:
    - Description of the vulnerability

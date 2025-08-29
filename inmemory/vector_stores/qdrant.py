@@ -1,4 +1,5 @@
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -14,7 +15,6 @@ from qdrant_client.models import (
     VectorParams,
 )
 
-from inmemory.config.config import InMemoryConfig
 from inmemory.vector_stores.base import VectorStoreBase
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,6 @@ class Qdrant(VectorStoreBase):
         self,
         collection_name: str,
         embedding_model_dims: int,
-        config: InMemoryConfig | None = None,
         client: QdrantClient = None,
         host: str = None,
         port: int = None,
@@ -33,6 +32,7 @@ class Qdrant(VectorStoreBase):
         url: str = None,
         api_key: str = None,
         on_disk: bool = False,
+        **kwargs
     ):
         """
         Initialize the Qdrant vector store.
@@ -40,7 +40,6 @@ class Qdrant(VectorStoreBase):
         Args:
             collection_name (str): Name of the collection.
             embedding_model_dims (int): Dimensions of the embedding model.
-            config (Optional[InMemoryConfig]): Configuration object
             client (QdrantClient, optional): Existing Qdrant client instance. Defaults to None.
             host (str, optional): Host address for Qdrant server. Defaults to None.
             port (int, optional): Port for Qdrant server. Defaults to None.
@@ -49,41 +48,25 @@ class Qdrant(VectorStoreBase):
             api_key (str, optional): API key for Qdrant server. Defaults to None.
             on_disk (bool, optional): Enables persistent storage. Defaults to False.
         """
-        self.config = config or InMemoryConfig()
-
         if client:
             self.client = client
             self.is_local = False
         else:
             params = {}
-
-            # Use config values or fallback to parameters
-            if api_key or getattr(self.config, "qdrant_api_key", None):
-                params["api_key"] = api_key or getattr(
-                    self.config, "qdrant_api_key", None
-                )
-
-            if url or getattr(self.config, "qdrant_url", None):
-                params["url"] = url or getattr(self.config, "qdrant_url", None)
-            elif host and port:
+            if api_key:
+                params["api_key"] = api_key
+            if url:
+                params["url"] = url
+            if host and port:
                 params["host"] = host
                 params["port"] = port
-            elif getattr(self.config, "qdrant_host", None) and getattr(
-                self.config, "qdrant_port", None
-            ):
-                params["host"] = getattr(self.config, "qdrant_host", None)
-                params["port"] = getattr(self.config, "qdrant_port", None)
-
+            
             if not params:
-                # Default to local storage
-                params["path"] = path or getattr(
-                    self.config, "qdrant_path", "/tmp/qdrant"
-                )
+                params["path"] = path
                 self.is_local = True
-                if not on_disk:
-                    path_obj = Path(params["path"])
-                    if path_obj.exists() and path_obj.is_dir():
-                        shutil.rmtree(params["path"])
+                if not on_disk and path:
+                    if os.path.exists(path) and os.path.isdir(path):
+                        shutil.rmtree(path)
             else:
                 self.is_local = False
 
@@ -92,22 +75,9 @@ class Qdrant(VectorStoreBase):
         self.collection_name = collection_name
         self.embedding_model_dims = embedding_model_dims
         self.on_disk = on_disk
+        self.create_col(embedding_model_dims, on_disk)
 
-        # Only create collection if it doesn't exist - DON'T OVERRIDE EXISTING
-        try:
-            existing_collection = self.client.get_collection(collection_name)
-            logger.info(
-                f"Using existing collection '{collection_name}' with {existing_collection.points_count} points"
-            )
-            self._create_filter_indexes()
-        except Exception:
-            # Collection doesn't exist, create it
-            logger.info(f"Creating new collection '{collection_name}'")
-            self.create_col(embedding_model_dims, on_disk)
-
-    def create_col(
-        self, vector_size: int, on_disk: bool, distance: Distance = Distance.COSINE
-    ):
+    def create_col(self, vector_size: int, on_disk: bool, distance: Distance = Distance.COSINE):
         """
         Create a new collection.
 
@@ -120,17 +90,13 @@ class Qdrant(VectorStoreBase):
         response = self.list_cols()
         for collection in response.collections:
             if collection.name == self.collection_name:
-                logger.debug(
-                    f"Collection {self.collection_name} already exists. Skipping creation."
-                )
+                logger.debug(f"Collection {self.collection_name} already exists. Skipping creation.")
                 self._create_filter_indexes()
                 return
 
         self.client.create_collection(
             collection_name=self.collection_name,
-            vectors_config=VectorParams(
-                size=vector_size, distance=distance, on_disk=on_disk
-            ),
+            vectors_config=VectorParams(size=vector_size, distance=distance, on_disk=on_disk),
         )
         self._create_filter_indexes()
 
@@ -138,23 +104,19 @@ class Qdrant(VectorStoreBase):
         """Create indexes for commonly used filter fields to enable filtering."""
         # Only create payload indexes for remote Qdrant servers
         if self.is_local:
-            logger.debug(
-                "Skipping payload index creation for local Qdrant (not supported)"
-            )
+            logger.debug("Skipping payload index creation for local Qdrant (not supported)")
             return
-
-        common_fields = ["user_id", "agent_id", "run_id", "actor_id"]
-
+            
+        common_fields = ["user_id", "agent_id", "run_id", "actor_id", "tags", "people_mentioned", "topic_category"]
+        
         for field in common_fields:
             try:
                 self.client.create_payload_index(
                     collection_name=self.collection_name,
                     field_name=field,
-                    field_schema="keyword",
+                    field_schema="keyword"
                 )
-                logger.info(
-                    f"Created index for {field} in collection {self.collection_name}"
-                )
+                logger.info(f"Created index for {field} in collection {self.collection_name}")
             except Exception as e:
                 logger.debug(f"Index for {field} might already exist: {e}")
 
@@ -167,9 +129,7 @@ class Qdrant(VectorStoreBase):
             payloads (list, optional): List of payloads corresponding to vectors. Defaults to None.
             ids (list, optional): List of IDs corresponding to vectors. Defaults to None.
         """
-        logger.info(
-            f"Inserting {len(vectors)} vectors into collection {self.collection_name}"
-        )
+        logger.info(f"Inserting {len(vectors)} vectors into collection {self.collection_name}")
         points = [
             PointStruct(
                 id=idx if ids is None else ids[idx],
@@ -192,24 +152,16 @@ class Qdrant(VectorStoreBase):
         """
         if not filters:
             return None
-
+            
         conditions = []
         for key, value in filters.items():
             if isinstance(value, dict) and "gte" in value and "lte" in value:
-                conditions.append(
-                    FieldCondition(
-                        key=key, range=Range(gte=value["gte"], lte=value["lte"])
-                    )
-                )
+                conditions.append(FieldCondition(key=key, range=Range(gte=value["gte"], lte=value["lte"])))
             else:
-                conditions.append(
-                    FieldCondition(key=key, match=MatchValue(value=value))
-                )
+                conditions.append(FieldCondition(key=key, match=MatchValue(value=value)))
         return Filter(must=conditions) if conditions else None
 
-    def search(
-        self, query: str, vectors: list, limit: int = 5, filters: dict = None
-    ) -> list:
+    def search(self, query: str, vectors: list, limit: int = 5, filters: dict = None) -> list:
         """
         Search for similar vectors.
 
@@ -267,9 +219,7 @@ class Qdrant(VectorStoreBase):
         Returns:
             dict: Retrieved vector.
         """
-        result = self.client.retrieve(
-            collection_name=self.collection_name, ids=[vector_id], with_payload=True
-        )
+        result = self.client.retrieve(collection_name=self.collection_name, ids=[vector_id], with_payload=True)
         return result[0] if result else None
 
     def list_cols(self) -> list:
@@ -315,50 +265,6 @@ class Qdrant(VectorStoreBase):
         )
         return result
 
-    def get_all(self, limit: int = 100, offset: int = 0):
-        """
-        Get all memories from the collection.
-
-        Args:
-            limit: Maximum number of results to return
-            offset: Number of results to skip
-
-        Returns:
-            list: List of formatted results
-        """
-        try:
-            # Use scroll to get all points with payload
-            result = self.client.scroll(
-                collection_name=self.collection_name,
-                limit=limit,
-                offset=offset,
-                with_payload=True,
-                with_vectors=False,
-            )
-
-            # Format results to match expected structure
-            formatted_results = []
-            for point in result[0]:  # result is a tuple (points, next_page_offset)
-                # Handle both data structures: "data" (new) and "memory" (existing dashboard)
-                content = point.payload.get("data", "") or point.payload.get(
-                    "memory", ""
-                )
-
-                formatted_result = {
-                    "id": str(point.id),
-                    "content": content,
-                    "metadata": point.payload,
-                }
-                formatted_results.append(formatted_result)
-
-            logger.info(
-                f"Retrieved {len(formatted_results)} memories from {self.collection_name}"
-            )
-            return formatted_results
-
-        except Exception as e:
-            logger.error(f"Error in get_all for collection {self.collection_name}: {e}")
-            return []
 
     def count(self):
         """
