@@ -4,7 +4,7 @@ Factory pattern for creating provider instances using base.py abstractions.
 This module provides clean factory classes that use only base.py interfaces,
 making it easy to add new providers without changing the Memory class.
 
-Based on mem0's factory pattern but simplified for Ollama + Qdrant only.
+Based on  factory pattern but simplified for Ollama + Qdrant only.
 """
 
 import importlib
@@ -30,13 +30,13 @@ class EmbeddingFactory:
     }
     
     @classmethod
-    def create(cls, provider_name: str, config: Optional[Dict[str, Any]] = None) -> EmbeddingBase:
+    def create(cls, provider_name: str, config=None) -> EmbeddingBase:
         """
         Create an embedding provider instance.
         
         Args:
             provider_name: Provider name (e.g., 'ollama')
-            config: Configuration dictionary
+            config: Pydantic config object or dict with provider-specific configuration
             
         Returns:
             EmbeddingBase: Configured embedding provider instance
@@ -50,11 +50,21 @@ class EmbeddingFactory:
         class_path = cls.provider_to_class[provider_name]
         embedding_class = load_class(class_path)
         
-        # Follow mem0's approach: use BaseEmbedderConfig directly
-        from inmemory.embeddings.configs import BaseEmbedderConfig
+        # Handle both Pydantic config objects and raw dicts
+        if hasattr(config, 'model_dump'):
+            # Pydantic config object - convert to dict
+            config_dict = config.model_dump()
+        elif isinstance(config, dict):
+            # Raw dict config
+            config_dict = config
+        elif config is None:
+            # No config provided - use empty dict
+            config_dict = {}
+        else:
+            raise ValueError(f"Invalid config type: {type(config)}")
         
-        config_dict = config or {}
-            
+        # Use BaseEmbedderConfig for compatibility
+        from inmemory.embeddings.configs import BaseEmbedderConfig
         base_config = BaseEmbedderConfig(**config_dict)
         return embedding_class(base_config)
     
@@ -73,13 +83,13 @@ class VectorStoreFactory:
     }
     
     @classmethod
-    def create(cls, provider_name: str, config: Dict[str, Any]) -> VectorStoreBase:
+    def create(cls, provider_name: str, config) -> VectorStoreBase:
         """
         Create a vector store provider instance.
         
         Args:
             provider_name: Provider name (e.g., 'qdrant')
-            config: Configuration dictionary
+            config: Pydantic config object or dict with provider-specific configuration
             
         Returns:
             VectorStoreBase: Configured vector store provider instance
@@ -93,11 +103,18 @@ class VectorStoreFactory:
         class_path = cls.provider_to_class[provider_name]
         vector_store_class = load_class(class_path)
         
-        # Follow mem0's approach: pass config directly
-        if not isinstance(config, dict):
-            config = config.model_dump()
-            
-        return vector_store_class(**config)
+        # Handle both Pydantic config objects and raw dicts
+        if hasattr(config, 'model_dump'):
+            # Pydantic config object - convert to dict
+            config_dict = config.model_dump()
+        elif isinstance(config, dict):
+            # Raw dict config
+            config_dict = config
+        else:
+            raise ValueError(f"Invalid config type: {type(config)}")
+        
+        # Pass config directly to vector store constructor
+        return vector_store_class(**config_dict)
     
     @classmethod
     def get_supported_providers(cls) -> list[str]:

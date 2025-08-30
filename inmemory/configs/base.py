@@ -2,7 +2,7 @@
 Base configuration classes for InMemory.
 
 This module provides the main configuration classes and utilities,
-following mem0's configuration structure pattern.
+following  configuration structure pattern.
 """
 
 import logging
@@ -16,31 +16,13 @@ try:
 except ImportError:
     _YAML_AVAILABLE = False
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, model_validator
 
 logger = logging.getLogger(__name__)
 
 # Set up the directory path
 home_dir = os.path.expanduser("~")
 inmemory_dir = os.environ.get("INMEMORY_DIR") or os.path.join(home_dir, ".inmemory")
-
-
-class StorageConfig(BaseModel):
-    """Configuration for storage backend."""
-
-    type: str = Field(default="file", description="Storage backend type")
-    path: str | None = Field(
-        default="~/.inmemory", description="Data directory for file storage"
-    )
-    mongodb_uri: str | None = Field(default=None, description="MongoDB connection URI")
-    database: str | None = Field(default="inmemory", description="Database name")
-
-    @validator("type")
-    def validate_storage_type(cls, v):
-        supported_types = ["file", "mongodb"]
-        if v not in supported_types:
-            raise ValueError(f"Storage type must be one of: {supported_types}")
-        return v
 
 
 class AuthConfig(BaseModel):
@@ -67,7 +49,7 @@ class AuthConfig(BaseModel):
 
 
 class VectorStoreConfig(BaseModel):
-    """Configuration for vector store providers."""
+    """Configuration for vector store providers following  pattern."""
 
     provider: str = Field(default="qdrant", description="Vector store provider")
     config: dict | None = Field(
@@ -90,40 +72,42 @@ class VectorStoreConfig(BaseModel):
             )
         return v
 
-    def get_config_with_defaults(self) -> dict:
-        """Get configuration with provider-specific defaults."""
-        base_config = self.config or {}
-        
-        if self.provider == "qdrant":
-            # Qdrant defaults (following mem0's approach - minimal defaults)
-            defaults = {
-                "collection_name": "inmemory_memories",
-                "embedding_model_dims": 768,
-                "on_disk": False,
-            }
-            
-            # Only set path as default if no other connection method is specified
-            # This matches mem0's approach where they don't set conflicting defaults
-            if not any(key in base_config for key in ["url", "host", "api_key"]):
-                defaults["path"] = "/tmp/qdrant"
-            
-            # Merge user config with defaults (user config takes precedence)
-            return {**defaults, **base_config}
-        elif self.provider in ["chroma", "chromadb"]:
-            # ChromaDB defaults
-            defaults = {
-                "collection_name": "inmemory_memories",
-                "host": "localhost",
-                "port": 8000,
-                "path": "/tmp/chroma",
-            }
-            return {**defaults, **base_config}
-        
-        return base_config
+    @model_validator(mode="after")
+    def validate_and_create_config(self) -> "VectorStoreConfig":
+        """Create provider-specific config object following  pattern."""
+        provider = self.provider
+        config = self.config
+
+        if provider not in self._provider_configs:
+            raise ValueError(f"Unsupported vector store provider: {provider}")
+
+        # Import provider-specific config class
+        if provider == "qdrant":
+            from inmemory.configs.vector_stores.qdrant import QdrantConfig
+            config_class = QdrantConfig
+        else:
+            # For future providers
+            module = __import__(
+                f"inmemory.configs.vector_stores.{provider}",
+                fromlist=[self._provider_configs[provider]],
+            )
+            config_class = getattr(module, self._provider_configs[provider])
+
+        if config is None:
+            config = {}
+
+        if not isinstance(config, dict):
+            if not isinstance(config, config_class):
+                raise ValueError(f"Invalid config type for provider {provider}")
+            return self
+
+        # Create provider-specific config object with defaults
+        self.config = config_class(**config)
+        return self
 
 
 class EmbeddingConfig(BaseModel):
-    """Configuration for embedding providers."""
+    """Configuration for embedding providers following  pattern."""
 
     provider: str = Field(default="ollama", description="Embedding provider")
     config: dict | None = Field(
@@ -145,27 +129,38 @@ class EmbeddingConfig(BaseModel):
             )
         return v
 
-    def get_config_with_defaults(self) -> dict:
-        """Get configuration with provider-specific defaults."""
-        base_config = self.config or {}
-        
-        if self.provider == "ollama":
-            # Ollama defaults
-            defaults = {
-                "model": "nomic-embed-text",
-                "embedding_dims": 768,
-                "ollama_base_url": "http://localhost:11434",
-            }
-            return {**defaults, **base_config}
-        elif self.provider == "openai":
-            # OpenAI defaults
-            defaults = {
-                "model": "text-embedding-3-small",
-                "embedding_dims": 1536,
-            }
-            return {**defaults, **base_config}
-        
-        return base_config
+    @model_validator(mode="after")
+    def validate_and_create_config(self) -> "EmbeddingConfig":
+        """Create provider-specific config object following  pattern."""
+        provider = self.provider
+        config = self.config
+
+        if provider not in self._provider_configs:
+            raise ValueError(f"Unsupported embedding provider: {provider}")
+
+        # Import provider-specific config class
+        if provider == "ollama":
+            from inmemory.configs.embeddings.ollama import OllamaConfig
+            config_class = OllamaConfig
+        else:
+            # For future providers
+            module = __import__(
+                f"inmemory.configs.embeddings.{provider}",
+                fromlist=[self._provider_configs[provider]],
+            )
+            config_class = getattr(module, self._provider_configs[provider])
+
+        if config is None:
+            config = {}
+
+        if not isinstance(config, dict):
+            if not isinstance(config, config_class):
+                raise ValueError(f"Invalid config type for provider {provider}")
+            return self
+
+        # Create provider-specific config object with defaults
+        self.config = config_class(**config)
+        return self
 
 
 class ServerConfig(BaseModel):
@@ -180,7 +175,6 @@ class ServerConfig(BaseModel):
 class InMemoryConfig(BaseModel):
     """Main configuration for InMemory."""
 
-    storage: StorageConfig = Field(default_factory=StorageConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     vector_store: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
@@ -236,7 +230,7 @@ def load_config(config_path: str | None = None) -> InMemoryConfig:
     try:
         config = InMemoryConfig.from_dict(config_dict)
         logger.info(
-            f"Configuration loaded: storage={config.storage.type}, auth={config.auth.type}"
+            f"Configuration loaded: vector_store={config.vector_store.provider}, embedding={config.embedding.provider}"
         )
         return config
     except Exception as e:
@@ -299,23 +293,6 @@ def _load_env_config() -> dict[str, Any]:
     """
     env_config = {}
 
-    # Storage configuration
-    if os.getenv("INMEMORY_STORAGE_TYPE"):
-        env_config.setdefault("storage", {})["type"] = os.getenv(
-            "INMEMORY_STORAGE_TYPE"
-        )
-
-    if os.getenv("INMEMORY_DATA_DIR"):
-        env_config.setdefault("storage", {})["path"] = os.getenv("INMEMORY_DATA_DIR")
-
-    if os.getenv("MONGODB_URI"):
-        env_config.setdefault("storage", {})["mongodb_uri"] = os.getenv("MONGODB_URI")
-
-    if os.getenv("INMEMORY_DATABASE"):
-        env_config.setdefault("storage", {})["database"] = os.getenv(
-            "INMEMORY_DATABASE"
-        )
-
     # Authentication configuration
     if os.getenv("INMEMORY_AUTH_TYPE"):
         env_config.setdefault("auth", {})["type"] = os.getenv("INMEMORY_AUTH_TYPE")
@@ -365,16 +342,12 @@ def get_default_config() -> InMemoryConfig:
 
 def get_enterprise_config() -> InMemoryConfig:
     """
-    Get default enterprise configuration for MongoDB + OAuth.
+    Get default enterprise configuration with OAuth authentication.
 
     Returns:
-        InMemoryConfig: Enterprise configuration with MongoDB backend
+        InMemoryConfig: Enterprise configuration with OAuth
     """
     return InMemoryConfig(
-        storage=StorageConfig(
-            type="mongodb",
-            mongodb_uri=os.getenv("MONGODB_URI", "mongodb://localhost:27017/inmemory"),
-        ),
         auth=AuthConfig(
             type="oauth",
             require_api_key=True,

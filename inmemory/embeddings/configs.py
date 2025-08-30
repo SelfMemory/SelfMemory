@@ -5,7 +5,7 @@ class BaseEmbedderConfig:
     """
     Base configuration class for all embedding providers.
     
-    This matches mem0's BaseEmbedderConfig pattern.
+    This matches  BaseEmbedderConfig pattern.
     """
     
     def __init__(

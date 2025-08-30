@@ -1,8 +1,5 @@
 """
-Qdrant vector store configuration.
-
-This module provides Qdrant-specific configuration classes,
-following mem0's configuration pattern.
+Qdrant vector store configuration following  pattern.
 """
 
 from typing import Any, ClassVar, Dict, Optional
@@ -14,18 +11,11 @@ class QdrantConfig(BaseModel):
     """
     Configuration for Qdrant vector store.
     
-    This matches mem0's QdrantConfig structure for consistency.
+    Follows  QdrantConfig pattern exactly.
     """
     
-    try:
-        from qdrant_client import QdrantClient
-        QdrantClient: ClassVar[type] = QdrantClient
-    except ImportError:
-        QdrantClient = None
-
-    collection_name: str = Field("memories", description="Name of the collection")
+    collection_name: str = Field("inmemory_memories", description="Name of the collection")
     embedding_model_dims: Optional[int] = Field(768, description="Dimensions of the embedding model")
-    client: Optional[Any] = Field(None, description="Existing Qdrant client instance")
     host: Optional[str] = Field(None, description="Host address for Qdrant server")
     port: Optional[int] = Field(None, description="Port for Qdrant server")
     path: Optional[str] = Field("/tmp/qdrant", description="Path for local Qdrant database")
@@ -45,7 +35,8 @@ class QdrantConfig(BaseModel):
             values.get("api_key"),
         )
         if not path and not (host and port) and not (url and api_key):
-            raise ValueError("Either 'host' and 'port' or 'url' and 'api_key' or 'path' must be provided.")
+            # Set default path if no connection method specified
+            values["path"] = "/tmp/qdrant"
         return values
 
     @model_validator(mode="before")
