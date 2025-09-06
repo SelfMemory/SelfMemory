@@ -1,0 +1,14 @@
+# MCP Server Dependencies
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+python-dotenv>=1.0.0
+mcp>=1.0.0
+
+# HTTP client for API calls
+httpx>=0.24.0
+
+# Additional FastAPI dependencies
+pydantic>=2.0.0
+
+# Core dependencies (will be available from parent package)
+# inmemory (local package)

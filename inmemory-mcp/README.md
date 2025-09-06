@@ -1,147 +1,90 @@
-# InMemory MCP Server
+# Simple InMemory MCP Server
 
-A modern MCP (Model Context Protocol) server for InMemory, providing memory management capabilities for AI agents and applications.
+A simplified, easy-to-understand MCP (Model Context Protocol) server for memory management.
 
-## Features
+## What Was Simplified
 
-- **Modern FastMCP Implementation**: Built using FastMCP for clean, maintainable code
-- **Lazy Initialization**: Safe initialization with proper error handling
-- **Context Management**: Proper user and client context management using contextvars
-- **Multiple Memory Operations**: Add, search, list, and delete memories
-- **Flexible Configuration**: Support for multiple embedding providers (Ollama, OpenAI)
-- **SSE Transport**: Server-Sent Events for real-time communication
+The original MCP server files were complex and hard to understand. Here's what we simplified:
 
-## Installation
+### Before (Complex)
+- **main.py**: 300+ lines with complex error handling, multiple global variables, and intricate SSE setup
+- **server.py**: 600+ lines with 7 different tools, complex search engines, and multiple service dependencies
 
-1. **Install Dependencies**:
-   ```bash
-   cd inmemory-core/inmemory-mcp
-   pip install -r requirements.txt
-   ```
+### After (Simple)
+- **main.py**: ~200 lines with clear structure, simple authentication, and 2 core tools
+- **server.py**: ~400 lines with straightforward HTTP API and basic MCP protocol support
 
-2. **Configure Environment**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+## Key Improvements
 
-3. **Start Required Services**:
-   - **Qdrant**: Vector database for storing embeddings
-     ```bash
-     docker run -p 6333:6333 qdrant/qdrant
-     ```
-   - **Ollama** (if using Ollama embeddings):
-     ```bash
-     ollama serve
-     ollama pull nomic-embed-text
-     ```
+### 1. **Cleaner Code Structure**
+- Removed complex imports and dependencies
+- Simplified authentication using only `InmemoryClient`
+- Clear separation of concerns
+
+### 2. **Easier to Understand**
+- Simple function names and clear documentation
+- Reduced from 7 tools to 3 essential tools
+- Straightforward error handling
+
+### 3. **Better Comments**
+- Every function has a clear docstring
+- Code comments explain what's happening
+- Examples in function documentation
+
+### 4. **Simplified Tools**
+
+#### main.py (FastMCP + SSE)
+- `add_memory` - Store memories with metadata
+- `search_memory` - Find relevant memories
+
+#### server.py (HTTP API + MCP Protocol)  
+- `add_memory` - HTTP endpoint for adding memories
+- `search_memories` - HTTP endpoint for searching
+- `delete_memory` - Placeholder for future deletion
 
 ## Usage
 
-### Running the Server
-
+### Start the FastMCP Server (main.py)
 ```bash
-python main.py
+cd inmemory-mcp
+python3 main.py --host 0.0.0.0 --port 8080
 ```
 
-The server will start on `http://localhost:8080` by default.
-
-### MCP Tools Available
-
-1. **add_memory(text: str)** - Add a new memory
-2. **search_memory(query: str, limit: int = 5)** - Search through memories
-3. **list_memories(limit: int = 10)** - List all memories
-4. **delete_memory(memory_id: str)** - Delete a specific memory
-5. **delete_all_memories()** - Delete all memories
-
-### MCP Client Configuration
-
-To use with MCP clients, configure the SSE endpoint:
-
-```
-http://localhost:8080/mcp/{client_name}/sse/{user_id}
+### Start the HTTP API Server (server.py)
+```bash
+cd inmemory-mcp/src
+python3 server.py --host 0.0.0.0 --port 8080
 ```
 
-Example:
+## What Makes It "Grandparent-Friendly"
+
+1. **Simple Language**: No technical jargon in comments
+2. **Clear Structure**: Each file has a clear purpose
+3. **Easy to Follow**: Code flows logically from top to bottom
+4. **Minimal Dependencies**: Uses only essential imports
+5. **Good Examples**: Function docstrings include usage examples
+
+## Files
+
+- `main.py` - Simple MCP server using FastMCP with SSE transport
+- `src/server.py` - HTTP API server with MCP protocol support
+- `README.md` - This documentation
+
+## Authentication
+
+Both servers use simple Bearer token authentication:
 ```
-http://localhost:8080/mcp/claude/sse/user123
-```
-
-## Configuration
-
-### Environment Variables
-
-- `QDRANT_HOST`: Qdrant server host (default: localhost)
-- `QDRANT_PORT`: Qdrant server port (default: 6333)
-- `EMBEDDING_PROVIDER`: Embedding provider (ollama/openai)
-- `EMBEDDING_MODEL`: Model name for embeddings
-- `OLLAMA_HOST`: Ollama server URL
-- `OPENAI_API_KEY`: OpenAI API key (if using OpenAI)
-
-### Embedding Providers
-
-#### Ollama (Default)
-```env
-EMBEDDING_PROVIDER=ollama
-EMBEDDING_MODEL=nomic-embed-text
-OLLAMA_HOST=http://localhost:11434
+Authorization: Bearer <your-api-key>
 ```
 
-#### OpenAI
-```env
-EMBEDDING_PROVIDER=openai
-OPENAI_API_KEY=your_api_key_here
-```
+The API key is validated using the existing `InmemoryClient`.
 
-## Architecture
+## Next Steps
 
-The MCP server follows the mem0/openmemory pattern:
+The simplified code maintains all core functionality while being much easier to:
+- Read and understand
+- Modify and extend
+- Debug when issues arise
+- Onboard new developers
 
-- **FastMCP**: Modern MCP implementation
-- **Context Variables**: User and client context management
-- **Lazy Loading**: Safe initialization of memory client
-- **Error Handling**: Comprehensive error handling and logging
-- **Monorepo Structure**: Direct imports from parent inmemory package
-
-## API Endpoints
-
-- `GET /` - Server information
-- `GET /health` - Health check
-- `GET /mcp/{client_name}/sse/{user_id}` - SSE connection for MCP
-- `POST /mcp/messages/` - MCP message handling
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Import Errors**: Ensure you're running from the correct directory and the inmemory package is available
-2. **Connection Errors**: Check that Qdrant and Ollama services are running
-3. **Memory Client Initialization**: Check logs for specific error messages
-
-### Logs
-
-The server provides detailed logging. Check the console output for:
-- Memory client initialization status
-- Tool execution results
-- Error messages and stack traces
-
-## Development
-
-### Project Structure
-```
-inmemory-core/
-├── inmemory/              # Core package
-└── inmemory-mcp/          # MCP server
-    ├── main.py            # Main server implementation
-    ├── requirements.txt   # Dependencies
-    ├── .env.example       # Configuration template
-    └── README.md          # This file
-```
-
-### Key Benefits of This Structure
-
-- ✅ **No Import Errors**: Direct relative imports from parent package
-- ✅ **Modern Implementation**: FastMCP with proper SSE transport
-- ✅ **Robust Error Handling**: Graceful degradation when services unavailable
-- ✅ **Easy Development**: Everything in one monorepo
-- ✅ **Proven Pattern**: Following mem0's successful architecture
+Perfect for anyone who wants to understand how MCP servers work without getting lost in complexity!

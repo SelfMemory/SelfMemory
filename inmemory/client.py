@@ -94,9 +94,11 @@ class InmemoryClient:
             # Production host
             APIConstants.DEFAULT_API_HOST,
             # Common local development hosts
+            "http://localhost:8081",  # Default server port
             "http://localhost:3000",
             "http://localhost:3001", 
             "http://localhost:3002",
+            "http://127.0.0.1:8080",
             "http://127.0.0.1:3000",
         ]
         
@@ -335,7 +337,7 @@ class InmemoryClient:
             Dict: Deletion result
         """
         try:
-            response = self.client.delete(f"/v1/memories/{memory_id}")
+            response = self.client.delete(f"/api/memories/{memory_id}")
             response.raise_for_status()
 
             result = response.json()
@@ -361,7 +363,7 @@ class InmemoryClient:
             Dict: Deletion result with count of deleted memories
         """
         try:
-            response = self.client.delete("/v1/memories/")
+            response = self.client.delete("/api/memories")
             response.raise_for_status()
 
             result = response.json()

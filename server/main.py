@@ -75,18 +75,31 @@ class SearchRequest(BaseModel):
 
 # Simple authentication (optional - can be removed for even more simplicity)
 def authenticate_api_key(authorization: str = Header(None)) -> str:
-    """Simple API key authentication."""
+    """Simple API key authentication - accepts both sk_im_ and inmem_sk_ formats."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization header required")
     
     api_key = authorization.replace("Bearer ", "")
-    if not api_key.startswith("inmem_sk_"):
+    
+    # Accept both formats: sk_im_ and inmem_sk_
+    if not (api_key.startswith("sk_im_") or api_key.startswith("inmem_sk_")):
         raise HTTPException(status_code=401, detail="Invalid API key format")
     
     # Generate user_id from API key (like mem0)
     return hashlib.md5(api_key.encode()).hexdigest()
 
 # API Endpoints (mem0 exact pattern)
+@app.get("/api/v1/ping", summary="Ping endpoint for client validation")
+def ping_endpoint(user_id: str = Depends(authenticate_api_key)):
+    """Ping endpoint that returns user info on successful authentication."""
+    return {
+        "status": "ok",
+        "user_id": user_id,
+        "key_id": "default",
+        "permissions": ["read", "write"],
+        "name": "InMemory User"
+    }
+
 @app.post("/configure", summary="Configure InMemory")
 def set_config(config: Dict[str, Any]):
     """Set memory configuration (mem0 style)."""
@@ -94,7 +107,7 @@ def set_config(config: Dict[str, Any]):
     MEMORY_INSTANCE = Memory(config=config)
     return {"message": "Configuration set successfully"}
 
-@app.post("/memories", summary="Create memories")
+@app.post("/api/memories", summary="Create memories")
 def add_memory(memory_create: MemoryCreate, user_id: str = Depends(authenticate_api_key)):
     """Store new memories (mem0 style with user isolation)."""
     if not any([memory_create.user_id, memory_create.agent_id, memory_create.run_id, user_id]):
@@ -127,7 +140,7 @@ def add_memory(memory_create: MemoryCreate, user_id: str = Depends(authenticate_
         logging.exception("Error in add_memory:")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/memories", summary="Get memories")
+@app.get("/api/memories", summary="Get memories")
 def get_all_memories(user_id: str = Depends(authenticate_api_key)):
     """Retrieve stored memories (mem0 style)."""
     try:
@@ -136,7 +149,7 @@ def get_all_memories(user_id: str = Depends(authenticate_api_key)):
         logging.exception("Error in get_all_memories:")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/memories/{memory_id}", summary="Get a memory")
+@app.get("/api/memories/{memory_id}", summary="Get a memory")
 def get_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
     """Retrieve a specific memory by ID (mem0 style)."""
     try:
@@ -145,7 +158,7 @@ def get_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
         logging.exception("Error in get_memory:")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/search", summary="Search memories")
+@app.post("/api/memories/search", summary="Search memories")
 def search_memories(search_req: SearchRequest, user_id: str = Depends(authenticate_api_key)):
     """Search for memories (mem0 style)."""
     try:
@@ -185,7 +198,7 @@ def search_memories(search_req: SearchRequest, user_id: str = Depends(authentica
         logging.exception("Error in search_memories:")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/memories/{memory_id}", summary="Delete a memory")
+@app.delete("/api/memories/{memory_id}", summary="Delete a memory")
 def delete_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
     """Delete a specific memory (mem0 style)."""
     try:
@@ -195,7 +208,7 @@ def delete_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
         logging.exception("Error in delete_memory:")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/memories", summary="Delete all memories")
+@app.delete("/api/memories", summary="Delete all memories")
 def delete_all_memories(user_id: str = Depends(authenticate_api_key)):
     """Delete all memories for a user (mem0 style)."""
     try:
