@@ -2,13 +2,14 @@
 Base configuration classes for InMemory.
 
 This module provides the main configuration classes and utilities,
-following  configuration structure pattern.
+following mem0 configuration structure pattern with hybrid dynamic import system.
 """
 
+import importlib
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Optional
 
 try:
     import yaml
@@ -17,6 +18,10 @@ except ImportError:
     _YAML_AVAILABLE = False
 
 from pydantic import BaseModel, Field, validator, model_validator
+
+# Static imports for core providers (always loaded for performance)
+from inmemory.configs.embeddings.ollama import OllamaConfig
+from inmemory.configs.vector_stores.qdrant import QdrantConfig
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +54,7 @@ class AuthConfig(BaseModel):
 
 
 class VectorStoreConfig(BaseModel):
-    """Configuration for vector store providers following  pattern."""
+    """Configuration for vector store providers following mem0 pattern."""
 
     provider: str = Field(default="qdrant", description="Vector store provider")
     config: dict | None = Field(
@@ -57,41 +62,30 @@ class VectorStoreConfig(BaseModel):
         description="Provider-specific configuration dictionary"
     )
 
-    _provider_configs = {
+    # Simple provider registry (mem0 style)
+    _provider_configs: Dict[str, str] = {
         "qdrant": "QdrantConfig",
         "chroma": "ChromaConfig",
         "chromadb": "ChromaConfig",
+        "pinecone": "PineconeConfig",
+        "weaviate": "WeaviateConfig",
     }
-
-    @validator("provider")
-    def validate_provider(cls, v):
-        supported_providers = ["qdrant", "chroma", "chromadb"]
-        if v not in supported_providers:
-            raise ValueError(
-                f"Vector store provider must be one of: {supported_providers}"
-            )
-        return v
 
     @model_validator(mode="after")
     def validate_and_create_config(self) -> "VectorStoreConfig":
-        """Create provider-specific config object following  pattern."""
+        """Create provider-specific config object using mem0 pattern."""
         provider = self.provider
         config = self.config
 
         if provider not in self._provider_configs:
             raise ValueError(f"Unsupported vector store provider: {provider}")
 
-        # Import provider-specific config class
-        if provider == "qdrant":
-            from inmemory.configs.vector_stores.qdrant import QdrantConfig
-            config_class = QdrantConfig
-        else:
-            # For future providers
-            module = __import__(
-                f"inmemory.configs.vector_stores.{provider}",
-                fromlist=[self._provider_configs[provider]],
-            )
-            config_class = getattr(module, self._provider_configs[provider])
+        # Dynamic import (mem0 style)
+        module = __import__(
+            f"inmemory.configs.vector_stores.{provider}",
+            fromlist=[self._provider_configs[provider]],
+        )
+        config_class = getattr(module, self._provider_configs[provider])
 
         if config is None:
             config = {}
@@ -101,13 +95,18 @@ class VectorStoreConfig(BaseModel):
                 raise ValueError(f"Invalid config type for provider {provider}")
             return self
 
-        # Create provider-specific config object with defaults
+        # Only add default path if no other connection method is specified
+        has_connection_method = any(key in config for key in ["path", "host", "port", "url"])
+        if not has_connection_method and "path" in config_class.__annotations__:
+            config["path"] = f"/tmp/{provider}"
+
+        # Create provider-specific config object
         self.config = config_class(**config)
         return self
 
 
 class EmbeddingConfig(BaseModel):
-    """Configuration for embedding providers following  pattern."""
+    """Configuration for embedding providers following mem0 pattern."""
 
     provider: str = Field(default="ollama", description="Embedding provider")
     config: dict | None = Field(
@@ -115,40 +114,30 @@ class EmbeddingConfig(BaseModel):
         description="Provider-specific configuration dictionary"
     )
 
-    _provider_configs = {
+    # Simple provider registry (mem0 style)
+    _provider_configs: Dict[str, str] = {
         "ollama": "OllamaConfig",
         "openai": "OpenAIConfig",
+        "huggingface": "HuggingFaceConfig",
+        "cohere": "CohereConfig",
+        "azure": "AzureConfig",
     }
-
-    @validator("provider")
-    def validate_provider(cls, v):
-        supported_providers = ["ollama", "openai"]
-        if v not in supported_providers:
-            raise ValueError(
-                f"Embedding provider must be one of: {supported_providers}"
-            )
-        return v
 
     @model_validator(mode="after")
     def validate_and_create_config(self) -> "EmbeddingConfig":
-        """Create provider-specific config object following  pattern."""
+        """Create provider-specific config object using mem0 pattern."""
         provider = self.provider
         config = self.config
 
         if provider not in self._provider_configs:
             raise ValueError(f"Unsupported embedding provider: {provider}")
 
-        # Import provider-specific config class
-        if provider == "ollama":
-            from inmemory.configs.embeddings.ollama import OllamaConfig
-            config_class = OllamaConfig
-        else:
-            # For future providers
-            module = __import__(
-                f"inmemory.configs.embeddings.{provider}",
-                fromlist=[self._provider_configs[provider]],
-            )
-            config_class = getattr(module, self._provider_configs[provider])
+        # Dynamic import (mem0 style)
+        module = __import__(
+            f"inmemory.configs.embeddings.{provider}",
+            fromlist=[self._provider_configs[provider]],
+        )
+        config_class = getattr(module, self._provider_configs[provider])
 
         if config is None:
             config = {}
@@ -158,7 +147,7 @@ class EmbeddingConfig(BaseModel):
                 raise ValueError(f"Invalid config type for provider {provider}")
             return self
 
-        # Create provider-specific config object with defaults
+        # Create provider-specific config object
         self.config = config_class(**config)
         return self
 

@@ -9,13 +9,68 @@ with a zero-setup API for direct usage without authentication.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional, Dict
 
 from inmemory.memory.base import MemoryBase
 from inmemory.configs import InMemoryConfig
 from inmemory.utils.factory import EmbeddingFactory, VectorStoreFactory
 
 logger = logging.getLogger(__name__)
+
+
+def _build_filters_and_metadata(
+    *,  # Enforce keyword-only arguments
+    user_id: str,
+    input_metadata: Optional[Dict[str, Any]] = None,
+    input_filters: Optional[Dict[str, Any]] = None,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Build filters and metadata for memory operations (simplified for user-only isolation).
+    
+    This function creates user-scoped metadata and filters that ensure complete 
+    isolation between users. Only user_id is required since this system doesn't 
+    use agent_id or run_id concepts.
+    
+    Args:
+        user_id: Required user identifier for memory isolation
+        input_metadata: Optional additional metadata to include
+        input_filters: Optional additional filters to include
+        
+    Returns:
+        tuple: (processed_metadata, effective_filters)
+            - processed_metadata: Metadata to store with the memory
+            - effective_filters: Filters to use when querying memories
+            
+    Raises:
+        ValueError: If user_id is not provided or is empty
+        
+    Examples:
+        >>> metadata, filters = _build_filters_and_metadata(user_id="alice")
+        >>> metadata, filters = _build_filters_and_metadata(
+        ...     user_id="alice", 
+        ...     input_metadata={"category": "work"}
+        ... )
+    """
+    # Validate that user_id is provided (required for this system)
+    if not user_id or not isinstance(user_id, str) or not user_id.strip():
+        raise ValueError("user_id is required and must be a non-empty string")
+    
+    # Start with input metadata or empty dict
+    processed_metadata = input_metadata.copy() if input_metadata else {}
+    
+    # Add user isolation metadata
+    processed_metadata["user_id"] = user_id.strip()
+        
+    # Add timestamp for tracking
+    processed_metadata["created_at"] = datetime.now().isoformat()
+    
+    # Build effective filters for querying
+    effective_filters = input_filters.copy() if input_filters else {}
+    
+    # Add user isolation filter
+    effective_filters["user_id"] = user_id.strip()
+        
+    return processed_metadata, effective_filters
 
 
 class Memory(MemoryBase):
@@ -107,45 +162,33 @@ class Memory(MemoryBase):
 
     def __init__(
         self, 
-        user_id: str, 
         config: InMemoryConfig | dict | None = None
     ):
         """
-        Initialize Memory with user context and automatic isolation.
+        Initialize Memory with configuration (mem0 style - no user_id required).
 
         Args:
-            user_id: Required user identifier for memory isolation
             config: Optional InMemoryConfig instance or config dictionary
 
-        Raises:
-            ValueError: If user_id is not provided or is empty
-
         Examples:
-            Basic user-scoped memory:
-            >>> memory = Memory(user_id="user_123")
+            Basic memory instance:
+            >>> memory = Memory()
 
             With custom config:
             >>> config = {
             ...     "embedding": {"provider": "ollama", "config": {...}},
             ...     "vector_store": {"provider": "qdrant", "config": {...}}
             ... }
-            >>> memory = Memory(user_id="user_123", config=config)
+            >>> memory = Memory(config=config)
             
-            Multi-user isolation:
-            >>> alice_memory = Memory(user_id="alice")
-            >>> bob_memory = Memory(user_id="bob")
-            >>> alice_memory.add("I love pizza")
-            >>> bob_memory.add("I love sushi")
-            >>> # Each user only sees their own memories
+            Multi-user usage (user_id passed to methods):
+            >>> memory = Memory()
+            >>> memory.add("I love pizza", user_id="alice")
+            >>> memory.add("I love sushi", user_id="bob")
+            >>> alice_results = memory.search("pizza", user_id="alice")  # Only Alice's memories
+            >>> bob_results = memory.search("sushi", user_id="bob")      # Only Bob's memories
         """
         
-        # Validate user context
-        if not user_id or not isinstance(user_id, str) or not user_id.strip():
-            raise ValueError("user_id is required and must be a non-empty string")
-        
-        # Store user identifier as instance variable
-        self.user_id = user_id.strip()
-
         # Handle different config types for clean API
         if config is None:
             self.config = InMemoryConfig()
@@ -168,56 +211,27 @@ class Memory(MemoryBase):
         )
 
         logger.info(
-            f"Memory SDK initialized for user_id='{self.user_id}': "
+            f"Memory SDK initialized: "
             f"{self.config.embedding.provider} + {self.config.vector_store.provider}"
         )
 
-    def _build_user_metadata_and_filters(self, additional_metadata: dict = None) -> tuple[dict, dict]:
-        """
-        Build metadata for storage and filters for querying.
-        
-        This creates user-scoped metadata that ensures complete isolation between users.
-        All memories are automatically tagged with the user_id for filtering.
-        
-        Args:
-            additional_metadata: Optional additional metadata to include
-            
-        Returns:
-            tuple: (storage_metadata, query_filters)
-                - storage_metadata: Metadata to store with the memory
-                - query_filters: Filters to use when querying memories
-        """
-        from copy import deepcopy
-        
-        # Base metadata template for storage (like mem0)
-        storage_metadata = deepcopy(additional_metadata) if additional_metadata else {}
-        
-        # Add user isolation metadata (always present since user_id is required)
-        storage_metadata.update({
-            "user_id": self.user_id,
-            "created_at": datetime.now().isoformat(),
-        })
-        
-        # Query filters for user isolation (like mem0)
-        query_filters = {
-            "user_id": self.user_id
-        }
-        
-        return storage_metadata, query_filters
 
     def add(
         self,
         memory_content: str,
+        *,  # Enforce keyword-only arguments
+        user_id: str,
         tags: str | None = None,
         people_mentioned: str | None = None,
         topic_category: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
-        Add a new memory to storage with automatic user isolation (mem0 style).
+        Add a new memory to storage with user isolation (mem0 style).
 
         Args:
             memory_content: The memory text to store
+            user_id: Required user identifier for memory isolation
             tags: Optional comma-separated tags
             people_mentioned: Optional comma-separated people names
             topic_category: Optional topic category
@@ -227,10 +241,10 @@ class Memory(MemoryBase):
             Dict: Result information including memory_id and status
 
         Examples:
-            >>> memory = Memory(user_id="alice")
-            >>> memory.add("I love pizza", tags="food,personal")
+            >>> memory = Memory()
+            >>> memory.add("I love pizza", user_id="alice", tags="food,personal")
             >>> memory.add("Meeting notes from project discussion",
-            ...           tags="work,meeting",
+            ...           user_id="alice", tags="work,meeting",
             ...           people_mentioned="Sarah,Mike")
         """
         try:
@@ -246,8 +260,11 @@ class Memory(MemoryBase):
             if metadata:
                 memory_metadata.update(metadata)
             
-            # Build user-scoped metadata and filters (mem0 style)
-            storage_metadata, _ = self._build_user_metadata_and_filters(memory_metadata)
+            # Build user-scoped metadata and filters using helper function (mem0 style)
+            storage_metadata, _ = _build_filters_and_metadata(
+                user_id=user_id,
+                input_metadata=memory_metadata
+            )
 
             # Generate embedding using provider
             embedding = self.embedding_provider.embed(memory_content)
@@ -262,7 +279,7 @@ class Memory(MemoryBase):
                 ids=[memory_id]
             )
 
-            logger.info(f"Memory added for user '{self.user_id}': {memory_content[:50]}...")
+            logger.info(f"Memory added for user '{user_id}': {memory_content[:50]}...")
             return {
                 "success": True,
                 "memory_id": memory_id,
@@ -270,12 +287,14 @@ class Memory(MemoryBase):
             }
 
         except Exception as e:
-            logger.error(f"Failed to add memory for user '{self.user_id}': {e}")
+            logger.error(f"Failed to add memory for user '{user_id}': {e}")
             return {"success": False, "error": str(e)}
 
     def search(
         self,
         query: str = "",
+        *,  # Enforce keyword-only arguments
+        user_id: str,
         limit: int = 10,
         tags: list[str] | None = None,
         people_mentioned: list[str] | None = None,
@@ -287,13 +306,14 @@ class Memory(MemoryBase):
         sort_by: str = "relevance",  # "relevance", "timestamp", "score"
     ) -> dict[str, list[dict[str, Any]]]:
         """
-        Search memories with automatic user isolation (mem0 style).
+        Search memories with user isolation (mem0 style).
         
-        All searches are automatically scoped to the current user's memories only.
+        All searches are scoped to the specified user's memories only.
         Users cannot see or access memories from other users.
 
         Args:
             query: Search query string (empty string returns all memories)
+            user_id: Required user identifier for memory isolation
             limit: Maximum number of results
             tags: Optional list of tags to filter by
             people_mentioned: Optional list of people to filter by
@@ -309,12 +329,13 @@ class Memory(MemoryBase):
 
         Examples:
             Basic search (user-isolated):
-            >>> memory = Memory(user_id="alice")
-            >>> results = memory.search("pizza")  # Only Alice's memories
+            >>> memory = Memory()
+            >>> results = memory.search("pizza", user_id="alice")  # Only Alice's memories
             
             Advanced filtering:
             >>> results = memory.search(
             ...     query="meetings",
+            ...     user_id="alice",
             ...     tags=["work", "important"],
             ...     people_mentioned=["John", "Sarah"],
             ...     temporal_filter="this_week",
@@ -323,16 +344,16 @@ class Memory(MemoryBase):
             ... )
             
             Get all user's memories sorted by timestamp:
-            >>> results = memory.search(query="", sort_by="timestamp", limit=100)
+            >>> results = memory.search(query="", user_id="alice", sort_by="timestamp", limit=100)
         """
         try:
             # Handle empty query case - return all memories
             is_empty_query = not query or not query.strip()
             
             if is_empty_query:
-                logger.info(f"Retrieving all memories for user '{self.user_id}' (empty query)")
+                logger.info(f"Retrieving all memories for user '{user_id}' (empty query)")
             else:
-                logger.info(f"Searching memories for user '{self.user_id}' with query: '{query[:50]}...'")
+                logger.info(f"Searching memories for user '{user_id}' with query: '{query[:50]}...'")
 
             # Build additional filters from search parameters
             additional_filters = {}
@@ -346,16 +367,16 @@ class Memory(MemoryBase):
             if temporal_filter:
                 additional_filters["temporal_filter"] = temporal_filter
 
-            # Build user-scoped filters (mem0 style) - this automatically adds user_id filtering
-            _, user_filters = self._build_user_metadata_and_filters()
+            # Build user-scoped filters using helper function (mem0 style)
+            _, user_filters = _build_filters_and_metadata(
+                user_id=user_id,
+                input_filters=additional_filters
+            )
             
-            # Combine user filters with additional search filters
-            combined_filters = {**user_filters, **additional_filters}
-
             # Execute search based on query type
             if is_empty_query:
                 # Get all user's memories using vector store's list method
-                results = self.vector_store.list(filters=combined_filters, limit=limit)
+                results = self.vector_store.list(filters=user_filters, limit=limit)
                 # Use helper method to format results consistently
                 formatted_results = self._format_results(results, include_metadata, include_score=False)
             else:
@@ -367,7 +388,7 @@ class Memory(MemoryBase):
                     query=query, 
                     vectors=query_embedding, 
                     limit=limit, 
-                    filters=combined_filters  # Includes automatic user_id filtering
+                    filters=user_filters  # Includes automatic user_id filtering
                 )
 
                 # Use helper method to format results consistently
@@ -383,37 +404,42 @@ class Memory(MemoryBase):
             # Apply sorting using helper method
             formatted_results = self._apply_sorting(formatted_results, sort_by)
 
-            logger.info(f"Search completed for user '{self.user_id}': {len(formatted_results)} results")
+            logger.info(f"Search completed for user '{user_id}': {len(formatted_results)} results")
             return {"results": formatted_results}
 
         except Exception as e:
-            logger.error(f"Search failed for user '{self.user_id}': {e}")
+            logger.error(f"Search failed for user '{user_id}': {e}")
             return {"results": []}
 
     def get_all(
-        self, limit: int = 100, offset: int = 0
+        self, 
+        *,  # Enforce keyword-only arguments
+        user_id: str,
+        limit: int = 100, 
+        offset: int = 0
     ) -> dict[str, list[dict[str, Any]]]:
         """
-        Get all memories for the current user with automatic user isolation (mem0 style).
+        Get all memories for the specified user with user isolation (mem0 style).
         
-        Only returns memories belonging to the current user. Users cannot see
+        Only returns memories belonging to the specified user. Users cannot see
         memories from other users.
 
         Args:
+            user_id: Required user identifier for memory isolation
             limit: Maximum number of memories to return
             offset: Number of memories to skip
 
         Returns:
-            Dict: All user's memories with "results" key
+            Dict: User's memories with "results" key
 
         Examples:
-            >>> memory = Memory(user_id="alice")
-            >>> all_memories = memory.get_all()  # Only Alice's memories
-            >>> recent_memories = memory.get_all(limit=10)
+            >>> memory = Memory()
+            >>> all_memories = memory.get_all(user_id="alice")  # Only Alice's memories
+            >>> recent_memories = memory.get_all(user_id="alice", limit=10)
         """
         try:
-            # Build user-scoped filters (mem0 style) - this automatically adds user_id filtering
-            _, user_filters = self._build_user_metadata_and_filters()
+            # Build user-scoped filters using helper function (mem0 style)
+            _, user_filters = _build_filters_and_metadata(user_id=user_id)
             
             # Use list() method with user isolation filters
             results = self.vector_store.list(filters=user_filters, limit=limit)
@@ -421,19 +447,19 @@ class Memory(MemoryBase):
             # Use helper method to format results consistently
             formatted_results = self._format_results(results, include_metadata=True, include_score=False)
             
-            logger.info(f"Retrieved {len(formatted_results)} memories for user '{self.user_id}'")
+            logger.info(f"Retrieved {len(formatted_results)} memories for user '{user_id}'")
             return {"results": formatted_results}
 
         except Exception as e:
-            logger.error(f"Failed to get memories for user '{self.user_id}': {e}")
+            logger.error(f"Failed to get memories for user '{user_id}': {e}")
             return {"results": []}
 
     def delete(self, memory_id: str) -> dict[str, Any]:
         """
-        Delete a specific memory with ownership validation (mem0 style).
+        Delete a specific memory (mem0 style - no ownership validation needed).
         
-        Only allows users to delete their own memories. Users cannot delete
-        memories belonging to other users.
+        Deletes the specified memory by ID. In the new mem0-style architecture,
+        ownership validation is handled at the API level, not in the Memory class.
 
         Args:
             memory_id: Memory identifier to delete
@@ -442,27 +468,15 @@ class Memory(MemoryBase):
             Dict: Deletion result with success status and message
 
         Examples:
-            >>> memory = Memory(user_id="alice")
-            >>> result = memory.delete("memory_123")  # Only works if Alice owns it
+            >>> memory = Memory()
+            >>> result = memory.delete("memory_123")
         """
         try:
-            # First, validate that the memory exists and user owns it (mem0 style)
-            memory = self.vector_store.get(vector_id=memory_id)
-            if not memory:
-                logger.warning(f"Memory {memory_id} not found for user '{self.user_id}'")
-                return {"success": False, "error": "Memory not found"}
-            
-            # Check ownership (mem0 style validation)
-            memory_user_id = memory.payload.get("user_id")
-            if memory_user_id != self.user_id:
-                logger.warning(f"User '{self.user_id}' attempted to delete memory {memory_id} owned by '{memory_user_id}'")
-                return {"success": False, "error": "Access denied: You can only delete your own memories"}
-            
-            # Delete only if user owns it
+            # Simply delete the memory (mem0 style - no ownership validation)
             success = self.vector_store.delete(memory_id)
 
             if success:
-                logger.info(f"Memory {memory_id} deleted by user '{self.user_id}'")
+                logger.info(f"Memory {memory_id} deleted successfully")
                 return {"success": True, "message": "Memory deleted successfully"}
             return {
                 "success": False,
@@ -470,27 +484,34 @@ class Memory(MemoryBase):
             }
 
         except Exception as e:
-            logger.error(f"Error deleting memory {memory_id} for user '{self.user_id}': {e}")
+            logger.error(f"Error deleting memory {memory_id}: {e}")
             return {"success": False, "error": str(e)}
 
-    def delete_all(self) -> dict[str, Any]:
+    def delete_all(
+        self, 
+        *,  # Enforce keyword-only arguments
+        user_id: str
+    ) -> dict[str, Any]:
         """
-        Delete all memories for the current user with automatic user isolation (mem0 style).
+        Delete all memories for the specified user with user isolation (mem0 style).
         
-        Only deletes memories belonging to the current user. Users cannot delete
+        Only deletes memories belonging to the specified user. Users cannot delete
         memories from other users. This maintains complete user isolation.
+
+        Args:
+            user_id: Required user identifier for memory isolation
 
         Returns:
             Dict: Deletion result with count of deleted memories for this user
 
         Examples:
-            >>> memory = Memory(user_id="alice")
-            >>> result = memory.delete_all()  # Only deletes Alice's memories
+            >>> memory = Memory()
+            >>> result = memory.delete_all(user_id="alice")  # Only deletes Alice's memories
             >>> print(result["deleted_count"])  # Number of Alice's memories deleted
         """
         try:
-            # Build user-scoped filters (mem0 style) - this automatically adds user_id filtering
-            _, user_filters = self._build_user_metadata_and_filters()
+            # Build user-scoped filters using helper function (mem0 style)
+            _, user_filters = _build_filters_and_metadata(user_id=user_id)
             
             # Get user's memories only (for counting)
             user_memories = self.vector_store.list(filters=user_filters, limit=10000)
@@ -507,15 +528,15 @@ class Memory(MemoryBase):
                 if memory_id and self.vector_store.delete(memory_id):
                     deleted_count += 1
 
-            logger.info(f"User '{self.user_id}' deleted {deleted_count} memories")
+            logger.info(f"User '{user_id}' deleted {deleted_count} memories")
             return {
                 "success": True,
                 "deleted_count": deleted_count,
-                "message": f"Deleted {deleted_count} memories for user '{self.user_id}'",
+                "message": f"Deleted {deleted_count} memories for user '{user_id}'",
             }
 
         except Exception as e:
-            logger.error(f"Failed to delete all memories for user '{self.user_id}': {e}")
+            logger.error(f"Failed to delete all memories for user '{user_id}': {e}")
             return {"success": False, "error": str(e)}
 
     # Helper Methods (mem0 Style)
@@ -638,31 +659,6 @@ class Memory(MemoryBase):
         else:
             return {}
 
-    def _validate_user_access(self, memory_id: str) -> bool:
-        """
-        Validate that the current user can access a specific memory (mem0 style).
-        
-        This method checks ownership by verifying that the memory's user_id
-        matches the current instance's user_id.
-        
-        Args:
-            memory_id: Memory identifier to validate access for
-            
-        Returns:
-            True if user can access the memory, False otherwise
-        """
-        try:
-            memory = self.vector_store.get(vector_id=memory_id)
-            if not memory:
-                return False
-            
-            # Extract user_id from memory metadata
-            memory_user_id = self._extract_metadata(memory).get("user_id")
-            return memory_user_id == self.user_id
-            
-        except Exception as e:
-            logger.error(f"Error validating user access for memory {memory_id}: {e}")
-            return False
 
     def _apply_sorting(self, results: list[dict[str, Any]], sort_by: str) -> list[dict[str, Any]]:
         """

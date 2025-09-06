@@ -4,11 +4,11 @@ Factory pattern for creating provider instances using base.py abstractions.
 This module provides clean factory classes that use only base.py interfaces,
 making it easy to add new providers without changing the Memory class.
 
-Based on  factory pattern but simplified for Ollama + Qdrant only.
+Based on mem0 hybrid factory pattern - static core providers + dynamic plugins.
 """
 
 import importlib
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Type
 
 from inmemory.embeddings.base import EmbeddingBase
 from inmemory.vector_stores.base import VectorStoreBase
@@ -22,17 +22,28 @@ def load_class(class_path: str):
 
 
 class EmbeddingFactory:
-    """Factory for creating embedding provider instances."""
+    """Factory for creating embedding provider instances with hybrid loading."""
     
-    # Provider mappings - only Ollama for now
-    provider_to_class = {
+    # Static provider mappings (always loaded for performance)
+    _static_providers = {
         "ollama": "inmemory.embeddings.ollama.OllamaEmbedding",
     }
+    
+    # Dynamic provider mappings (loaded on demand)
+    _dynamic_providers = {
+        "openai": "inmemory.embeddings.openai.OpenAIEmbedding",
+        "huggingface": "inmemory.embeddings.huggingface.HuggingFaceEmbedding",
+        "cohere": "inmemory.embeddings.cohere.CohereEmbedding",
+        "azure": "inmemory.embeddings.azure.AzureEmbedding",
+    }
+    
+    # Cache for loaded dynamic providers
+    _loaded_providers: Dict[str, str] = {}
     
     @classmethod
     def create(cls, provider_name: str, config=None) -> EmbeddingBase:
         """
-        Create an embedding provider instance.
+        Create an embedding provider instance using hybrid loading.
         
         Args:
             provider_name: Provider name (e.g., 'ollama')
@@ -44,11 +55,27 @@ class EmbeddingFactory:
         Raises:
             ValueError: If provider is not supported
         """
-        if provider_name not in cls.provider_to_class:
+        # Try static providers first (fast path)
+        if provider_name in cls._static_providers:
+            class_path = cls._static_providers[provider_name]
+        
+        # Try cached dynamic providers
+        elif provider_name in cls._loaded_providers:
+            class_path = cls._loaded_providers[provider_name]
+        
+        # Try dynamic providers (load on demand)
+        elif provider_name in cls._dynamic_providers:
+            class_path = cls._dynamic_providers[provider_name]
+            # Cache for future use
+            cls._loaded_providers[provider_name] = class_path
+        
+        else:
             raise ValueError(f"Unsupported embedding provider: {provider_name}")
-            
-        class_path = cls.provider_to_class[provider_name]
-        embedding_class = load_class(class_path)
+        
+        try:
+            embedding_class = load_class(class_path)
+        except (ImportError, AttributeError) as e:
+            raise ValueError(f"Failed to load provider '{provider_name}': {e}")
         
         # Handle both Pydantic config objects and raw dicts
         if hasattr(config, 'model_dump'):
@@ -71,21 +98,109 @@ class EmbeddingFactory:
     @classmethod
     def get_supported_providers(cls) -> list[str]:
         """Get list of supported embedding providers."""
-        return list(cls.provider_to_class.keys())
+        return list(cls._static_providers.keys()) + list(cls._dynamic_providers.keys())
+    
+    @classmethod
+    def register_provider(cls, name: str, class_path: str, static: bool = False):
+        """
+        Register a new provider dynamically.
+        
+        Args:
+            name: Provider name
+            class_path: Full path to provider class
+            static: Whether to load immediately (static) or on demand (dynamic)
+        """
+        if static:
+            cls._static_providers[name] = class_path
+        else:
+            cls._dynamic_providers[name] = class_path
+    
+    @classmethod
+    def validate_config(cls, provider_name: str, config) -> Dict[str, Any]:
+        """
+        Validate configuration for a provider without creating instance.
+        
+        Args:
+            provider_name: Provider name
+            config: Configuration to validate
+            
+        Returns:
+            Dict with validation results
+        """
+        try:
+            # Create instance to trigger validation
+            instance = cls.create(provider_name, config)
+            
+            # Test connection if config supports it
+            if hasattr(instance.config, 'test_connection'):
+                connection_test = instance.config.test_connection()
+                return {
+                    "status": "valid",
+                    "provider": provider_name,
+                    "connection_test": connection_test
+                }
+            else:
+                return {
+                    "status": "valid",
+                    "provider": provider_name,
+                    "connection_test": {"status": "not_supported"}
+                }
+                
+        except Exception as e:
+            return {
+                "status": "invalid",
+                "provider": provider_name,
+                "error": str(e)
+            }
+    
+    @classmethod
+    def get_provider_info(cls, provider_name: str) -> Dict[str, Any]:
+        """Get information about a provider."""
+        if provider_name in cls._static_providers:
+            return {
+                "provider": provider_name,
+                "type": "static",
+                "class_path": cls._static_providers[provider_name],
+                "loaded": True
+            }
+        elif provider_name in cls._dynamic_providers:
+            return {
+                "provider": provider_name,
+                "type": "dynamic",
+                "class_path": cls._dynamic_providers[provider_name],
+                "loaded": provider_name in cls._loaded_providers
+            }
+        else:
+            return {
+                "provider": provider_name,
+                "type": "unknown",
+                "supported": False
+            }
 
 
 class VectorStoreFactory:
-    """Factory for creating vector store provider instances."""
+    """Factory for creating vector store provider instances with hybrid loading."""
     
-    # Provider mappings - only Qdrant for now
-    provider_to_class = {
+    # Static provider mappings (always loaded for performance)
+    _static_providers = {
         "qdrant": "inmemory.vector_stores.qdrant.Qdrant",
     }
+    
+    # Dynamic provider mappings (loaded on demand)
+    _dynamic_providers = {
+        "chroma": "inmemory.vector_stores.chroma.ChromaDB",
+        "chromadb": "inmemory.vector_stores.chroma.ChromaDB",
+        "pinecone": "inmemory.vector_stores.pinecone.PineconeDB",
+        "weaviate": "inmemory.vector_stores.weaviate.WeaviateDB",
+    }
+    
+    # Cache for loaded dynamic providers
+    _loaded_providers: Dict[str, str] = {}
     
     @classmethod
     def create(cls, provider_name: str, config) -> VectorStoreBase:
         """
-        Create a vector store provider instance.
+        Create a vector store provider instance using hybrid loading.
         
         Args:
             provider_name: Provider name (e.g., 'qdrant')
@@ -97,11 +212,27 @@ class VectorStoreFactory:
         Raises:
             ValueError: If provider is not supported
         """
-        if provider_name not in cls.provider_to_class:
+        # Try static providers first (fast path)
+        if provider_name in cls._static_providers:
+            class_path = cls._static_providers[provider_name]
+        
+        # Try cached dynamic providers
+        elif provider_name in cls._loaded_providers:
+            class_path = cls._loaded_providers[provider_name]
+        
+        # Try dynamic providers (load on demand)
+        elif provider_name in cls._dynamic_providers:
+            class_path = cls._dynamic_providers[provider_name]
+            # Cache for future use
+            cls._loaded_providers[provider_name] = class_path
+        
+        else:
             raise ValueError(f"Unsupported vector store provider: {provider_name}")
-            
-        class_path = cls.provider_to_class[provider_name]
-        vector_store_class = load_class(class_path)
+        
+        try:
+            vector_store_class = load_class(class_path)
+        except (ImportError, AttributeError) as e:
+            raise ValueError(f"Failed to load provider '{provider_name}': {e}")
         
         # Handle both Pydantic config objects and raw dicts
         if hasattr(config, 'model_dump'):
@@ -119,4 +250,81 @@ class VectorStoreFactory:
     @classmethod
     def get_supported_providers(cls) -> list[str]:
         """Get list of supported vector store providers."""
-        return list(cls.provider_to_class.keys())
+        return list(cls._static_providers.keys()) + list(cls._dynamic_providers.keys())
+    
+    @classmethod
+    def register_provider(cls, name: str, class_path: str, static: bool = False):
+        """
+        Register a new provider dynamically.
+        
+        Args:
+            name: Provider name
+            class_path: Full path to provider class
+            static: Whether to load immediately (static) or on demand (dynamic)
+        """
+        if static:
+            cls._static_providers[name] = class_path
+        else:
+            cls._dynamic_providers[name] = class_path
+    
+    @classmethod
+    def validate_config(cls, provider_name: str, config) -> Dict[str, Any]:
+        """
+        Validate configuration for a provider without creating instance.
+        
+        Args:
+            provider_name: Provider name
+            config: Configuration to validate
+            
+        Returns:
+            Dict with validation results
+        """
+        try:
+            # Create instance to trigger validation
+            instance = cls.create(provider_name, config)
+            
+            # Test connection if config supports it
+            if hasattr(instance, 'test_connection'):
+                connection_test = instance.test_connection()
+                return {
+                    "status": "valid",
+                    "provider": provider_name,
+                    "connection_test": connection_test
+                }
+            else:
+                return {
+                    "status": "valid",
+                    "provider": provider_name,
+                    "connection_test": {"status": "not_supported"}
+                }
+                
+        except Exception as e:
+            return {
+                "status": "invalid",
+                "provider": provider_name,
+                "error": str(e)
+            }
+    
+    @classmethod
+    def get_provider_info(cls, provider_name: str) -> Dict[str, Any]:
+        """Get information about a provider."""
+        if provider_name in cls._static_providers:
+            return {
+                "provider": provider_name,
+                "type": "static",
+                "class_path": cls._static_providers[provider_name],
+                "loaded": True
+            }
+        elif provider_name in cls._dynamic_providers:
+            return {
+                "provider": provider_name,
+                "type": "dynamic",
+                "class_path": cls._dynamic_providers[provider_name],
+                "loaded": provider_name in cls._loaded_providers
+            }
+        else:
+            return {
+                "provider": provider_name,
+                "type": "unknown",
+                "supported": False
+            }

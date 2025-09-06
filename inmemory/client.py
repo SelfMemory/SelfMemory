@@ -40,9 +40,8 @@ class InmemoryClient:
             api_key: The API key for authenticating with the InMemory API. If not
                      provided, it will attempt to use the INMEM_API_KEY
                      environment variable.
-            host: The base URL for the InMemory API. Defaults to the value from
-                  APIConstants.DEFAULT_API_HOST, with support for INMEMORY_API_HOST
-                  environment variable override.
+            host: The base URL for the InMemory API. If not provided, will
+                  auto-discover the correct host by trying multiple endpoints.
             client: A custom httpx.Client instance. If provided, it will be
                     used instead of creating a new one.
 
@@ -50,15 +49,17 @@ class InmemoryClient:
             ValueError: If no API key is provided or found in the environment.
         """
         self.api_key = api_key or os.getenv("INMEM_API_KEY")
-        # Priority order: explicit host -> env var -> constants default
-        self.host = (
-            host or os.getenv("INMEMORY_API_HOST") or APIConstants.DEFAULT_API_HOST
-        )
 
         if not self.api_key:
             raise ValueError(
                 "InMemory API Key not provided. Please set INMEM_API_KEY environment variable or provide api_key parameter."
             )
+
+        # Auto-discover host if not provided
+        if host:
+            self.host = host
+        else:
+            self.host = self._discover_host()
 
         if client is not None:
             self.client = client
@@ -80,26 +81,82 @@ class InmemoryClient:
                 timeout=APIConstants.DEFAULT_TIMEOUT,
             )
 
-        # Validate API key on initialization
+        # Validate API key on the discovered/provided host
         self.user_info = self._validate_api_key()
-        logger.info("Inmemory client initialized")
+        logger.info(f"Inmemory client initialized with host: {self.host}")
+
+    def _discover_host(self) -> str:
+        """Auto-discover the correct host for the API key by trying multiple endpoints."""
+        # Priority order for host discovery
+        candidate_hosts = [
+            # Environment variable override
+            os.getenv("INMEMORY_API_HOST"),
+            # Production host
+            APIConstants.DEFAULT_API_HOST,
+            # Common local development hosts
+            "http://localhost:3000",
+            "http://localhost:3001", 
+            "http://localhost:3002",
+            "http://127.0.0.1:3000",
+        ]
+        
+        # Filter out None values
+        candidate_hosts = [host for host in candidate_hosts if host]
+        
+        logger.info(f"Auto-discovering host for API key...")
+        
+        for host in candidate_hosts:
+            try:
+                # Create a temporary client to test this host
+                temp_client = httpx.Client(
+                    base_url=host,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    timeout=5.0,  # Short timeout for discovery
+                )
+                
+                # Try to ping this host
+                response = temp_client.get("/api/v1/ping")
+                response.raise_for_status()
+                data = response.json()
+                
+                # If we get a valid response, this is our host
+                if data.get("status") == "ok":
+                    temp_client.close()
+                    logger.info(f"✅ Discovered host: {host}")
+                    return host
+                    
+            except Exception as e:
+                logger.debug(f"Host {host} failed: {e}")
+                continue
+            finally:
+                try:
+                    temp_client.close()
+                except:
+                    pass
+        
+        # If no host worked, fall back to default
+        logger.warning("Could not auto-discover host, using default")
+        return APIConstants.DEFAULT_API_HOST
 
     def _validate_api_key(self) -> dict[str, Any]:
-        """Validate the API key by making a test request."""
+        """Validate the API key by making a test request (following mem0's pattern)."""
         try:
-            response = self.client.get("/v1/auth/validate")
+            response = self.client.get("/api/v1/ping")
             response.raise_for_status()
-            auth_info = response.json()
+            data = response.json()
 
-            # The /v1/auth/validate endpoint returns validation status
-            if auth_info.get("valid", False):
+            # The ping endpoint returns user info on success
+            if data.get("status") == "ok":
                 return {
-                    "valid": True,
-                    "created_at": None,  # Not provided by this endpoint
-                    "last_used": None,  # Not provided by this endpoint
-                    "usage_count": 0,  # Not provided by this endpoint
+                    "user_id": data.get("user_id"),
+                    "key_id": data.get("key_id"),
+                    "permissions": data.get("permissions", []),
+                    "name": data.get("name")
                 }
-            raise ValueError("API key validation failed: Invalid key")
+            raise ValueError("API key validation failed: Invalid response")
 
         except httpx.HTTPStatusError as e:
             try:
@@ -146,7 +203,7 @@ class InmemoryClient:
                 "metadata": metadata or {},
             }
 
-            response = self.client.post("/v1/memories", json=payload)
+            response = self.client.post("/api/memories", json=payload)
             response.raise_for_status()
 
             result = response.json()
@@ -207,7 +264,7 @@ class InmemoryClient:
                 "threshold": threshold or 0.0,
             }
 
-            response = self.client.post("/v1/search", json=payload)
+            response = self.client.post("/api/memories/search", json=payload)
             response.raise_for_status()
 
             result = response.json()
@@ -249,7 +306,7 @@ class InmemoryClient:
                 "offset": offset,
             }
 
-            response = self.client.get("/v1/memories/", params=params)
+            response = self.client.get("/api/memories", params=params)
             response.raise_for_status()
 
             result = response.json()
