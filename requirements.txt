@@ -26,3 +26,4 @@ pyyaml>=6.0.0
 # MCP server support (Python 3.10+ only)
 mcp[cli]>=1.0.0
 fastmcp>=2.0.0
+sse-starlette>=1.6.0

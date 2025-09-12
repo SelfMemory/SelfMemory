@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Literal
 
 from inmemory.embeddings.base import EmbeddingBase
 from inmemory.embeddings.configs import BaseEmbedderConfig
@@ -17,9 +17,9 @@ except ImportError:
 
 
 class OllamaEmbedding(EmbeddingBase):
-    def __init__(self, config: Optional[BaseEmbedderConfig] = None):
+    def __init__(self, config: BaseEmbedderConfig | None = None):
         super().__init__(config)
-        
+
         # Use config or defaults
         if config is None:
             self.config = BaseEmbedderConfig()
@@ -38,11 +38,17 @@ class OllamaEmbedding(EmbeddingBase):
         Ensure the specified model exists locally. If not, pull it from Ollama.
         """
         local_models = self.client.list()["models"]
-        if not any(model.get("name") == self.config.model or model.get("model") == self.config.model for model in local_models):
+        if not any(
+            model.get("name") == self.config.model
+            or model.get("model") == self.config.model
+            for model in local_models
+        ):
             self.client.pull(self.config.model)
 
     def embed(
-        self, text: str, memory_action: Optional[Literal["add", "search", "update"]] = None
+        self,
+        text: str,
+        memory_action: Literal["add", "search", "update"] | None = None,
     ) -> list[float]:
         """
         Get the embedding for the given text using Ollama.

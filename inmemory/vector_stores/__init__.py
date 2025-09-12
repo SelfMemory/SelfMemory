@@ -69,8 +69,10 @@ def get_vector_store_provider(
             embedding_model_dims=embedding_model_dims,
             **qdrant_params,
         )
-    
-    raise ValueError(f"Unsupported vector store provider: {provider}. Only 'qdrant' is supported.")
+
+    raise ValueError(
+        f"Unsupported vector store provider: {provider}. Only 'qdrant' is supported."
+    )
 
 
 __all__ = [

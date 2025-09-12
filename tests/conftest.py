@@ -2,14 +2,14 @@
 Pytest configuration and shared fixtures for InMemory tests.
 
 This module provides common fixtures and utilities used across all test modules,
-following mem0's testing patterns with comprehensive mocking strategies.
+following  testing patterns with comprehensive mocking strategies.
 """
 
 import os
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, Mock, patch
+from typing import Any
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -49,7 +49,7 @@ def mock_memory_data():
         "people_mentioned": "John,Sarah",
         "topic_category": "food",
         "created_at": "2024-01-01T12:00:00",
-        "metadata": {"source": "test", "confidence": 0.95}
+        "metadata": {"source": "test", "confidence": 0.95},
     }
 
 
@@ -65,9 +65,9 @@ def mock_search_results(mock_memory_data):
                 "people_mentioned": mock_memory_data["people_mentioned"],
                 "topic_category": mock_memory_data["topic_category"],
                 "created_at": mock_memory_data["created_at"],
-                **mock_memory_data["metadata"]
+                **mock_memory_data["metadata"],
             },
-            score=0.95
+            score=0.95,
         )
     ]
 
@@ -109,25 +109,29 @@ def mock_config():
 def mock_memory_instance(mock_config, mock_ollama_embedding, mock_qdrant_vector_store):
     """
     Mock Memory instance with all dependencies mocked.
-    
+
     This fixture provides a fully mocked Memory instance that can be used
     for testing without requiring actual external services.
     """
     with (
-        patch("inmemory.utils.factory.EmbeddingFactory.create") as mock_embedding_factory,
-        patch("inmemory.utils.factory.VectorStoreFactory.create") as mock_vector_factory,
+        patch(
+            "inmemory.utils.factory.EmbeddingFactory.create"
+        ) as mock_embedding_factory,
+        patch(
+            "inmemory.utils.factory.VectorStoreFactory.create"
+        ) as mock_vector_factory,
     ):
         # Configure factory mocks
         mock_embedding_factory.return_value = mock_ollama_embedding
         mock_vector_factory.return_value = mock_qdrant_vector_store
-        
+
         # Create Memory instance
         memory = Memory(config=mock_config)
-        
+
         # Ensure mocked components are properly attached
         memory.embedding_provider = mock_ollama_embedding
         memory.vector_store = mock_qdrant_vector_store
-        
+
         yield memory
 
 
@@ -139,20 +143,20 @@ def sample_memories():
             "content": "I love pizza and Italian food",
             "tags": "food,personal",
             "people_mentioned": "John",
-            "topic_category": "food"
+            "topic_category": "food",
         },
         {
             "content": "Meeting with Sarah about the project deadline",
             "tags": "work,meeting",
             "people_mentioned": "Sarah",
-            "topic_category": "work"
+            "topic_category": "work",
         },
         {
             "content": "Watched a great movie last night",
             "tags": "entertainment,personal",
             "people_mentioned": "",
-            "topic_category": "entertainment"
-        }
+            "topic_category": "entertainment",
+        },
     ]
 
 
@@ -161,24 +165,22 @@ def mock_http_client():
     """Mock HTTP client for testing InmemoryClient."""
     mock_client = Mock()
     mock_client.get.return_value = Mock(
-        status_code=200,
-        json=lambda: {"status": "healthy"}
+        status_code=200, json=lambda: {"status": "healthy"}
     )
     mock_client.post.return_value = Mock(
-        status_code=200,
-        json=lambda: {"success": True, "memory_id": str(uuid.uuid4())}
+        status_code=200, json=lambda: {"success": True, "memory_id": str(uuid.uuid4())}
     )
     mock_client.delete.return_value = Mock(
         status_code=200,
-        json=lambda: {"success": True, "message": "Deleted successfully"}
+        json=lambda: {"success": True, "message": "Deleted successfully"},
     )
     return mock_client
 
 
 class MockPoint:
     """Mock point object for vector store responses."""
-    
-    def __init__(self, id: str, payload: Dict[str, Any], score: float = 1.0):
+
+    def __init__(self, id: str, payload: dict[str, Any], score: float = 1.0):
         self.id = id
         self.payload = payload
         self.score = score
@@ -187,21 +189,28 @@ class MockPoint:
 @pytest.fixture
 def create_mock_point():
     """Factory fixture for creating mock points."""
-    def _create_point(id: str = None, content: str = "test content", score: float = 1.0, **kwargs):
+
+    def _create_point(
+        id: str = None, content: str = "test content", score: float = 1.0, **kwargs
+    ):
         if id is None:
             id = str(uuid.uuid4())
-        
+
         payload = {
             "data": content,
             "tags": kwargs.get("tags", ""),
             "people_mentioned": kwargs.get("people_mentioned", ""),
             "topic_category": kwargs.get("topic_category", ""),
             "created_at": kwargs.get("created_at", datetime.now().isoformat()),
-            **{k: v for k, v in kwargs.items() if k not in ["tags", "people_mentioned", "topic_category", "created_at"]}
+            **{
+                k: v
+                for k, v in kwargs.items()
+                if k not in ["tags", "people_mentioned", "topic_category", "created_at"]
+            },
         }
-        
+
         return MockPoint(id=id, payload=payload, score=score)
-    
+
     return _create_point
 
 
@@ -225,11 +234,11 @@ def pytest_collection_modifyitems(config, items):
         # Mark integration tests
         if "integration" in str(item.fspath):
             item.add_marker(pytest.mark.integration)
-        
+
         # Mark network tests
         if "network" in item.name or "client" in str(item.fspath):
             item.add_marker(pytest.mark.network)
-        
+
         # Mark slow tests
         if "slow" in item.name or "load" in item.name:
             item.add_marker(pytest.mark.slow)

@@ -2,10 +2,11 @@
 Demo and test script for Qdrant vector store.
 Initializes Qdrant and exercises all public methods.
 """
+
 import random
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance
+
 from inmemory.vector_stores.qdrant import Qdrant
+
 
 def main():
     # Settings
@@ -23,10 +24,8 @@ def main():
 
     # 2. Insert vectors
     vectors = [[random.random() for _ in range(embedding_model_dims)] for _ in range(5)]
-    payloads = [
-        {"data": f"memory {i}", "user_id": f"user_{i}"} for i in range(5)
-    ]
-    ids = [i+1 for i in range(5)]
+    payloads = [{"data": f"memory {i}", "user_id": f"user_{i}"} for i in range(5)]
+    ids = [i + 1 for i in range(5)]
     qdrant.insert(vectors, payloads=payloads, ids=ids)
     print("Inserted vectors.")
 
@@ -76,6 +75,7 @@ def main():
     # 13. Delete collection
     qdrant.delete_col()
     print("Deleted collection.")
+
 
 if __name__ == "__main__":
     main()

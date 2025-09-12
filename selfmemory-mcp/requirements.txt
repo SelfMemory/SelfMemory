@@ -1,0 +1,22 @@
+# MCP Server Dependencies
+# Python MCP SDK for building MCP servers
+mcp>=1.2.0
+
+# FastAPI and web server dependencies
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+
+# Environment configuration
+python-dotenv>=1.0.0
+
+# HTTP client for API calls
+httpx>=0.24.0
+
+# Type hints and validation
+pydantic>=2.0.0
+
+# Core dependencies (will be available from parent package)
+# inmemory (local package - install with: pip install -e ../.)
+
+# Authentication and security
+cryptography>=3.0.0

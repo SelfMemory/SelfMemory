@@ -1,4 +1,4 @@
-# InMemory - Enhanced Memory Management for AI
+# SelfMemory - Enhanced Memory Management for AI
 
 <p align="center">
   <strong>🧠 Long-term memory for AI Agents with zero-setup simplicity</strong>
@@ -361,17 +361,56 @@ For enterprise deployments, InMemory provides:
 
 ## 🤖 MCP Server Integration
 
-InMemory works seamlessly with MCP (Model Context Protocol) for AI agent integration:
+InMemory includes a built-in MCP (Model Context Protocol) server for AI agent integration:
 
 ```bash
-# Separate repository for MCP server
-git clone https://github.com/you/inmemory-mcp
-cd inmemory-mcp
-pip install -e .
+# MCP server is included in the monorepo
+cd inmemory-mcp/
 
-# Configure to connect to any InMemory API
-export INMEMORY_API_URL="http://localhost:8080"
-python src/server.py
+# Install MCP dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
+
+# Start required services
+docker run -p 6333:6333 qdrant/qdrant  # Qdrant vector database
+ollama serve && ollama pull nomic-embed-text  # Ollama embeddings
+
+# Run the MCP server
+python main.py
+```
+
+### MCP Server Features
+
+- **Modern FastMCP Implementation**: Clean, maintainable code following mem0 patterns
+- **Lazy Initialization**: Safe startup with proper error handling
+- **Context Management**: User and client context using contextvars
+- **Multiple Tools**: add_memory, search_memory, list_memories, delete_memory, delete_all_memories
+- **SSE Transport**: Server-Sent Events for real-time communication
+- **Flexible Configuration**: Support for Ollama and OpenAI embeddings
+
+### MCP Client Configuration
+
+Configure your MCP client to connect to:
+```
+http://localhost:8080/mcp/{client_name}/sse/{user_id}
+```
+
+Example for Claude Desktop:
+```json
+{
+  "mcpServers": {
+    "inmemory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"],
+      "env": {
+        "MCP_SERVER_URL": "http://localhost:8080/mcp/claude/sse/user123"
+      }
+    }
+  }
+}
 ```
 
 ## 🛠️ Requirements

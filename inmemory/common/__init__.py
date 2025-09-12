@@ -8,7 +8,7 @@ from .constants import APIConstants, MetadataConstants, SearchConstants, VectorC
 
 __all__ = [
     "APIConstants",
-    "MetadataConstants", 
+    "MetadataConstants",
     "SearchConstants",
     "VectorConstants",
 ]

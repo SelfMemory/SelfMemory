@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Literal, Optional
+from typing import Literal
 
 from inmemory.embeddings.configs import BaseEmbedderConfig
 
@@ -7,7 +7,7 @@ from inmemory.embeddings.configs import BaseEmbedderConfig
 class EmbeddingBase(ABC):
     """Base class for all embedding providers."""
 
-    def __init__(self, config: Optional[BaseEmbedderConfig] = None):
+    def __init__(self, config: BaseEmbedderConfig | None = None):
         """Initialize a base embedding class
 
         :param config: Embedding configuration option class, defaults to None
@@ -20,7 +20,9 @@ class EmbeddingBase(ABC):
 
     @abstractmethod
     def embed(
-        self, text: str, memory_action: Optional[Literal["add", "search", "update"]] = None
+        self,
+        text: str,
+        memory_action: Literal["add", "search", "update"] | None = None,
     ) -> list[float]:
         """
         Get the embedding for the given text.

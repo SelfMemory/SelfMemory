@@ -1,13 +1,13 @@
 """
 Unit tests for Qdrant vector store provider.
 
-Tests the Qdrant class following mem0's testing patterns with
+Tests the Qdrant class following  testing patterns with
 comprehensive mocking of Qdrant client operations.
 """
 
 import unittest
 import uuid
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -22,8 +22,8 @@ from inmemory.vector_stores.qdrant import Qdrant
 
 
 class TestQdrant(unittest.TestCase):
-    """Test the Qdrant vector store implementation following mem0's pattern."""
-    
+    """Test the Qdrant vector store implementation following  pattern."""
+
     def setUp(self):
         """Set up test fixtures with mocked Qdrant client."""
         self.client_mock = MagicMock(spec=QdrantClient)
@@ -40,7 +40,7 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Collection creation with proper configuration
-        
+
         Expected behavior:
         - Should check if collection exists first
         - Should create collection with correct vector configuration
@@ -61,7 +61,7 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Inserting vectors with payloads and IDs
-        
+
         Expected behavior:
         - Should convert vectors, payloads, and IDs to PointStruct objects
         - Should call upsert with proper point structures
@@ -87,14 +87,16 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Vector similarity search functionality
-        
+
         Expected behavior:
         - Should call query_points with correct parameters
         - Should return search results with scores and payloads
         - Should handle query vectors and limits properly
         """
         vectors = [[0.1, 0.2]]
-        mock_point = MagicMock(id=str(uuid.uuid4()), score=0.95, payload={"key": "value"})
+        mock_point = MagicMock(
+            id=str(uuid.uuid4()), score=0.95, payload={"key": "value"}
+        )
         self.client_mock.query_points.return_value = MagicMock(points=[mock_point])
 
         results = self.qdrant.search(query="", vectors=vectors, limit=1)
@@ -115,7 +117,7 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Search with metadata filters (user_id, agent_id, run_id)
-        
+
         Expected behavior:
         - Should create proper Filter object from filter dictionary
         - Should include all filter conditions in query
@@ -123,14 +125,16 @@ class TestQdrant(unittest.TestCase):
         """
         vectors = [[0.1, 0.2]]
         mock_point = MagicMock(
-            id=str(uuid.uuid4()), 
-            score=0.95, 
-            payload={"user_id": "alice", "agent_id": "agent1", "run_id": "run1"}
+            id=str(uuid.uuid4()),
+            score=0.95,
+            payload={"user_id": "alice", "agent_id": "agent1", "run_id": "run1"},
         )
         self.client_mock.query_points.return_value = MagicMock(points=[mock_point])
 
         filters = {"user_id": "alice", "agent_id": "agent1", "run_id": "run1"}
-        results = self.qdrant.search(query="", vectors=vectors, limit=1, filters=filters)
+        results = self.qdrant.search(
+            query="", vectors=vectors, limit=1, filters=filters
+        )
 
         # Verify that _create_filter was called and query_filter was passed
         self.client_mock.query_points.assert_called_once()
@@ -138,7 +142,7 @@ class TestQdrant(unittest.TestCase):
         self.assertEqual(call_args["collection_name"], "test_collection")
         self.assertEqual(call_args["query"], vectors)
         self.assertEqual(call_args["limit"], 1)
-        
+
         # Verify that a Filter object was created
         query_filter = call_args["query_filter"]
         self.assertIsInstance(query_filter, Filter)
@@ -154,21 +158,21 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Search with single metadata filter
-        
+
         Expected behavior:
         - Should handle single filter condition properly
         - Should create Filter with one condition
         """
         vectors = [[0.1, 0.2]]
         mock_point = MagicMock(
-            id=str(uuid.uuid4()), 
-            score=0.95, 
-            payload={"user_id": "alice"}
+            id=str(uuid.uuid4()), score=0.95, payload={"user_id": "alice"}
         )
         self.client_mock.query_points.return_value = MagicMock(points=[mock_point])
 
         filters = {"user_id": "alice"}
-        results = self.qdrant.search(query="", vectors=vectors, limit=1, filters=filters)
+        results = self.qdrant.search(
+            query="", vectors=vectors, limit=1, filters=filters
+        )
 
         # Verify that a Filter object was created with single condition
         call_args = self.client_mock.query_points.call_args[1]
@@ -184,13 +188,15 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Search without any filters
-        
+
         Expected behavior:
         - Should pass None as query_filter
         - Should return all matching vectors
         """
         vectors = [[0.1, 0.2]]
-        mock_point = MagicMock(id=str(uuid.uuid4()), score=0.95, payload={"key": "value"})
+        mock_point = MagicMock(
+            id=str(uuid.uuid4()), score=0.95, payload={"key": "value"}
+        )
         self.client_mock.query_points.return_value = MagicMock(points=[mock_point])
 
         results = self.qdrant.search(query="", vectors=vectors, limit=1, filters=None)
@@ -205,17 +211,17 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Filter creation with multiple conditions
-        
+
         Expected behavior:
         - Should create Filter with multiple must conditions
         - Should include all provided filter keys
         """
         filters = {"user_id": "alice", "agent_id": "agent1", "run_id": "run1"}
         result = self.qdrant._create_filter(filters)
-        
+
         self.assertIsInstance(result, Filter)
         self.assertEqual(len(result.must), 3)
-        
+
         # Check that all conditions are present
         conditions = [cond.key for cond in result.must]
         self.assertIn("user_id", conditions)
@@ -227,14 +233,14 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Filter creation with single condition
-        
+
         Expected behavior:
         - Should create Filter with one must condition
         - Should properly set key and match value
         """
         filters = {"user_id": "alice"}
         result = self.qdrant._create_filter(filters)
-        
+
         self.assertIsInstance(result, Filter)
         self.assertEqual(len(result.must), 1)
         self.assertEqual(result.must[0].key, "user_id")
@@ -245,14 +251,14 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Filter creation with no filters
-        
+
         Expected behavior:
         - Should return None when no filters provided
         - Should handle empty dict and None input
         """
         result = self.qdrant._create_filter(None)
         self.assertIsNone(result)
-        
+
         result = self.qdrant._create_filter({})
         self.assertIsNone(result)
 
@@ -261,24 +267,32 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Filter creation with range conditions
-        
+
         Expected behavior:
         - Should handle range filters (gte, lte) properly
         - Should create both range and match conditions
         """
         filters = {"user_id": "alice", "count": {"gte": 5, "lte": 10}}
         result = self.qdrant._create_filter(filters)
-        
+
         self.assertIsInstance(result, Filter)
         self.assertEqual(len(result.must), 2)
-        
+
         # Check that range condition is created
-        range_conditions = [cond for cond in result.must if hasattr(cond, 'range') and cond.range is not None]
+        range_conditions = [
+            cond
+            for cond in result.must
+            if hasattr(cond, "range") and cond.range is not None
+        ]
         self.assertEqual(len(range_conditions), 1)
         self.assertEqual(range_conditions[0].key, "count")
-        
+
         # Check that string condition is created
-        string_conditions = [cond for cond in result.must if hasattr(cond, 'match') and cond.match is not None]
+        string_conditions = [
+            cond
+            for cond in result.must
+            if hasattr(cond, "match") and cond.match is not None
+        ]
         self.assertEqual(len(string_conditions), 1)
         self.assertEqual(string_conditions[0].key, "user_id")
 
@@ -287,7 +301,7 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Deleting vectors by ID
-        
+
         Expected behavior:
         - Should call delete with proper PointIdsList
         - Should use correct collection name
@@ -305,7 +319,7 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Updating existing vectors
-        
+
         Expected behavior:
         - Should call upsert with updated vector and payload
         - Should preserve vector ID
@@ -314,7 +328,9 @@ class TestQdrant(unittest.TestCase):
         updated_vector = [0.2, 0.3]
         updated_payload = {"key": "updated_value"}
 
-        self.qdrant.update(vector_id=vector_id, vector=updated_vector, payload=updated_payload)
+        self.qdrant.update(
+            vector_id=vector_id, vector=updated_vector, payload=updated_payload
+        )
 
         self.client_mock.upsert.assert_called_once()
         point = self.client_mock.upsert.call_args[1]["points"][0]
@@ -327,13 +343,15 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Retrieving vectors by ID
-        
+
         Expected behavior:
         - Should call retrieve with correct parameters
         - Should return vector data with payload
         """
         vector_id = str(uuid.uuid4())
-        self.client_mock.retrieve.return_value = [{"id": vector_id, "payload": {"key": "value"}}]
+        self.client_mock.retrieve.return_value = [
+            {"id": vector_id, "payload": {"key": "value"}}
+        ]
 
         result = self.qdrant.get(vector_id=vector_id)
 
@@ -348,11 +366,13 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Listing available collections
-        
+
         Expected behavior:
         - Should call get_collections and return collection info
         """
-        self.client_mock.get_collections.return_value = MagicMock(collections=[{"name": "test_collection"}])
+        self.client_mock.get_collections.return_value = MagicMock(
+            collections=[{"name": "test_collection"}]
+        )
         result = self.qdrant.list_cols()
         self.assertEqual(result.collections[0]["name"], "test_collection")
 
@@ -361,15 +381,15 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Listing vectors with metadata filters
-        
+
         Expected behavior:
         - Should call scroll with proper filter
         - Should return filtered results
         """
         mock_point = MagicMock(
-            id=str(uuid.uuid4()), 
-            score=0.95, 
-            payload={"user_id": "alice", "agent_id": "agent1", "run_id": "run1"}
+            id=str(uuid.uuid4()),
+            score=0.95,
+            payload={"user_id": "alice", "agent_id": "agent1", "run_id": "run1"},
         )
         self.client_mock.scroll.return_value = [mock_point]
 
@@ -381,7 +401,7 @@ class TestQdrant(unittest.TestCase):
         call_args = self.client_mock.scroll.call_args[1]
         self.assertEqual(call_args["collection_name"], "test_collection")
         self.assertEqual(call_args["limit"], 10)
-        
+
         # Verify that a Filter object was created
         scroll_filter = call_args["scroll_filter"]
         self.assertIsInstance(scroll_filter, Filter)
@@ -398,15 +418,13 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Listing vectors with single filter
-        
+
         Expected behavior:
         - Should create Filter with single condition
         - Should return filtered results
         """
         mock_point = MagicMock(
-            id=str(uuid.uuid4()), 
-            score=0.95, 
-            payload={"user_id": "alice"}
+            id=str(uuid.uuid4()), score=0.95, payload={"user_id": "alice"}
         )
         self.client_mock.scroll.return_value = [mock_point]
 
@@ -428,12 +446,14 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Listing all vectors without filters
-        
+
         Expected behavior:
         - Should pass None as scroll_filter
         - Should return all vectors
         """
-        mock_point = MagicMock(id=str(uuid.uuid4()), score=0.95, payload={"key": "value"})
+        mock_point = MagicMock(
+            id=str(uuid.uuid4()), score=0.95, payload={"key": "value"}
+        )
         self.client_mock.scroll.return_value = [mock_point]
 
         results = self.qdrant.list(filters=None, limit=10)
@@ -449,24 +469,28 @@ class TestQdrant(unittest.TestCase):
         TEST EXPLANATION:
         ================
         What I'm testing: Deleting entire collection
-        
+
         Expected behavior:
         - Should call delete_collection with correct name
         """
         self.qdrant.delete_col()
-        self.client_mock.delete_collection.assert_called_once_with(collection_name="test_collection")
+        self.client_mock.delete_collection.assert_called_once_with(
+            collection_name="test_collection"
+        )
 
     def test_col_info(self):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Getting collection information
-        
+
         Expected behavior:
         - Should call get_collection with correct name
         """
         self.qdrant.col_info()
-        self.client_mock.get_collection.assert_called_once_with(collection_name="test_collection")
+        self.client_mock.get_collection.assert_called_once_with(
+            collection_name="test_collection"
+        )
 
     def tearDown(self):
         """Clean up test fixtures."""
@@ -483,5 +507,5 @@ class TestQdrant(unittest.TestCase):
 # 6. Collection management (list, delete, info)
 # 7. Vector listing with filtering capabilities
 #
-# This follows mem0's comprehensive testing approach for Qdrant
+# This follows  comprehensive testing approach for Qdrant
 # with proper mocking and covers all vector store functionality.

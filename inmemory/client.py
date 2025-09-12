@@ -96,17 +96,17 @@ class InmemoryClient:
             # Common local development hosts
             "http://localhost:8081",  # Default server port
             "http://localhost:3000",
-            "http://localhost:3001", 
+            "http://localhost:3001",
             "http://localhost:3002",
             "http://127.0.0.1:8080",
             "http://127.0.0.1:3000",
         ]
-        
+
         # Filter out None values
         candidate_hosts = [host for host in candidate_hosts if host]
-        
-        logger.info(f"Auto-discovering host for API key...")
-        
+
+        logger.info("Auto-discovering host for API key...")
+
         for host in candidate_hosts:
             try:
                 # Create a temporary client to test this host
@@ -118,18 +118,18 @@ class InmemoryClient:
                     },
                     timeout=5.0,  # Short timeout for discovery
                 )
-                
+
                 # Try to ping this host
                 response = temp_client.get("/api/v1/ping")
                 response.raise_for_status()
                 data = response.json()
-                
+
                 # If we get a valid response, this is our host
                 if data.get("status") == "ok":
                     temp_client.close()
                     logger.info(f"✅ Discovered host: {host}")
                     return host
-                    
+
             except Exception as e:
                 logger.debug(f"Host {host} failed: {e}")
                 continue
@@ -138,7 +138,7 @@ class InmemoryClient:
                     temp_client.close()
                 except:
                     pass
-        
+
         # If no host worked, fall back to default
         logger.warning("Could not auto-discover host, using default")
         return APIConstants.DEFAULT_API_HOST
@@ -156,7 +156,7 @@ class InmemoryClient:
                     "user_id": data.get("user_id"),
                     "key_id": data.get("key_id"),
                     "permissions": data.get("permissions", []),
-                    "name": data.get("name")
+                    "name": data.get("name"),
                 }
             raise ValueError("API key validation failed: Invalid response")
 

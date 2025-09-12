@@ -6,17 +6,17 @@ ensuring consistent behavior across different memory types.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class MemoryBase(ABC):
     """
     Abstract base class for all memory implementations.
-    
+
     This class defines the core interface that all memory implementations
     must implement, ensuring consistent behavior and making it easy to
     swap between different memory backends or add new functionality.
-    
+
     All memory implementations should inherit from this class and implement
     all abstract methods.
     """
@@ -25,11 +25,11 @@ class MemoryBase(ABC):
     def add(
         self,
         memory_content: str,
-        tags: Optional[str] = None,
-        people_mentioned: Optional[str] = None,
-        topic_category: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        tags: str | None = None,
+        people_mentioned: str | None = None,
+        topic_category: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Add a new memory to storage.
 
@@ -50,12 +50,12 @@ class MemoryBase(ABC):
         self,
         query: str,
         limit: int = 10,
-        tags: Optional[List[str]] = None,
-        people_mentioned: Optional[List[str]] = None,
-        topic_category: Optional[str] = None,
-        temporal_filter: Optional[str] = None,
-        threshold: Optional[float] = None,
-    ) -> Dict[str, List[Dict[str, Any]]]:
+        tags: list[str] | None = None,
+        people_mentioned: list[str] | None = None,
+        topic_category: str | None = None,
+        temporal_filter: str | None = None,
+        threshold: float | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
         """
         Search memories with semantic similarity.
 
@@ -76,7 +76,7 @@ class MemoryBase(ABC):
     @abstractmethod
     def get_all(
         self, limit: int = 100, offset: int = 0
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    ) -> dict[str, list[dict[str, Any]]]:
         """
         Get all memories.
 
@@ -90,7 +90,7 @@ class MemoryBase(ABC):
         pass
 
     @abstractmethod
-    def delete(self, memory_id: str) -> Dict[str, Any]:
+    def delete(self, memory_id: str) -> dict[str, Any]:
         """
         Delete a specific memory.
 
@@ -103,7 +103,7 @@ class MemoryBase(ABC):
         pass
 
     @abstractmethod
-    def delete_all(self) -> Dict[str, Any]:
+    def delete_all(self) -> dict[str, Any]:
         """
         Delete all memories.
 
@@ -113,7 +113,7 @@ class MemoryBase(ABC):
         pass
 
     @abstractmethod
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get statistics for memories.
 
@@ -123,7 +123,7 @@ class MemoryBase(ABC):
         pass
 
     @abstractmethod
-    def health_check(self) -> Dict[str, Any]:
+    def health_check(self) -> dict[str, Any]:
         """
         Perform health check on all components.
 

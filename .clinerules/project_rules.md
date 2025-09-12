@@ -1,4 +1,4 @@
-For reference always into mem0 and supermemory folder before doing thing then give me a comparison of methods they followed and ask me to pick one.
+For reference always into  and supermemory folder before doing thing then give me a comparison of methods they followed and ask me to pick one.
 
 These are my outcomes:
 - this will be exposed as FASTAPI so that dashboard can interact with it. SAAS product
@@ -14,5 +14,9 @@ so our plan is when user types a text input it will converted into embeddings an
 
 inmemory folder will be used primarily for SDK - We will support this SDK from python3.10
 server folder will be used for hosting the FastAPI application and handling incoming requests.
+
+we are having one vector database collection and all user data will be stored in it and filtered based on the user_id.
+
+so this project will run both 8080 and 8081 port. but there is a another repo called proxy which will act as reverse proxy and route the request to 8080 or 8081 based on the endpoint which is running on 8000 port. My server can only expose 8000 port to public.
 
 Please dont Change the API contract without asking me.

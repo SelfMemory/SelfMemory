@@ -9,6 +9,9 @@ fastapi>=0.100.0
 uvicorn>=0.20.0
 python-dotenv>=1.0.0
 
+# Database
+pymongo>=4.0.0
+
 # HTTP client for potential external calls
 httpx>=0.25.0
 

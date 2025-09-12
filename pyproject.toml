@@ -48,6 +48,7 @@ dependencies = [
     "openai>=1.0.0", # OpenAI embeddings
     # Configuration support
     "pyyaml>=6.0.0", # YAML config files
+    "mcp[cli]>=1.13.0",
 ]
 
 [project.urls]
@@ -219,4 +220,9 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
+]
+
+[tool.uv.workspace]
+members = [
+    "selfmemory-mcp",
 ]

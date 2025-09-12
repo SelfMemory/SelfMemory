@@ -2,7 +2,7 @@
 InMemory Test Suite
 
 This package contains comprehensive tests for the InMemory library,
-following pytest best practices and mem0's testing patterns.
+following pytest best practices and  testing patterns.
 
 Test Structure:
 - Unit tests: Test individual components in isolation

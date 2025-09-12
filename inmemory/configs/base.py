@@ -5,23 +5,21 @@ This module provides the main configuration classes and utilities,
 following mem0 configuration structure pattern with hybrid dynamic import system.
 """
 
-import importlib
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 try:
     import yaml
+
     _YAML_AVAILABLE = True
 except ImportError:
     _YAML_AVAILABLE = False
 
-from pydantic import BaseModel, Field, validator, model_validator
+from pydantic import BaseModel, Field, model_validator, validator
 
 # Static imports for core providers (always loaded for performance)
-from inmemory.configs.embeddings.ollama import OllamaConfig
-from inmemory.configs.vector_stores.qdrant import QdrantConfig
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +56,11 @@ class VectorStoreConfig(BaseModel):
 
     provider: str = Field(default="qdrant", description="Vector store provider")
     config: dict | None = Field(
-        default=None, 
-        description="Provider-specific configuration dictionary"
+        default=None, description="Provider-specific configuration dictionary"
     )
 
     # Simple provider registry (mem0 style)
-    _provider_configs: Dict[str, str] = {
+    _provider_configs: dict[str, str] = {
         "qdrant": "QdrantConfig",
         "chroma": "ChromaConfig",
         "chromadb": "ChromaConfig",
@@ -96,7 +93,9 @@ class VectorStoreConfig(BaseModel):
             return self
 
         # Only add default path if no other connection method is specified
-        has_connection_method = any(key in config for key in ["path", "host", "port", "url"])
+        has_connection_method = any(
+            key in config for key in ["path", "host", "port", "url"]
+        )
         if not has_connection_method and "path" in config_class.__annotations__:
             config["path"] = f"/tmp/{provider}"
 
@@ -110,12 +109,11 @@ class EmbeddingConfig(BaseModel):
 
     provider: str = Field(default="ollama", description="Embedding provider")
     config: dict | None = Field(
-        default=None,
-        description="Provider-specific configuration dictionary"
+        default=None, description="Provider-specific configuration dictionary"
     )
 
     # Simple provider registry (mem0 style)
-    _provider_configs: Dict[str, str] = {
+    _provider_configs: dict[str, str] = {
         "ollama": "OllamaConfig",
         "openai": "OpenAIConfig",
         "huggingface": "HuggingFaceConfig",
@@ -168,7 +166,7 @@ class InMemoryConfig(BaseModel):
     vector_store: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
-    
+
     history_db_path: str = Field(
         description="Path to the history database",
         default=os.path.join(inmemory_dir, "history.db"),

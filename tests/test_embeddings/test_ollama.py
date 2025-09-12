@@ -1,7 +1,7 @@
 """
 Unit tests for Ollama embedding provider.
 
-Tests the OllamaEmbedding class following mem0's testing patterns
+Tests the OllamaEmbedding class following  testing patterns
 with comprehensive mocking of external Ollama API calls.
 """
 
@@ -16,8 +16,8 @@ from inmemory.embeddings.ollama import OllamaEmbedding
 @pytest.fixture
 def mock_ollama_client():
     """
-    Mock Ollama client following mem0's pattern.
-    
+    Mock Ollama client following  pattern.
+
     This fixture mocks the Ollama Client to avoid actual API calls
     and provides predictable responses for testing.
     """
@@ -30,21 +30,21 @@ def mock_ollama_client():
 
 class TestOllamaEmbedding:
     """Test the OllamaEmbedding provider implementation."""
-    
+
     def test_embed_text_success(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Successful text embedding generation
-        
+
         Mocks used:
         - mock_ollama_client: Returns fake embedding vector
-        
+
         Expected behavior:
         - Should call Ollama embeddings API with correct parameters
         - Should return the embedding vector from API response
         - Should use configured model name
-        
+
         How the test works:
         1. Configure mock to return fake embedding
         2. Create OllamaEmbedding instance
@@ -64,19 +64,18 @@ class TestOllamaEmbedding:
 
         # Verify API call
         mock_ollama_client.embeddings.assert_called_once_with(
-            model="nomic-embed-text", 
-            prompt=text
+            model="nomic-embed-text", prompt=text
         )
 
         # Verify result
         assert embedding == [0.1, 0.2, 0.3, 0.4, 0.5]
-        
+
     def test_embed_with_custom_model(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Embedding with custom model configuration
-        
+
         Expected behavior:
         - Should use the configured model name in API calls
         - Should work with different model names
@@ -92,17 +91,16 @@ class TestOllamaEmbedding:
 
         # Verify custom model was used
         mock_ollama_client.embeddings.assert_called_once_with(
-            model="custom-embed-model", 
-            prompt=text
+            model="custom-embed-model", prompt=text
         )
         assert embedding == [0.1, 0.2, 0.3]
-        
+
     def test_embed_empty_text(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Embedding empty or whitespace text
-        
+
         Expected behavior:
         - Should handle empty strings gracefully
         - Should still call API (let Ollama handle empty input)
@@ -115,19 +113,18 @@ class TestOllamaEmbedding:
 
         # Test empty string
         embedding = embedder.embed("")
-        
+
         mock_ollama_client.embeddings.assert_called_once_with(
-            model="nomic-embed-text", 
-            prompt=""
+            model="nomic-embed-text", prompt=""
         )
         assert len(embedding) == 768
-        
+
     def test_embed_long_text(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Embedding long text content
-        
+
         Expected behavior:
         - Should handle long text without issues
         - Should pass full text to Ollama API
@@ -140,21 +137,20 @@ class TestOllamaEmbedding:
 
         # Create long text (simulate a document)
         long_text = "This is a very long text. " * 100
-        
+
         embedding = embedder.embed(long_text)
-        
+
         mock_ollama_client.embeddings.assert_called_once_with(
-            model="nomic-embed-text", 
-            prompt=long_text
+            model="nomic-embed-text", prompt=long_text
         )
         assert len(embedding) == 768
-        
+
     def test_ensure_model_exists_model_available(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Model availability check when model exists
-        
+
         Expected behavior:
         - Should check if model is available in Ollama
         - Should not attempt to pull if model already exists
@@ -167,20 +163,20 @@ class TestOllamaEmbedding:
 
         # Should not call pull since model exists
         mock_ollama_client.pull.assert_not_called()
-        
+
     def test_ensure_model_exists_model_missing(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Model availability check when model is missing
-        
+
         Expected behavior:
         - Should detect missing model
         - Should attempt to pull the model
         """
         # Configure empty model list (model not available)
         mock_ollama_client.list.return_value = {"models": []}
-        
+
         config = BaseEmbedderConfig(model="missing-model", embedding_dims=768)
         embedder = OllamaEmbedding(config)
 
@@ -191,13 +187,13 @@ class TestOllamaEmbedding:
 
         # Should attempt to pull the missing model
         mock_ollama_client.pull.assert_called_once_with("missing-model")
-        
+
     def test_embed_api_error_handling(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Error handling when Ollama API fails
-        
+
         Expected behavior:
         - Should propagate API errors appropriately
         - Should not crash silently
@@ -210,15 +206,15 @@ class TestOllamaEmbedding:
 
         with pytest.raises(Exception) as exc_info:
             embedder.embed("test text")
-            
+
         assert "Ollama API unavailable" in str(exc_info.value)
-        
+
     def test_embed_malformed_response(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Handling malformed API responses
-        
+
         Expected behavior:
         - Should handle cases where API response is missing 'embedding' key
         - Should raise appropriate error
@@ -232,13 +228,13 @@ class TestOllamaEmbedding:
 
         with pytest.raises(KeyError):
             embedder.embed("test text")
-            
+
     def test_config_validation(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Configuration validation
-        
+
         Expected behavior:
         - Should accept valid BaseEmbedderConfig
         - Should store config properly
@@ -246,46 +242,45 @@ class TestOllamaEmbedding:
         config = BaseEmbedderConfig(
             model="custom-model",
             embedding_dims=1024,
-            ollama_base_url="http://custom:11434"
+            ollama_base_url="http://custom:11434",
         )
-        
+
         embedder = OllamaEmbedding(config)
-        
+
         assert embedder.config.model == "custom-model"
         assert embedder.config.embedding_dims == 1024
         assert embedder.config.ollama_base_url == "http://custom:11434"
-        
+
     def test_client_initialization_with_custom_url(self):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Client initialization with custom Ollama URL
-        
+
         Expected behavior:
         - Should use custom URL from config
         - Should initialize Ollama client with correct host
         """
         config = BaseEmbedderConfig(
-            model="nomic-embed-text",
-            ollama_base_url="http://custom-ollama:11434"
+            model="nomic-embed-text", ollama_base_url="http://custom-ollama:11434"
         )
-        
+
         with patch("inmemory.embeddings.ollama.Client") as mock_client_class:
             embedder = OllamaEmbedding(config)
-            
+
             # Verify client was initialized with custom URL
             mock_client_class.assert_called_once_with(host="http://custom-ollama:11434")
 
 
 class TestOllamaEmbeddingIntegration:
     """Test integration scenarios and edge cases."""
-    
+
     def test_multiple_embeds_same_instance(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Multiple embedding calls on same instance
-        
+
         Expected behavior:
         - Should handle multiple calls correctly
         - Should maintain state between calls
@@ -308,13 +303,13 @@ class TestOllamaEmbeddingIntegration:
         assert mock_ollama_client.embeddings.call_count == 2
         assert embedding1 == [0.1, 0.2, 0.3]
         assert embedding2 == [0.4, 0.5, 0.6]
-        
+
     def test_embedding_dimensions_consistency(self, mock_ollama_client):
         """
         TEST EXPLANATION:
         ================
         What I'm testing: Embedding dimension consistency
-        
+
         Expected behavior:
         - Should return embeddings with expected dimensions
         - Should be consistent across calls
@@ -327,7 +322,7 @@ class TestOllamaEmbeddingIntegration:
         mock_ollama_client.embeddings.return_value = mock_response
 
         embedding = embedder.embed("test text")
-        
+
         # Verify dimensions match config
         assert len(embedding) == 768
         assert len(embedding) == config.embedding_dims
@@ -344,5 +339,5 @@ class TestOllamaEmbeddingIntegration:
 # 7. Client initialization with custom URLs
 # 8. Multiple embedding calls and dimension consistency
 #
-# This follows mem0's testing pattern for Ollama embeddings with
+# This follows  testing pattern for Ollama embeddings with
 # comprehensive mocking and covers all critical functionality.

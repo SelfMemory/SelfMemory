@@ -9,10 +9,10 @@ with a zero-setup API for direct usage without authentication.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional, Dict
+from typing import Any
 
-from inmemory.memory.base import MemoryBase
 from inmemory.configs import InMemoryConfig
+from inmemory.memory.base import MemoryBase
 from inmemory.utils.factory import EmbeddingFactory, VectorStoreFactory
 
 logger = logging.getLogger(__name__)
@@ -21,55 +21,55 @@ logger = logging.getLogger(__name__)
 def _build_filters_and_metadata(
     *,  # Enforce keyword-only arguments
     user_id: str,
-    input_metadata: Optional[Dict[str, Any]] = None,
-    input_filters: Optional[Dict[str, Any]] = None,
-) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    input_metadata: dict[str, Any] | None = None,
+    input_filters: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Build filters and metadata for memory operations (simplified for user-only isolation).
-    
-    This function creates user-scoped metadata and filters that ensure complete 
-    isolation between users. Only user_id is required since this system doesn't 
+
+    This function creates user-scoped metadata and filters that ensure complete
+    isolation between users. Only user_id is required since this system doesn't
     use agent_id or run_id concepts.
-    
+
     Args:
         user_id: Required user identifier for memory isolation
         input_metadata: Optional additional metadata to include
         input_filters: Optional additional filters to include
-        
+
     Returns:
         tuple: (processed_metadata, effective_filters)
             - processed_metadata: Metadata to store with the memory
             - effective_filters: Filters to use when querying memories
-            
+
     Raises:
         ValueError: If user_id is not provided or is empty
-        
+
     Examples:
         >>> metadata, filters = _build_filters_and_metadata(user_id="alice")
         >>> metadata, filters = _build_filters_and_metadata(
-        ...     user_id="alice", 
+        ...     user_id="alice",
         ...     input_metadata={"category": "work"}
         ... )
     """
     # Validate that user_id is provided (required for this system)
     if not user_id or not isinstance(user_id, str) or not user_id.strip():
         raise ValueError("user_id is required and must be a non-empty string")
-    
+
     # Start with input metadata or empty dict
     processed_metadata = input_metadata.copy() if input_metadata else {}
-    
+
     # Add user isolation metadata
     processed_metadata["user_id"] = user_id.strip()
-        
+
     # Add timestamp for tracking
     processed_metadata["created_at"] = datetime.now().isoformat()
-    
+
     # Build effective filters for querying
     effective_filters = input_filters.copy() if input_filters else {}
-    
+
     # Add user isolation filter
     effective_filters["user_id"] = user_id.strip()
-        
+
     return processed_metadata, effective_filters
 
 
@@ -93,17 +93,17 @@ class Memory(MemoryBase):
         >>> alice_memory = Memory(user_id="alice")
         >>> bob_memory = Memory(user_id="bob")
         >>> charlie_memory = Memory(user_id="charlie")
-        
+
         >>> # Users can add memories independently
         >>> alice_memory.add("I love Italian food, especially pizza")
         >>> bob_memory.add("I prefer Japanese cuisine like sushi")
         >>> charlie_memory.add("Mexican food is my favorite")
-        
+
         >>> # Searches are automatically user-isolated
         >>> alice_results = alice_memory.search("food")  # Only gets Alice's memories
         >>> bob_results = bob_memory.search("food")      # Only gets Bob's memories
         >>> charlie_results = charlie_memory.search("food")  # Only gets Charlie's memories
-        
+
         Advanced usage with metadata and filtering:
         >>> # Add memories with rich metadata
         >>> alice_memory.add(
@@ -112,7 +112,7 @@ class Memory(MemoryBase):
         ...     people_mentioned="Sarah,Mike,Jennifer",
         ...     topic_category="work"
         ... )
-        
+
         >>> # Search with advanced filtering (still user-isolated)
         >>> work_memories = alice_memory.search(
         ...     query="meeting",
@@ -121,16 +121,16 @@ class Memory(MemoryBase):
         ...     match_all_tags=True,
         ...     limit=20
         ... )
-        
+
         User isolation in action:
         >>> # Users cannot access each other's memories
         >>> alice_memory.get_all()  # Returns only Alice's memories
         >>> bob_memory.get_all()    # Returns only Bob's memories
-        
+
         >>> # Users can only delete their own memories
         >>> alice_memory.delete_all()  # Deletes only Alice's memories
         >>> bob_memory.delete_all()    # Deletes only Bob's memories
-        
+
         Custom configuration:
         >>> # Use custom embedding and vector store providers
         >>> config = {
@@ -144,26 +144,23 @@ class Memory(MemoryBase):
         ...     }
         ... }
         >>> memory = Memory(user_id="user_123", config=config)
-        
+
         Production multi-tenant usage:
         >>> # Different users in a multi-tenant application
         >>> def get_user_memory(user_id: str) -> Memory:
         ...     return Memory(user_id=user_id)
-        
+
         >>> # Each user gets isolated memory
         >>> user_1_memory = get_user_memory("tenant_1_user_456")
         >>> user_2_memory = get_user_memory("tenant_2_user_789")
-        
+
         >>> # Complete isolation - no cross-user data leakage
         >>> user_1_memory.add("Confidential business data")
         >>> user_2_memory.add("Personal notes")
         >>> # Users can never see each other's data
     """
 
-    def __init__(
-        self, 
-        config: InMemoryConfig | dict | None = None
-    ):
+    def __init__(self, config: InMemoryConfig | dict | None = None):
         """
         Initialize Memory with configuration (mem0 style - no user_id required).
 
@@ -180,7 +177,7 @@ class Memory(MemoryBase):
             ...     "vector_store": {"provider": "qdrant", "config": {...}}
             ... }
             >>> memory = Memory(config=config)
-            
+
             Multi-user usage (user_id passed to methods):
             >>> memory = Memory()
             >>> memory.add("I love pizza", user_id="alice")
@@ -188,7 +185,7 @@ class Memory(MemoryBase):
             >>> alice_results = memory.search("pizza", user_id="alice")  # Only Alice's memories
             >>> bob_results = memory.search("sushi", user_id="bob")      # Only Bob's memories
         """
-        
+
         # Handle different config types for clean API
         if config is None:
             self.config = InMemoryConfig()
@@ -198,23 +195,20 @@ class Memory(MemoryBase):
         else:
             # Already an InMemoryConfig object
             self.config = config
-        
+
         # Use factories with exact pattern - pass raw config
         self.embedding_provider = EmbeddingFactory.create(
-            self.config.embedding.provider,
-            self.config.embedding.config
+            self.config.embedding.provider, self.config.embedding.config
         )
-        
+
         self.vector_store = VectorStoreFactory.create(
-            self.config.vector_store.provider,
-            self.config.vector_store.config
+            self.config.vector_store.provider, self.config.vector_store.config
         )
 
         logger.info(
             f"Memory SDK initialized: "
             f"{self.config.embedding.provider} + {self.config.vector_store.provider}"
         )
-
 
     def add(
         self,
@@ -255,15 +249,14 @@ class Memory(MemoryBase):
                 "people_mentioned": people_mentioned or "",
                 "topic_category": topic_category or "",
             }
-            
+
             # Add any additional metadata
             if metadata:
                 memory_metadata.update(metadata)
-            
+
             # Build user-scoped metadata and filters using helper function (mem0 style)
             storage_metadata, _ = _build_filters_and_metadata(
-                user_id=user_id,
-                input_metadata=memory_metadata
+                user_id=user_id, input_metadata=memory_metadata
             )
 
             # Generate embedding using provider
@@ -274,9 +267,7 @@ class Memory(MemoryBase):
 
             # Insert using vector store provider with user-scoped metadata
             self.vector_store.insert(
-                vectors=[embedding], 
-                payloads=[storage_metadata], 
-                ids=[memory_id]
+                vectors=[embedding], payloads=[storage_metadata], ids=[memory_id]
             )
 
             logger.info(f"Memory added for user '{user_id}': {memory_content[:50]}...")
@@ -307,7 +298,7 @@ class Memory(MemoryBase):
     ) -> dict[str, list[dict[str, Any]]]:
         """
         Search memories with user isolation (mem0 style).
-        
+
         All searches are scoped to the specified user's memories only.
         Users cannot see or access memories from other users.
 
@@ -331,7 +322,7 @@ class Memory(MemoryBase):
             Basic search (user-isolated):
             >>> memory = Memory()
             >>> results = memory.search("pizza", user_id="alice")  # Only Alice's memories
-            
+
             Advanced filtering:
             >>> results = memory.search(
             ...     query="meetings",
@@ -342,18 +333,22 @@ class Memory(MemoryBase):
             ...     match_all_tags=True,
             ...     limit=20
             ... )
-            
+
             Get all user's memories sorted by timestamp:
             >>> results = memory.search(query="", user_id="alice", sort_by="timestamp", limit=100)
         """
         try:
             # Handle empty query case - return all memories
             is_empty_query = not query or not query.strip()
-            
+
             if is_empty_query:
-                logger.info(f"Retrieving all memories for user '{user_id}' (empty query)")
+                logger.info(
+                    f"Retrieving all memories for user '{user_id}' (empty query)"
+                )
             else:
-                logger.info(f"Searching memories for user '{user_id}' with query: '{query[:50]}...'")
+                logger.info(
+                    f"Searching memories for user '{user_id}' with query: '{query[:50]}...'"
+                )
 
             # Build additional filters from search parameters
             additional_filters = {}
@@ -369,42 +364,48 @@ class Memory(MemoryBase):
 
             # Build user-scoped filters using helper function (mem0 style)
             _, user_filters = _build_filters_and_metadata(
-                user_id=user_id,
-                input_filters=additional_filters
+                user_id=user_id, input_filters=additional_filters
             )
-            
+
             # Execute search based on query type
             if is_empty_query:
                 # Get all user's memories using vector store's list method
                 results = self.vector_store.list(filters=user_filters, limit=limit)
                 # Use helper method to format results consistently
-                formatted_results = self._format_results(results, include_metadata, include_score=False)
+                formatted_results = self._format_results(
+                    results, include_metadata, include_score=False
+                )
             else:
                 # Generate embedding for semantic search
                 query_embedding = self.embedding_provider.embed(query.strip())
 
                 # Execute semantic search with user isolation (mem0 style)
                 results = self.vector_store.search(
-                    query=query, 
-                    vectors=query_embedding, 
-                    limit=limit, 
-                    filters=user_filters  # Includes automatic user_id filtering
+                    query=query,
+                    vectors=query_embedding,
+                    limit=limit,
+                    filters=user_filters,  # Includes automatic user_id filtering
                 )
 
                 # Use helper method to format results consistently
-                formatted_results = self._format_results(results, include_metadata, include_score=True)
-                
+                formatted_results = self._format_results(
+                    results, include_metadata, include_score=True
+                )
+
                 # Apply threshold filtering if specified
                 if threshold is not None:
                     formatted_results = [
-                        result for result in formatted_results 
+                        result
+                        for result in formatted_results
                         if result.get("score", 0) >= threshold
                     ]
 
             # Apply sorting using helper method
             formatted_results = self._apply_sorting(formatted_results, sort_by)
 
-            logger.info(f"Search completed for user '{user_id}': {len(formatted_results)} results")
+            logger.info(
+                f"Search completed for user '{user_id}': {len(formatted_results)} results"
+            )
             return {"results": formatted_results}
 
         except Exception as e:
@@ -412,15 +413,15 @@ class Memory(MemoryBase):
             return {"results": []}
 
     def get_all(
-        self, 
+        self,
         *,  # Enforce keyword-only arguments
         user_id: str,
-        limit: int = 100, 
-        offset: int = 0
+        limit: int = 100,
+        offset: int = 0,
     ) -> dict[str, list[dict[str, Any]]]:
         """
         Get all memories for the specified user with user isolation (mem0 style).
-        
+
         Only returns memories belonging to the specified user. Users cannot see
         memories from other users.
 
@@ -440,14 +441,18 @@ class Memory(MemoryBase):
         try:
             # Build user-scoped filters using helper function (mem0 style)
             _, user_filters = _build_filters_and_metadata(user_id=user_id)
-            
+
             # Use list() method with user isolation filters
             results = self.vector_store.list(filters=user_filters, limit=limit)
-            
+
             # Use helper method to format results consistently
-            formatted_results = self._format_results(results, include_metadata=True, include_score=False)
-            
-            logger.info(f"Retrieved {len(formatted_results)} memories for user '{user_id}'")
+            formatted_results = self._format_results(
+                results, include_metadata=True, include_score=False
+            )
+
+            logger.info(
+                f"Retrieved {len(formatted_results)} memories for user '{user_id}'"
+            )
             return {"results": formatted_results}
 
         except Exception as e:
@@ -457,7 +462,7 @@ class Memory(MemoryBase):
     def delete(self, memory_id: str) -> dict[str, Any]:
         """
         Delete a specific memory (mem0 style - no ownership validation needed).
-        
+
         Deletes the specified memory by ID. In the new mem0-style architecture,
         ownership validation is handled at the API level, not in the Memory class.
 
@@ -488,13 +493,13 @@ class Memory(MemoryBase):
             return {"success": False, "error": str(e)}
 
     def delete_all(
-        self, 
+        self,
         *,  # Enforce keyword-only arguments
-        user_id: str
+        user_id: str,
     ) -> dict[str, Any]:
         """
         Delete all memories for the specified user with user isolation (mem0 style).
-        
+
         Only deletes memories belonging to the specified user. Users cannot delete
         memories from other users. This maintains complete user isolation.
 
@@ -512,19 +517,19 @@ class Memory(MemoryBase):
         try:
             # Build user-scoped filters using helper function (mem0 style)
             _, user_filters = _build_filters_and_metadata(user_id=user_id)
-            
+
             # Get user's memories only (for counting)
             user_memories = self.vector_store.list(filters=user_filters, limit=10000)
-            
+
             # Use helper method to extract points from results
             points = self._extract_points_from_results(user_memories)
-            
+
             deleted_count = 0
-            
+
             # Delete only user's memories (like mem0 approach)
             for point in points:
                 memory_id = self._extract_memory_id(point)
-                
+
                 if memory_id and self.vector_store.delete(memory_id):
                     deleted_count += 1
 
@@ -540,155 +545,149 @@ class Memory(MemoryBase):
             return {"success": False, "error": str(e)}
 
     # Helper Methods (mem0 Style)
-    
-    def _format_results(self, results, include_metadata: bool = True, include_score: bool = True) -> list[dict[str, Any]]:
+
+    def _format_results(
+        self, results, include_metadata: bool = True, include_score: bool = True
+    ) -> list[dict[str, Any]]:
         """
         Format results consistently across all methods (mem0 style).
-        
+
         This helper method standardizes result formatting from different vector stores,
         ensuring consistent output format regardless of the underlying storage provider.
-        
+
         Args:
             results: Raw results from vector store operations
             include_metadata: Whether to include full metadata in results
             include_score: Whether to include similarity scores
-            
+
         Returns:
             List of formatted result dictionaries
         """
         formatted_results = []
-        
+
         # Extract points from results using helper method
         points = self._extract_points_from_results(results)
-        
+
         for point in points:
             # Build base result structure
             result = {
                 "id": self._extract_memory_id(point),
                 "content": self._extract_content(point),
             }
-            
+
             # Add score if requested and available
             if include_score:
-                result["score"] = getattr(point, 'score', 1.0)
-            
+                result["score"] = getattr(point, "score", 1.0)
+
             # Add metadata if requested
             if include_metadata:
                 result["metadata"] = self._extract_metadata(point)
-            
+
             formatted_results.append(result)
-        
+
         return formatted_results
 
     def _extract_points_from_results(self, results) -> list:
         """
         Extract points from vector store results (handles different formats).
-        
+
         Different vector stores return results in different formats:
         - Some return tuples: (points, metadata)
         - Some return lists directly: [point1, point2, ...]
         - Some return single objects
-        
+
         Args:
             results: Raw results from vector store
-            
+
         Returns:
             List of point objects
         """
         if isinstance(results, tuple) and len(results) > 0:
             # Handle tuple format (e.g., from Qdrant list operations)
             return results[0] if isinstance(results[0], list) else [results[0]]
-        elif isinstance(results, list):
+        if isinstance(results, list):
             # Handle direct list format
             return results
-        elif results is not None:
+        if results is not None:
             # Handle single result
             return [results]
-        else:
-            # Handle empty/None results
-            return []
+        # Handle empty/None results
+        return []
 
     def _extract_memory_id(self, point) -> str:
         """
         Extract memory ID from a point object (handles different formats).
-        
+
         Args:
             point: Point object from vector store
-            
+
         Returns:
             Memory ID as string
         """
-        if hasattr(point, 'id'):
+        if hasattr(point, "id"):
             return str(point.id)
-        elif isinstance(point, dict):
+        if isinstance(point, dict):
             return str(point.get("id", ""))
-        else:
-            return ""
+        return ""
 
     def _extract_content(self, point) -> str:
         """
         Extract content/data from a point object (handles different formats).
-        
+
         Args:
             point: Point object from vector store
-            
+
         Returns:
             Memory content as string
         """
-        if hasattr(point, 'payload'):
+        if hasattr(point, "payload"):
             return point.payload.get("data", "")
-        elif isinstance(point, dict):
+        if isinstance(point, dict):
             return point.get("data", point.get("content", ""))
-        else:
-            return ""
+        return ""
 
     def _extract_metadata(self, point) -> dict[str, Any]:
         """
         Extract metadata from a point object (handles different formats).
-        
+
         Args:
             point: Point object from vector store
-            
+
         Returns:
             Metadata dictionary
         """
-        if hasattr(point, 'payload'):
+        if hasattr(point, "payload"):
             return point.payload
-        elif isinstance(point, dict):
+        if isinstance(point, dict):
             return point
-        else:
-            return {}
+        return {}
 
-
-    def _apply_sorting(self, results: list[dict[str, Any]], sort_by: str) -> list[dict[str, Any]]:
+    def _apply_sorting(
+        self, results: list[dict[str, Any]], sort_by: str
+    ) -> list[dict[str, Any]]:
         """
         Apply sorting to formatted results (mem0 style).
-        
+
         Args:
             results: List of formatted result dictionaries
             sort_by: Sort method ("relevance", "timestamp", "score")
-            
+
         Returns:
             Sorted list of results
         """
         if not results:
             return results
-            
+
         if sort_by == "timestamp":
             return sorted(
                 results,
                 key=lambda x: x.get("metadata", {}).get("created_at", ""),
-                reverse=True
+                reverse=True,
             )
-        elif sort_by == "score":
-            return sorted(
-                results,
-                key=lambda x: x.get("score", 0),
-                reverse=True
-            )
-        else:
-            # "relevance" is default - already sorted by vector store
-            return results
+        if sort_by == "score":
+            return sorted(results, key=lambda x: x.get("score", 0), reverse=True)
+        # "relevance" is default - already sorted by vector store
+        return results
 
     def get_stats(self) -> dict[str, Any]:
         """
@@ -704,7 +703,9 @@ class Memory(MemoryBase):
 
             # Get embedding model from config
             embedding_model = "unknown"
-            if self.config.embedding.config and hasattr(self.config.embedding.config, 'model'):
+            if self.config.embedding.config and hasattr(
+                self.config.embedding.config, "model"
+            ):
                 embedding_model = self.config.embedding.config.model
 
             return {
@@ -728,7 +729,9 @@ class Memory(MemoryBase):
         """
         # Get embedding model from config
         embedding_model = "unknown"
-        if self.config.embedding.config and hasattr(self.config.embedding.config, 'model'):
+        if self.config.embedding.config and hasattr(
+            self.config.embedding.config, "model"
+        ):
             embedding_model = self.config.embedding.config.model
 
         health = {

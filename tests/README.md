@@ -259,7 +259,7 @@ pytest --collect-only
 
 ## Comparison with Industry Standards
 
-### Inspired by mem0 Testing Patterns
+### Inspired by  Testing Patterns
 - Comprehensive parametrized testing
 - Advanced scenario coverage
 - Robust error handling validation
