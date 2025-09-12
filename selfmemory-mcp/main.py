@@ -5,7 +5,7 @@ This module implements an MCP (Model Context Protocol) server that provides
 memory operations for SelfMemory using simple Bearer token authentication.
 
 Features:
-- Simple Bearer token authentication with InMemory API keys
+- Simple Bearer token authentication with SelfMemory API keys
 - Per-request client creation for proper user isolation
 - Graceful error handling when core server is unavailable
 - Clean add_memory and search_memories tools
@@ -25,7 +25,7 @@ load_dotenv()  # Load environment variables from .env
 
 from mcp.server.fastmcp import Context, FastMCP
 
-from inmemory import InmemoryClient
+from selfmemory import SelfMemoryClient
 
 # Configure logging
 logging.basicConfig(
@@ -34,7 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-CORE_SERVER_HOST = os.getenv("INMEMORY_API_HOST", "http://localhost:8081")
+CORE_SERVER_HOST = os.getenv("SELFMEMORY_API_HOST", "http://localhost:8081")
 MCP_SERVER_PORT = int(os.getenv("MCP_SERVER_PORT", "8080"))
 MCP_SERVER_HOST = os.getenv("MCP_SERVER_HOST", "0.0.0.0")
 
@@ -51,15 +51,15 @@ mcp = FastMCP(
 logger.info(f"SelfMemory MCP Server initialized - Core server: {CORE_SERVER_HOST}")
 
 
-def validate_and_get_client(ctx: Context) -> InmemoryClient:
+def validate_and_get_client(ctx: Context) -> SelfMemoryClient:
     """
-    Validate Bearer token and create authenticated InmemoryClient.
+    Validate Bearer token and create authenticated SelfMemoryClient.
 
     Args:
         ctx: FastMCP Context containing request information
 
     Returns:
-        InmemoryClient: Client authenticated with the user's token
+        SelfMemoryClient: Client authenticated with the user's token
 
     Raises:
         ValueError: If authentication fails
@@ -75,7 +75,7 @@ def validate_and_get_client(ctx: Context) -> InmemoryClient:
         token = auth_header.replace("Bearer ", "")
 
         # Create and validate client - this will raise ValueError if token is invalid
-        client = InmemoryClient(api_key=token, host=CORE_SERVER_HOST)
+        client = SelfMemoryClient(api_key=token, host=CORE_SERVER_HOST)
 
         logger.info(
             f"Token validated successfully for user: {client.user_info.get('user_id', 'unknown')}"
@@ -117,7 +117,7 @@ async def add_memory(
         # Validate token and get authenticated client
         client = validate_and_get_client(ctx)
 
-        # Format data in the correct mem0 format that the core server expects
+        # Format data in the correct selfmemory format that the core server expects
         memory_data = {
             "messages": [{"role": "user", "content": content}],
             "metadata": {

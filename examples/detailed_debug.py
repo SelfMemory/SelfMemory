@@ -2,7 +2,7 @@
 Detailed debug to understand exactly what's happening with filtering.
 """
 
-from inmemory import Memory
+from selfmemory import Memory
 
 
 def detailed_debug():

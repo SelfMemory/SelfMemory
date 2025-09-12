@@ -1,14 +1,14 @@
 [project]
-name = "inmemory"
+name = "selfmemory"
 version = "0.1.11"
 description = "Enhanced Memory Management for AI Agents with zero-setup simplicity"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    {name = "InMemory Team", email = "shrijayan@cpluz.com"}
+    {name = "SelfMemory Team", email = "shrijayan@cpluz.com"}
 ]
 maintainers = [
-    {name = "InMemory Team", email = "shrijayan@cpluz.com"}
+    {name = "SelfMemory Team", email = "shrijayan@cpluz.com"}
 ]
 license = "Apache-2.0"
 keywords = [
@@ -52,11 +52,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/shrijayan/inmemory"
-Repository = "https://github.com/shrijayan/inmemory"
-Documentation = "https://github.com/shrijayan/inmemory#readme"
-Issues = "https://github.com/shrijayan/inmemory/issues"
-Changelog = "https://github.com/shrijayan/inmemory/blob/main/CHANGELOG.md"
+Homepage = "https://selfmemory.com"
+Repository = "https://github.com/selfmemory/selfmemory"
+Documentation = "https://github.com/selfmemory/selfmemory/wiki"
+Issues = "https://github.com/selfmemory/selfmemory/issues"
+Changelog = "https://github.com/selfmemory/selfmemory/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # Enterprise features (MongoDB + OAuth + Multi-user + MCP)
@@ -87,7 +87,7 @@ test = [
 ]
 
 [project.scripts]
-inmemory = "inmemory.cli:main"
+selfmemory = "selfmemory.cli:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -95,7 +95,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["inmemory*"]
+include = ["selfmemory*"]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -206,7 +206,7 @@ addopts = [
     "--strict-config",
     "--verbose",
     "-ra",
-    "--cov=inmemory",
+    "--cov=selfmemory",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
     "--cov-report=xml",

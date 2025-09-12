@@ -2,7 +2,7 @@
 Debug test to understand what's happening with user isolation.
 """
 
-from inmemory import Memory
+from selfmemory import Memory
 
 
 def debug_user_isolation():

@@ -1,6 +1,6 @@
-# InMemory SDK Examples
+# SelfMemory SDK Examples
 
-This directory contains comprehensive examples and test suites for the InMemory SDK.
+This directory contains comprehensive examples and test suites for the SelfMemory SDK.
 
 ## Files Overview
 
@@ -35,7 +35,7 @@ python examples/sdk_comprehensive_test.py
 
 ## SDK Features Demonstrated
 
-### Local Memory SDK (`inmemory.Memory`)
+### Local Memory SDK (`selfmemory.Memory`)
 - ✅ **Initialization** - Default and custom configurations
 - ✅ **Memory Operations** - Add, search, get_all, delete, delete_all
 - ✅ **Multi-User Isolation** - Complete user data separation
@@ -43,7 +43,7 @@ python examples/sdk_comprehensive_test.py
 - ✅ **Configuration** - Custom embedding and vector store providers
 - ✅ **Health & Stats** - System monitoring and statistics
 
-### Managed Client SDK (`inmemory.InmemoryClient`)
+### Managed Client SDK (`selfmemory.SelfMemoryClient`)
 - ✅ **API Integration** - REST API client for managed service
 - ✅ **Authentication** - API key-based authentication
 - ✅ **Advanced Search** - Tag search, people search, temporal search
@@ -74,14 +74,14 @@ python examples/sdk_comprehensive_test.py
 - `nomic-embed-text` model available in Ollama
 
 ### Optional
-- InMemory API server for managed client testing
+- SelfMemory API server for managed client testing
 - `INMEM_API_KEY` environment variable for managed client
 
 ## Usage Patterns
 
 ### Basic Memory Operations
 ```python
-from inmemory import Memory
+from selfmemory import Memory
 
 # Initialize
 memory = Memory()
@@ -108,7 +108,7 @@ memory.close()
 
 ### Multi-User Isolation
 ```python
-from inmemory import Memory
+from selfmemory import Memory
 
 memory = Memory()
 
@@ -123,7 +123,7 @@ bob_memories = memory.get_all(user_id="bob")      # Only Bob's memories
 
 ### Custom Configuration
 ```python
-from inmemory import Memory
+from selfmemory import Memory
 
 config = {
     "embedding": {
@@ -148,13 +148,13 @@ memory = Memory(config=config)
 ### Managed Client Usage
 ```python
 import os
-from inmemory import InmemoryClient
+from selfmemory import SelfMemoryClient
 
 # Set API key
 os.environ["INMEM_API_KEY"] = "your_api_key_here"
 
 # Use client
-with InmemoryClient() as client:
+with SelfMemoryClient() as client:
     client.add("Important business meeting")
     results = client.search("meeting")
 ```

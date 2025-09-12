@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-InMemory Client Example - Managed Service Usage
+SelfMemory Client Example - Managed Service Usage
 
-This example demonstrates how to use the InmemoryClient for the managed/hosted
-InMemory service. The client connects to a remote API server instead of running
+This example demonstrates how to use the SelfMemoryClient for the managed/hosted
+SelfMemory service. The client connects to a remote API server instead of running
 everything locally.
 
 Key Features Demonstrated:
@@ -15,33 +15,33 @@ Key Features Demonstrated:
 - Real-world scenarios
 
 Prerequisites:
-- Valid InMemory API key (set INMEM_API_KEY environment variable)
-- Access to InMemory API server
+- Valid SelfMemory API key (set INMEM_API_KEY environment variable)
+- Access to SelfMemory API server
 
 Usage:
     # Set your API key
     export INMEM_API_KEY="your_api_key_here"
 
     # Run the example
-    python examples/inmemory_client_example.py
+    python examples/selfmemory_client_example.py
 
 For local development, you can also run the server locally:
     cd server && python main.py
-    export INMEMORY_API_HOST="http://localhost:8081"
+    export SELFMEMORY_API_HOST="http://localhost:8081"
 """
 
 import os
 import time
 from datetime import datetime
 
-# Import InMemory Client
+# Import SelfMemory Client
 try:
-    from inmemory import InmemoryClient
+    from selfmemory import SelfMemoryClient
 
-    print("✅ InMemory Client imported successfully")
+    print("✅ SelfMemory Client imported successfully")
 except ImportError as e:
-    print(f"❌ Failed to import InMemory Client: {e}")
-    print("Please install the inmemory package: pip install inmemory")
+    print(f"❌ Failed to import SelfMemory Client: {e}")
+    print("Please install the selfmemory package: pip install selfmemory")
     exit(1)
 
 
@@ -60,12 +60,12 @@ def print_subsection(title: str):
 
 
 def basic_client_usage():
-    """Demonstrate basic InmemoryClient usage."""
-    print_section("BASIC INMEMORY CLIENT USAGE")
+    """Demonstrate basic SelfMemoryClient usage."""
+    print_section("BASIC SELFMEMORY CLIENT USAGE")
 
     # Get API credentials
     api_key = os.getenv("INMEM_API_KEY")
-    api_host = os.getenv("INMEMORY_API_HOST")  # Optional, defaults to production
+    api_host = os.getenv("SELFMEMORY_API_HOST")  # Optional, defaults to production
 
     if not api_key:
         print("❌ INMEM_API_KEY environment variable not set!")
@@ -78,11 +78,11 @@ def basic_client_usage():
 
     try:
         # Initialize the client
-        print("\n1. Initializing InMemory Client...")
+        print("\n1. Initializing SelfMemory Client...")
         if api_host:
-            client = InmemoryClient(api_key=api_key, host=api_host)
+            client = SelfMemoryClient(api_key=api_key, host=api_host)
         else:
-            client = InmemoryClient(api_key=api_key)
+            client = SelfMemoryClient(api_key=api_key)
 
         print("✅ Client initialized successfully")
         print(f"   Connected to: {client.host}")
@@ -196,7 +196,7 @@ def advanced_search_features():
     print_section("ADVANCED SEARCH FEATURES")
 
     api_key = os.getenv("INMEM_API_KEY")
-    api_host = os.getenv("INMEMORY_API_HOST")
+    api_host = os.getenv("SELFMEMORY_API_HOST")
 
     if not api_key:
         print("❌ API key not available for advanced search demo")
@@ -205,9 +205,9 @@ def advanced_search_features():
     try:
         # Initialize client
         client = (
-            InmemoryClient(api_key=api_key, host=api_host)
+            SelfMemoryClient(api_key=api_key, host=api_host)
             if api_host
-            else InmemoryClient(api_key=api_key)
+            else SelfMemoryClient(api_key=api_key)
         )
 
         # Add diverse test data
@@ -336,13 +336,13 @@ def context_manager_usage():
     print_section("CONTEXT MANAGER USAGE")
 
     api_key = os.getenv("INMEM_API_KEY")
-    api_host = os.getenv("INMEMORY_API_HOST")
+    api_host = os.getenv("SELFMEMORY_API_HOST")
 
     if not api_key:
         print("❌ API key not available for context manager demo")
         return
 
-    print("🔄 Using InmemoryClient as a context manager...")
+    print("🔄 Using SelfMemoryClient as a context manager...")
 
     try:
         # Use client as context manager
@@ -350,7 +350,7 @@ def context_manager_usage():
         if api_host:
             client_args["host"] = api_host
 
-        with InmemoryClient(**client_args) as client:
+        with SelfMemoryClient(**client_args) as client:
             print("✅ Client initialized in context manager")
 
             # Add a test memory
@@ -391,7 +391,7 @@ def error_handling_demo():
     # Test 1: Invalid API key
     print("\n1. Testing invalid API key...")
     try:
-        invalid_client = InmemoryClient(api_key="invalid_key_12345")
+        invalid_client = SelfMemoryClient(api_key="invalid_key_12345")
         print("❌ Should have failed with invalid API key")
     except ValueError as e:
         print(f"✅ Properly caught invalid API key: {str(e)[:60]}...")
@@ -401,7 +401,7 @@ def error_handling_demo():
     # Test 2: Network connectivity (invalid host)
     print("\n2. Testing network connectivity...")
     try:
-        network_client = InmemoryClient(
+        network_client = SelfMemoryClient(
             api_key="test_key", host="http://invalid-host-that-does-not-exist.com"
         )
         print("❌ Should have failed with network error")
@@ -415,12 +415,12 @@ def error_handling_demo():
     if api_key:
         print("\n3. Testing graceful error handling with valid client...")
         try:
-            api_host = os.getenv("INMEMORY_API_HOST")
+            api_host = os.getenv("SELFMEMORY_API_HOST")
             client_args = {"api_key": api_key}
             if api_host:
                 client_args["host"] = api_host
 
-            client = InmemoryClient(**client_args)
+            client = SelfMemoryClient(**client_args)
 
             # Test invalid memory deletion
             delete_result = client.delete("invalid_memory_id_12345")
@@ -449,7 +449,7 @@ def real_world_scenario():
     print_section("REAL-WORLD SCENARIO: PERSONAL KNOWLEDGE ASSISTANT")
 
     api_key = os.getenv("INMEM_API_KEY")
-    api_host = os.getenv("INMEMORY_API_HOST")
+    api_host = os.getenv("SELFMEMORY_API_HOST")
 
     if not api_key:
         print("❌ API key not available for real-world scenario")
@@ -462,7 +462,7 @@ def real_world_scenario():
         if api_host:
             client_args["host"] = api_host
 
-        with InmemoryClient(**client_args) as assistant:
+        with SelfMemoryClient(**client_args) as assistant:
             # Scenario: User adds various types of information throughout the day
             print("\n📝 Adding daily information...")
 
@@ -608,7 +608,7 @@ def performance_comparison():
     print_section("PERFORMANCE CHARACTERISTICS")
 
     api_key = os.getenv("INMEM_API_KEY")
-    api_host = os.getenv("INMEMORY_API_HOST")
+    api_host = os.getenv("SELFMEMORY_API_HOST")
 
     if not api_key:
         print("❌ API key not available for performance testing")
@@ -621,7 +621,7 @@ def performance_comparison():
         if api_host:
             client_args["host"] = api_host
 
-        client = InmemoryClient(**client_args)
+        client = SelfMemoryClient(**client_args)
 
         # Test 1: Add operation timing
         print("\n1. Add operation performance...")
@@ -697,8 +697,8 @@ def performance_comparison():
 
 
 def main():
-    """Main function to run all InmemoryClient examples."""
-    print("🚀 InMemory Client Example Suite")
+    """Main function to run all SelfMemoryClient examples."""
+    print("🚀 SelfMemory Client Example Suite")
     print(f"📅 Started at: {datetime.now().isoformat()}")
     print("=" * 60)
 
@@ -707,19 +707,19 @@ def main():
     if not api_key:
         print("\n❌ INMEM_API_KEY environment variable not set!")
         print("\nTo use this example, you need to:")
-        print("1. Get an API key from InMemory service")
+        print("1. Get an API key from SelfMemory service")
         print("2. Set the environment variable: export INMEM_API_KEY='your_key_here'")
         print(
-            "3. Optionally set custom host: export INMEMORY_API_HOST='http://localhost:8081'"
+            "3. Optionally set custom host: export SELFMEMORY_API_HOST='http://localhost:8081'"
         )
         print("\nFor local development:")
         print("1. Start the server: cd server && python main.py")
-        print("2. Set host: export INMEMORY_API_HOST='http://localhost:8081'")
+        print("2. Set host: export SELFMEMORY_API_HOST='http://localhost:8081'")
         return
 
     print(f"✅ API Key found: {api_key[:8]}...")
 
-    api_host = os.getenv("INMEMORY_API_HOST")
+    api_host = os.getenv("SELFMEMORY_API_HOST")
     if api_host:
         print(f"🌐 Using custom API host: {api_host}")
     else:
@@ -774,9 +774,9 @@ def main():
     )
 
     print("\n" + "=" * 60)
-    print("🎉 InMemory Client examples completed!")
+    print("🎉 SelfMemory Client examples completed!")
     print("\nNext steps:")
-    print("• Integrate InmemoryClient into your application")
+    print("• Integrate SelfMemoryClient into your application")
     print("• Explore the API documentation for advanced features")
     print("• Check out the comprehensive test suite for more examples")
     print("• Consider using the local Memory SDK for offline usage")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-InMemory Core API Server
+SelfMemory Core API Server
 A simple REST API server that provides the endpoints expected by the dashboard.
 Runs on port 8081 and provides /api/memories endpoints.
 """
@@ -30,8 +30,8 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 mongo_client = MongoClient(MONGODB_URI)
 mongo_db = mongo_client.get_database()
 
-# Use the existing inmemory client
-from inmemory.client import InmemoryClient
+# Use the existing selfmemory client
+from selfmemory.client import SelfMemoryClient
 
 # Setup logging
 logging.basicConfig(
@@ -152,8 +152,8 @@ async def get_memories(
     try:
         logger.info(f"Getting memories for user {user_id}")
 
-        # Use InmemoryClient to search/get all memories
-        client = InmemoryClient(api_key=api_key)
+        # Use SelfMemoryClient to search/get all memories
+        client = SelfMemoryClient(api_key=api_key)
 
         # Search with empty query to get all memories
         result = client.search(query="", limit=limit)
@@ -206,8 +206,8 @@ async def search_memories(
 
         logger.info(f"Searching memories for user {user_id}: '{request.query}'")
 
-        # Use InmemoryClient to search memories
-        client = InmemoryClient(api_key=api_key)
+        # Use SelfMemoryClient to search memories
+        client = SelfMemoryClient(api_key=api_key)
 
         result = client.search(query=request.query, limit=request.limit)
         client.close()
@@ -276,8 +276,8 @@ async def create_memory(
 
         logger.info(f"Creating memory for user {user_id}: {memory_content[:50]}...")
 
-        # Use InmemoryClient to add memory
-        client = InmemoryClient(api_key=api_key)
+        # Use SelfMemoryClient to add memory
+        client = SelfMemoryClient(api_key=api_key)
 
         # Extract metadata
         metadata = request.metadata or {}
@@ -319,7 +319,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "service": "InMemory Core API Server",
+        "service": "SelfMemory Core API Server",
         "version": "1.0.0",
     }
 
@@ -329,7 +329,7 @@ async def health_check():
 async def root():
     """Root endpoint with API information"""
     return {
-        "service": "InMemory Core API Server",
+        "service": "SelfMemory Core API Server",
         "version": "1.0.0",
         "endpoints": {
             "get_memories": "GET /api/memories",
@@ -342,7 +342,7 @@ async def root():
 
 
 if __name__ == "__main__":
-    logger.info("🚀 Starting InMemory Core API Server...")
+    logger.info("🚀 Starting SelfMemory Core API Server...")
     logger.info("📍 Server: http://localhost:8081")
     logger.info("🌐 API: http://localhost:8081/api/memories")
     logger.info("🏥 Health: http://localhost:8081/health")

@@ -6,7 +6,7 @@ Debug script to identify persistence issues
 import os
 import shutil
 
-from inmemory import Memory
+from selfmemory import Memory
 
 
 def debug_qdrant_creation():

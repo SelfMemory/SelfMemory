@@ -1,7 +1,7 @@
-# InMemory Server Requirements
-# Clean FastAPI server following mem0 pattern
+# SelfMemory Server Requirements
+# Clean FastAPI server following selfmemory pattern
 
-# Core InMemory library (install from parent directory)
+# Core SelfMemory library (install from parent directory)
 # Run: pip install -e .. 
 
 # FastAPI server requirements

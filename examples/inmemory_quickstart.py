@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-InMemory SDK Quick Start - Copy & Paste Ready
+SelfMemory SDK Quick Start - Copy & Paste Ready
 FIXED VERSION with persistent storage
 """
 
-# Install first: pip install inmemory
-from inmemory import Memory
+# Install first: pip install selfmemory
+from selfmemory import Memory
 
 
 def main():
-    print("🚀 InMemory SDK Quick Start")
+    print("🚀 SelfMemory SDK Quick Start")
 
     # 1. Configure Memory to connect to Docker Qdrant
     config = {

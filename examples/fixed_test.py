@@ -2,7 +2,7 @@
 Fixed test with completely different content to verify user isolation.
 """
 
-from inmemory import Memory
+from selfmemory import Memory
 
 
 def test_user_isolation_fixed():

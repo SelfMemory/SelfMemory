@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Comprehensive InMemory SDK Testing Suite
+Comprehensive SelfMemory SDK Testing Suite
 
 This script provides manual testing for all SDK functions including:
-- Local Memory SDK (inmemory.Memory)
-- Managed Client SDK (inmemory.InmemoryClient)
+- Local Memory SDK (selfmemory.Memory)
+- Managed Client SDK (selfmemory.SelfMemoryClient)
 - Configuration testing
 - Multi-user isolation
 - Advanced search features
@@ -16,7 +16,7 @@ Usage:
 
 Requirements:
     - Ollama server running on localhost:11434 with nomic-embed-text model
-    - Optional: InMemory API server for managed client testing
+    - Optional: SelfMemory API server for managed client testing
 """
 
 import json
@@ -31,14 +31,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import InMemory SDK
+# Import SelfMemory SDK
 try:
-    from inmemory import InmemoryClient, Memory
-    from inmemory.configs import InMemoryConfig
+    from selfmemory import Memory, SelfMemoryClient
+    from selfmemory.configs import SelfMemoryConfig
 
-    print("✅ InMemory SDK imported successfully")
+    print("✅ SelfMemory SDK imported successfully")
 except ImportError as e:
-    print(f"❌ Failed to import InMemory SDK: {e}")
+    print(f"❌ Failed to import SelfMemory SDK: {e}")
     exit(1)
 
 
@@ -450,12 +450,12 @@ class SDKTester:
             self.test_results["errors"].append(f"Error handling: {e}")
 
     def test_managed_client_sdk(self):
-        """Test the managed InmemoryClient SDK."""
+        """Test the managed SelfMemoryClient SDK."""
         self.print_section("MANAGED CLIENT SDK TESTING")
 
         # Check if API credentials are available
         api_key = os.getenv("INMEM_API_KEY")
-        api_host = os.getenv("INMEMORY_API_HOST", "http://localhost:8081")
+        api_host = os.getenv("SELFMEMORY_API_HOST", "http://localhost:8081")
 
         if not api_key:
             print("⚠️ INMEM_API_KEY not found. Skipping managed client tests.")
@@ -469,7 +469,7 @@ class SDKTester:
         try:
             print(f"🔗 Connecting to API: {api_host}")
             client, init_time = self.measure_time(
-                InmemoryClient, api_key=api_key, host=api_host
+                SelfMemoryClient, api_key=api_key, host=api_host
             )
             print(f"✅ Client initialized in {init_time:.3f}s")
 
@@ -560,7 +560,7 @@ class SDKTester:
 
         try:
             print("\n🔄 Testing context manager usage...")
-            with InmemoryClient(api_key=api_key, host=api_host) as ctx_client:
+            with SelfMemoryClient(api_key=api_key, host=api_host) as ctx_client:
                 result = ctx_client.add("Context manager test memory")
                 print(f"   Context manager: {'✅' if result.get('success') else '❌'}")
 
@@ -877,7 +877,7 @@ class SDKTester:
 
     def run_all_tests(self):
         """Run all SDK tests."""
-        print("🚀 Starting Comprehensive InMemory SDK Testing Suite")
+        print("🚀 Starting Comprehensive SelfMemory SDK Testing Suite")
         print(f"📅 Test started at: {datetime.now().isoformat()}")
 
         start_time = time.time()
@@ -904,12 +904,12 @@ class SDKTester:
 def main():
     """Main function to run the comprehensive SDK tests."""
     print("=" * 80)
-    print("  INMEMORY SDK COMPREHENSIVE TESTING SUITE")
+    print("  SELFMEMORY SDK COMPREHENSIVE TESTING SUITE")
     print("=" * 80)
     print()
-    print("This script will test all InMemory SDK functions including:")
-    print("• Local Memory SDK (inmemory.Memory)")
-    print("• Managed Client SDK (inmemory.InmemoryClient)")
+    print("This script will test all SelfMemory SDK functions including:")
+    print("• Local Memory SDK (selfmemory.Memory)")
+    print("• Managed Client SDK (selfmemory.SelfMemoryClient)")
     print("• Configuration variations")
     print("• Multi-user isolation")
     print("• Advanced search features")

@@ -16,7 +16,7 @@ httpx>=0.24.0
 pydantic>=2.0.0
 
 # Core dependencies (will be available from parent package)
-# inmemory (local package - install with: pip install -e ../.)
+# selfmemory (local package - install with: pip install -e ../.)
 
 # Authentication and security
 cryptography>=3.0.0

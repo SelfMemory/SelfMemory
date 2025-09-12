@@ -8,7 +8,7 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "inmemory",
+    "selfmemory",
     "selfmemory-mcp",
 ]
 
@@ -827,7 +827,7 @@ wheels = [
 ]
 
 [[package]]
-name = "inmemory"
+name = "selfmemory"
 version = "0.1.11"
 source = { editable = "." }
 dependencies = [

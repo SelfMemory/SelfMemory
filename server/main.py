@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from pymongo import MongoClient
 
-from inmemory import Memory
+from selfmemory import Memory
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -21,16 +21,16 @@ logging.basicConfig(
 load_dotenv()
 
 # MongoDB connection (same as dashboard)
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/inmemory")
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/selfmemory")
 mongo_client = MongoClient(MONGODB_URI)
 mongo_db = mongo_client.get_database()
 
-# Default configuration (mem0 style - simple and clean)
+# Default configuration (selfmemory style - simple and clean)
 DEFAULT_CONFIG = {
     "vector_store": {
         "provider": "qdrant",
         "config": {
-            "collection_name": "inmemory_memories",
+            "collection_name": "selfmemory_memories",
             "host": "localhost",
             "port": 6333,  # Default Qdrant Docker port
         },
@@ -44,13 +44,13 @@ DEFAULT_CONFIG = {
     },
 }
 
-# Global Memory instance (mem0 style - single instance for all users)
+# Global Memory instance (selfmemory style - single instance for all users)
 MEMORY_INSTANCE = Memory(config=DEFAULT_CONFIG)
 
 # FastAPI app
 app = FastAPI(
-    title="InMemory REST APIs",
-    description="A REST API for managing and searching memories - following mem0 patterns.",
+    title="SelfMemory REST APIs",
+    description="A REST API for managing and searching memories - following selfmemory patterns.",
     version="1.0.0",
 )
 
@@ -64,7 +64,7 @@ app.add_middleware(
 )
 
 
-# Pydantic models (mem0 style)
+# Pydantic models (selfmemory style)
 class Message(BaseModel):
     role: str = Field(..., description="Role of the message (user or assistant).")
     content: str = Field(..., description="Message content.")
@@ -159,7 +159,7 @@ def authenticate_api_key(authorization: str = Header(None)) -> str:
         raise HTTPException(status_code=500, detail="Authentication error")
 
 
-# API Endpoints (mem0 exact pattern)
+# API Endpoints (selfmemory exact pattern)
 @app.get("/api/v1/ping", summary="Ping endpoint for client validation")
 def ping_endpoint(user_id: str = Depends(authenticate_api_key)):
     """Ping endpoint that returns user info on successful authentication."""
@@ -168,13 +168,13 @@ def ping_endpoint(user_id: str = Depends(authenticate_api_key)):
         "user_id": user_id,
         "key_id": "default",
         "permissions": ["read", "write"],
-        "name": "InMemory User",
+        "name": "SelfMemory User",
     }
 
 
-@app.post("/configure", summary="Configure InMemory")
+@app.post("/configure", summary="Configure SelfMemory")
 def set_config(config: dict[str, Any]):
-    """Set memory configuration (mem0 style)."""
+    """Set memory configuration (selfmemory style)."""
     global MEMORY_INSTANCE
     MEMORY_INSTANCE = Memory(config=config)
     return {"message": "Configuration set successfully"}
@@ -184,7 +184,7 @@ def set_config(config: dict[str, Any]):
 def add_memory(
     memory_create: MemoryCreate, user_id: str = Depends(authenticate_api_key)
 ):
-    """Store new memories (mem0 style with user isolation)."""
+    """Store new memories (selfmemory style with user isolation)."""
     if not any(
         [memory_create.user_id, memory_create.agent_id, memory_create.run_id, user_id]
     ):
@@ -193,19 +193,19 @@ def add_memory(
         )
 
     try:
-        # Extract memory content from messages (mem0 style)
+        # Extract memory content from messages (selfmemory style)
         memory_content = ""
         if memory_create.messages:
             # Combine all message contents
             memory_content = " ".join([msg.content for msg in memory_create.messages])
 
-        # Extract metadata fields for inmemory-core compatibility
+        # Extract metadata fields for selfmemory-core compatibility
         metadata = memory_create.metadata or {}
         tags = metadata.get("tags", "")
         people_mentioned = metadata.get("people_mentioned", "")
         topic_category = metadata.get("topic_category", "")
 
-        # Use the single global instance with user_id for isolation (inmemory-core pattern)
+        # Use the single global instance with user_id for isolation (selfmemory-core pattern)
         response = MEMORY_INSTANCE.add(
             memory_content=memory_content,
             user_id=user_id or memory_create.user_id,  # Data-level isolation
@@ -222,7 +222,7 @@ def add_memory(
 
 @app.get("/api/memories", summary="Get memories")
 def get_all_memories(user_id: str = Depends(authenticate_api_key)):
-    """Retrieve stored memories (mem0 style)."""
+    """Retrieve stored memories (selfmemory style)."""
     try:
         return MEMORY_INSTANCE.get_all(user_id=user_id)
     except Exception as e:
@@ -232,7 +232,7 @@ def get_all_memories(user_id: str = Depends(authenticate_api_key)):
 
 @app.get("/api/memories/{memory_id}", summary="Get a memory")
 def get_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
-    """Retrieve a specific memory by ID (mem0 style)."""
+    """Retrieve a specific memory by ID (selfmemory style)."""
     try:
         return MEMORY_INSTANCE.get(memory_id, user_id=user_id)
     except Exception as e:
@@ -244,7 +244,7 @@ def get_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
 def search_memories(
     search_req: SearchRequest, user_id: str = Depends(authenticate_api_key)
 ):
-    """Search for memories (mem0 style)."""
+    """Search for memories (selfmemory style)."""
     try:
         # Build base parameters - exclude query, filters, and None values
         params = {
@@ -289,7 +289,7 @@ def search_memories(
                     else:
                         params[filter_key] = filter_value
 
-        # Call search with query and unpacked params (mem0 pattern)
+        # Call search with query and unpacked params (selfmemory pattern)
         return MEMORY_INSTANCE.search(query=search_req.query, **params)
     except Exception as e:
         logging.exception("Error in search_memories:")
@@ -298,7 +298,7 @@ def search_memories(
 
 @app.delete("/api/memories/{memory_id}", summary="Delete a memory")
 def delete_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
-    """Delete a specific memory (mem0 style)."""
+    """Delete a specific memory (selfmemory style)."""
     try:
         MEMORY_INSTANCE.delete(memory_id=memory_id, user_id=user_id)
         return {"message": "Memory deleted successfully"}
@@ -309,7 +309,7 @@ def delete_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
 
 @app.delete("/api/memories", summary="Delete all memories")
 def delete_all_memories(user_id: str = Depends(authenticate_api_key)):
-    """Delete all memories for a user (mem0 style)."""
+    """Delete all memories for a user (selfmemory style)."""
     try:
         MEMORY_INSTANCE.delete_all(user_id=user_id)
         return {"message": "All memories deleted"}
@@ -320,7 +320,7 @@ def delete_all_memories(user_id: str = Depends(authenticate_api_key)):
 
 @app.get("/health", summary="Health check")
 def health_check():
-    """Health check (mem0 style)."""
+    """Health check (selfmemory style)."""
     try:
         return MEMORY_INSTANCE.health_check()
     except Exception as e:
@@ -332,7 +332,7 @@ def health_check():
 
 @app.post("/reset", summary="Reset all memories")
 def reset_memory():
-    """Completely reset stored memories (mem0 style)."""
+    """Completely reset stored memories (selfmemory style)."""
     try:
         MEMORY_INSTANCE.reset()
         return {"message": "All memories reset"}
@@ -350,10 +350,10 @@ def home():
 if __name__ == "__main__":
     import uvicorn
 
-    host = os.getenv("INMEMORY_SERVER_HOST", "0.0.0.0")
-    port = int(os.getenv("INMEMORY_SERVER_PORT", "8081"))
+    host = os.getenv("SELFMEMORY_SERVER_HOST", "0.0.0.0")
+    port = int(os.getenv("SELFMEMORY_SERVER_PORT", "8081"))
 
-    logging.info("Starting InMemory Server...")
+    logging.info("Starting SelfMemory Server...")
     logging.info(f"API available at: http://{host}:{port}/")
     logging.info(f"Documentation: http://{host}:{port}/docs")
 

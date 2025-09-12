@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Simple InMemory Client Example
+Simple SelfMemory Client Example
 
-A minimal example showing how to use InmemoryClient with just an API key.
+A minimal example showing how to use SelfMemoryClient with just an API key.
 No need to specify host - it will be auto-discovered!
 """
 
-from inmemory import InmemoryClient
+from selfmemory import SelfMemoryClient
 
 
 def main():
     # Just provide your API key - host will be auto-discovered!
-    client = InmemoryClient(api_key="sk_im_f9dd000733fe7feb0218aeb0e8300c1e87842dac")
+    client = SelfMemoryClient(api_key="sk_im_f9dd000733fe7feb0218aeb0e8300c1e87842dac")
 
     # Add memories
     result1 = client.add(

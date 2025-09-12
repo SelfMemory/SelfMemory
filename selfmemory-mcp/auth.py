@@ -1,8 +1,8 @@
 """
-Authentication module for InMemory MCP server.
+Authentication module for SelfMemory MCP server.
 
 This module implements OAuth 2.1 resource server functionality using the existing
-InMemory authentication system. API keys are validated using the InmemoryClient,
+SelfMemory authentication system. API keys are validated using the SelfMemoryClient,
 and user information is extracted for memory isolation.
 """
 
@@ -11,13 +11,13 @@ import os
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 
-from inmemory.client import InmemoryClient
+from selfmemory.client import SelfMemoryClient
 
 logger = logging.getLogger(__name__)
 
 
-class InmemoryAccessToken(AccessToken):
-    """Access token implementation with InMemory user information."""
+class SelfMemoryAccessToken(AccessToken):
+    """Access token implementation with SelfMemory user information."""
 
     def __init__(
         self,
@@ -32,7 +32,7 @@ class InmemoryAccessToken(AccessToken):
         self.client_id = key_id
         self.scopes = permissions or ["user"]
 
-        # Additional InMemory-specific fields
+        # Additional SelfMemory-specific fields
         self.user_id = user_id
         self.key_id = key_id
         self.name = name
@@ -44,11 +44,11 @@ class InmemoryAccessToken(AccessToken):
         return self.user_id
 
 
-class InmemoryTokenVerifier(TokenVerifier):
+class SelfMemoryTokenVerifier(TokenVerifier):
     """
-    Token verifier for InMemory API keys.
+    Token verifier for SelfMemory API keys.
 
-    This verifier uses the existing InmemoryClient to validate API keys
+    This verifier uses the existing SelfMemoryClient to validate API keys
     and extract user information for memory operations.
     """
 
@@ -57,15 +57,15 @@ class InmemoryTokenVerifier(TokenVerifier):
         Initialize the token verifier.
 
         Args:
-            host: Optional host URL for the InMemory API. If not provided,
+            host: Optional host URL for the SelfMemory API. If not provided,
                   will use auto-discovery or environment variables.
         """
-        self.host = host or os.getenv("INMEMORY_API_HOST")
-        logger.info(f"InmemoryTokenVerifier initialized with host: {self.host}")
+        self.host = host or os.getenv("SELFMEMORY_API_HOST")
+        logger.info(f"SelfMemoryTokenVerifier initialized with host: {self.host}")
 
     async def verify_token(self, token: str) -> AccessToken | None:
         """
-        Verify an API key token using InmemoryClient.
+        Verify an API key token using SelfMemoryClient.
 
         Args:
             token: The API key to verify
@@ -74,8 +74,8 @@ class InmemoryTokenVerifier(TokenVerifier):
             AccessToken with user information if valid, None if invalid
         """
         try:
-            # Use InmemoryClient to validate the API key
-            client = InmemoryClient(api_key=token, host=self.host)
+            # Use SelfMemoryClient to validate the API key
+            client = SelfMemoryClient(api_key=token, host=self.host)
 
             # The client initialization already validates the API key
             # and stores user info in client.user_info
@@ -91,7 +91,7 @@ class InmemoryTokenVerifier(TokenVerifier):
                 return None
 
             # Create access token with user information
-            access_token = InmemoryAccessToken(
+            access_token = SelfMemoryAccessToken(
                 token=token,
                 user_id=str(user_id),
                 key_id=user_info.get("key_id", "unknown"),
@@ -103,7 +103,7 @@ class InmemoryTokenVerifier(TokenVerifier):
             return access_token
 
         except ValueError as e:
-            # InmemoryClient raises ValueError for authentication failures
+            # SelfMemoryClient raises ValueError for authentication failures
             logger.warning(f"API key validation failed: {e}")
             return None
         except Exception as e:
@@ -122,6 +122,6 @@ def get_user_id_from_token(access_token: AccessToken) -> str:
     Returns:
         User ID string for memory operations
     """
-    if isinstance(access_token, InmemoryAccessToken):
+    if isinstance(access_token, SelfMemoryAccessToken):
         return access_token.user_id
     return access_token.subject

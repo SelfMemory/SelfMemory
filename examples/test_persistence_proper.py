@@ -7,7 +7,7 @@ import os
 import shutil
 import time
 
-from inmemory import Memory
+from selfmemory import Memory
 
 
 def test_persistence():

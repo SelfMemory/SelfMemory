@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-InMemory SDK Basic Usage Examples
+SelfMemory SDK Basic Usage Examples
 
-This script demonstrates basic usage patterns for the InMemory SDK.
+This script demonstrates basic usage patterns for the SelfMemory SDK.
 Perfect for getting started with the SDK quickly.
 
 Usage:
@@ -15,8 +15,8 @@ Requirements:
 import os
 from datetime import datetime
 
-# Import InMemory SDK
-from inmemory import InmemoryClient, Memory
+# Import SelfMemory SDK
+from selfmemory import Memory, SelfMemoryClient
 
 
 def example_local_memory_sdk():
@@ -247,7 +247,7 @@ def example_custom_configuration():
 
 
 def example_managed_client_sdk():
-    """Demonstrate managed InmemoryClient SDK (if API key available)."""
+    """Demonstrate managed SelfMemoryClient SDK (if API key available)."""
     print("\n" + "=" * 60)
     print("  MANAGED CLIENT SDK - BASIC USAGE")
     print("=" * 60)
@@ -261,8 +261,8 @@ def example_managed_client_sdk():
 
     try:
         # 1. Initialize client
-        print("\n1. Initializing InmemoryClient...")
-        client = InmemoryClient(api_key=api_key)
+        print("\n1. Initializing SelfMemoryClient...")
+        client = SelfMemoryClient(api_key=api_key)
         print(f"✅ Client initialized: {client}")
 
         # 2. Add memories
@@ -315,7 +315,7 @@ def example_managed_client_sdk():
 
         # 8. Context manager usage
         print("\n8. Context manager usage...")
-        with InmemoryClient(api_key=api_key) as ctx_client:
+        with SelfMemoryClient(api_key=api_key) as ctx_client:
             result = ctx_client.add("Context manager test")
             print(f"   Context manager: {'✅' if result.get('success') else '❌'}")
 
@@ -331,7 +331,7 @@ def example_managed_client_sdk():
 
 def main():
     """Run all basic usage examples."""
-    print("🚀 InMemory SDK Basic Usage Examples")
+    print("🚀 SelfMemory SDK Basic Usage Examples")
     print(f"📅 Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     try:

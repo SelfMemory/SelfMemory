@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for multi-user isolation in InMemory Server.
+Test script for multi-user isolation in SelfMemory Server.
 
 This script tests that users can only access their own memories
 and cannot see or modify memories from other users.
@@ -255,13 +255,13 @@ def test_multi_user_isolation():
 
 def main():
     """Run all tests."""
-    print("🚀 Starting InMemory Server Multi-User Isolation Tests")
+    print("🚀 Starting SelfMemory Server Multi-User Isolation Tests")
     print("=" * 60)
 
     # Test server health
     if not test_health_check():
         print("\n❌ Server health check failed. Please start the server first:")
-        print("   cd inmemory-core/server && python main.py")
+        print("   cd selfmemory-core/server && python main.py")
         sys.exit(1)
 
     # Test multi-user isolation

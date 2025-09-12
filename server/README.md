@@ -1,16 +1,16 @@
-# InMemory Server
+# SelfMemory Server
 
-A multi-user FastAPI REST API server for InMemory following the mem0 pattern with complete user isolation.
+A multi-user FastAPI REST API server for SelfMemory following the selfmemory pattern with complete user isolation.
 
 ## Overview
 
-This server provides REST endpoints for the InMemory memory management system with full multi-user support:
+This server provides REST endpoints for the SelfMemory memory management system with full multi-user support:
 
 - **Multi-User Architecture**: Complete user isolation with user-scoped Memory instances
 - **User Context Required**: All operations require `user_id` for memory isolation
 - **Environment Configuration**: All settings via environment variables
-- **mem0 Compatible API**: Follows mem0's multi-user API patterns
-- **SDK Integration**: Uses the `inmemory` library directly with user isolation
+- **selfmemory Compatible API**: Follows selfmemory's multi-user API patterns
+- **SDK Integration**: Uses the `selfmemory` library directly with user isolation
 
 ## Quick Start
 
@@ -20,7 +20,7 @@ This server provides REST endpoints for the InMemory memory management system wi
 # From the server/ directory
 pip install -r requirements.txt
 
-# Install the inmemory library in development mode
+# Install the selfmemory library in development mode
 cd .. && pip install -e . && cd server/
 ```
 
@@ -137,13 +137,13 @@ curl -X POST http://localhost:8081/configure \
 
 ## Architecture
 
-### Multi-User Design (Following mem0)
+### Multi-User Design (Following selfmemory)
 - **User-Scoped Instances**: Each request creates `Memory(user_id=user_id)` for complete isolation
 - **No Global State**: No shared memory instances between users
 - **Environment Configuration**: All settings via environment variables
-- **Direct SDK Usage**: Uses `inmemory.Memory` class with user isolation
+- **Direct SDK Usage**: Uses `selfmemory.Memory` class with user isolation
 - **Ownership Validation**: Users can only access their own memories
-- **mem0 API Compatibility**: Follows mem0's multi-user patterns
+- **selfmemory API Compatibility**: Follows selfmemory's multi-user patterns
 
 ### Configuration
 ```python
@@ -160,7 +160,7 @@ DEFAULT_CONFIG = {
         "config": {
             "host": "localhost",
             "port": 6333,
-            "collection_name": "inmemory_memories"
+            "collection_name": "selfmemory_memories"
         }
     }
 }
@@ -188,11 +188,11 @@ bob_results = bob_memory.search("food")      # Only Bob's memories
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `INMEMORY_SERVER_HOST` | `0.0.0.0` | Server bind address |
-| `INMEMORY_SERVER_PORT` | `8081` | Server port |
+| `SELFMEMORY_SERVER_HOST` | `0.0.0.0` | Server bind address |
+| `SELFMEMORY_SERVER_PORT` | `8081` | Server port |
 | `QDRANT_HOST` | `localhost` | Qdrant server host |
 | `QDRANT_PORT` | `6333` | Qdrant server port |
-| `QDRANT_COLLECTION` | `inmemory_memories` | Qdrant collection name |
+| `QDRANT_COLLECTION` | `selfmemory_memories` | Qdrant collection name |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
 | `EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model name |
 | `LOG_LEVEL` | `INFO` | Logging level |
@@ -218,8 +218,8 @@ curl http://localhost:8081/docs  # OpenAPI documentation
 ### Docker Support (Future)
 ```bash
 # Build and run (when Dockerfile is added)
-docker build -t inmemory-server .
-docker run -p 8081:8081 inmemory-server
+docker build -t selfmemory-server .
+docker run -p 8081:8081 selfmemory-server
 ```
 
 ## Key Differences from Old Server
@@ -232,7 +232,7 @@ docker run -p 8081:8081 inmemory-server
 - ❌ Complex dashboard compatibility layers
 
 ### Added
-- ✅ Single global Memory instance (mem0 pattern)
+- ✅ Single global Memory instance (selfmemory pattern)
 - ✅ Environment-based configuration
 - ✅ Clean Pydantic models
 - ✅ Direct Memory class usage

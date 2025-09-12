@@ -75,10 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Installation Modes:**
 ```bash
-pip install inmemory                    # Zero dependencies
-pip install inmemory[server]            # + FastAPI server
-pip install inmemory[enterprise]        # + MongoDB + OAuth
-pip install inmemory[full]              # Everything + MCP
+pip install SELFMEMORY                    # Zero dependencies
+pip install SELFMEMORY[server]            # + FastAPI server
+pip install SELFMEMORY[enterprise]        # + MongoDB + OAuth
+pip install SELFMEMORY[full]              # Everything + MCP
 ```
 
 **API Server:**
@@ -133,10 +133,10 @@ pip install inmemory[full]              # Everything + MCP
 
 ### Version 0.1.0 - "Zero Setup"
 
-This initial release focuses on **ease of use** and **progressive complexity**. You can start using InMemory immediately with zero configuration, then scale up to enterprise features as needed.
+This initial release focuses on **ease of use** and **progressive complexity**. You can start using SELFMEMORY immediately with zero configuration, then scale up to enterprise features as needed.
 
 **Key Highlights:**
-- 🚀 **Zero Setup**: `pip install inmemory` and start using immediately
+- 🚀 **Zero Setup**: `pip install SELFMEMORY` and start using immediately
 - 🏗️ **Flexible Architecture**: File → API Server → Enterprise MongoDB
 - 🔍 **Advanced Search**: Semantic, temporal, and metadata-based search
 - 🚫 **Duplicate Prevention**: Intelligent memory deduplication
@@ -150,7 +150,7 @@ None (initial release).
 This is the initial release, so no migration is needed.
 
 ### Contributors
-- InMemory Team - Initial implementation and architecture
+- SELFMEMORY Team - Initial implementation and architecture
 - Community contributors - Testing, feedback, and documentation improvements
 
 ---
@@ -204,7 +204,7 @@ This is the initial release, so no migration is needed.
 - **Documentation**: See README.md and docs/ directory
 - **Issues**: Report bugs and request features on GitHub
 - **Discussions**: Ask questions in GitHub Discussions
-- **Security**: Report security issues to security@inmemory.dev
+- **Security**: Report security issues to info@cpluz.com
 
 ## License
 

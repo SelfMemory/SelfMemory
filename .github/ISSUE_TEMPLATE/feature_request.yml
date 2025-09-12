@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest a new feature for InMemory
+description: Suggest a new feature for SelfMemory
 title: "[FEATURE] "
 labels: ["enhancement", "triage"]
 assignees: []
@@ -68,7 +68,7 @@ body:
       description: If applicable, show what you think the API should look like.
       render: python
       placeholder: |
-        from inmemory import Memory
+        from selfmemory import Memory
 
         memory = Memory()
         # Your proposed API usage
@@ -101,7 +101,7 @@ body:
       options:
         - Nice to have - Would be useful but not critical
         - Important - Would significantly improve my workflow
-        - Critical - Blocking my ability to use InMemory effectively
+        - Critical - Blocking my ability to use SelfMemory effectively
     validations:
       required: true
 

@@ -296,7 +296,7 @@ docs/
 
 ### Reporting Security Issues
 - **Do not** open public issues for security vulnerabilities
-- **Email** security concerns to: [security@inmemory.dev]
+- **Email** security concerns to: [info@cpluz.com]
 - **Include** detailed description and steps to reproduce
 - **Allow** reasonable time for investigation before public disclosure
 

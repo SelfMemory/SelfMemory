@@ -1,18 +1,18 @@
 """
-Multi-User Isolation Demo for InMemory Memory SDK
+Multi-User Isolation Demo for SelfMemory Memory SDK
 
-This example demonstrates the mem0-style user isolation capabilities
-of the InMemory Memory class, showing how different users can have
+This example demonstrates the selfmemory-style user isolation capabilities
+of the SelfMemory Memory class, showing how different users can have
 completely isolated memory spaces.
 """
 
-from inmemory import Memory
+from selfmemory import Memory
 
 
 def main():
     """Demonstrate multi-user isolation with the Memory SDK."""
 
-    print("🚀 InMemory Multi-User Isolation Demo")
+    print("🚀 SelfMemory Multi-User Isolation Demo")
     print("=" * 50)
 
     # Create separate memory instances for different users

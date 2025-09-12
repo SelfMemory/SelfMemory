@@ -20,7 +20,7 @@ A Model Context Protocol (MCP) server that provides memory management capabiliti
 cp .env.example .env
 
 # Edit .env to configure your setup
-# INMEMORY_API_HOST=http://localhost:8081  # Your core server URL
+# SELFMEMORY_API_HOST=http://localhost:8081  # Your core server URL
 # MCP_SERVER_PORT=8080                     # MCP server port
 ```
 
@@ -30,7 +30,7 @@ cp .env.example .env
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Install the local inmemory package (from parent directory)
+# Install the local selfmemory package (from parent directory)
 pip install -e ../.
 ```
 
@@ -49,7 +49,7 @@ The server will start on `http://localhost:8080/mcp` by default.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `INMEMORY_API_HOST` | `http://localhost:8081` | Core SelfMemory server URL |
+| `SELFMEMORY_API_HOST` | `http://localhost:8081` | Core SelfMemory server URL |
 | `MCP_SERVER_HOST` | `0.0.0.0` | Host to bind the MCP server |
 | `MCP_SERVER_PORT` | `8080` | Port for the MCP server |
 | `LOG_LEVEL` | `INFO` | Logging level |
@@ -147,9 +147,9 @@ SelfMemory API keys can be in either format:
 ## Authentication Flow
 
 1. **Client Request**: MCP client sends request with Bearer token
-2. **Token Validation**: MCP server validates token against core server using `InmemoryTokenVerifier`
+2. **Token Validation**: MCP server validates token against core server using `SelfMemoryTokenVerifier`
 3. **User Extraction**: User information is extracted from validated token
-4. **Client Creation**: Per-request `InmemoryClient` is created with user's token
+4. **Client Creation**: Per-request `SelfMemoryClient` is created with user's token
 5. **Memory Operation**: Memory operation is performed with proper user isolation
 6. **Response**: Results are returned to the MCP client
 
@@ -224,11 +224,11 @@ curl -X POST http://localhost:8080/mcp \
 
 2. **Connection Refused**
    - Check that the core server is running on the configured port
-   - Verify the `INMEMORY_API_HOST` environment variable
+   - Verify the `SELFMEMORY_API_HOST` environment variable
    - Ensure no firewall blocking the connection
 
 3. **Import Errors**
-   - Install the inmemory package: `pip install -e ../.`
+   - Install the selfmemory package: `pip install -e ../.`
    - Check that all dependencies are installed: `pip install -r requirements.txt`
 
 4. **Memory Operations Fail**

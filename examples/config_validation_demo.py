@@ -11,9 +11,9 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from inmemory.configs.embeddings.ollama import OllamaConfig
-from inmemory.configs.vector_stores.qdrant import QdrantConfig
-from inmemory.utils.factory import EmbeddingFactory, VectorStoreFactory
+from selfmemory.configs.embeddings.ollama import OllamaConfig
+from selfmemory.configs.vector_stores.qdrant import QdrantConfig
+from selfmemory.utils.factory import EmbeddingFactory, VectorStoreFactory
 
 
 def demo_ollama_validation():
@@ -250,7 +250,7 @@ def demo_factory_validation():
 
 def main():
     """Run all validation demos."""
-    print("🚀 INMEMORY CONFIG VALIDATION DEMO")
+    print("🚀 SELFMEMORY CONFIG VALIDATION DEMO")
     print("=" * 60)
     print("This demo showcases the enhanced configuration validation")
     print("features implemented in Phase 3 of the project.")

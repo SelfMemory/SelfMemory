@@ -2,7 +2,7 @@
 Quick test to verify multi-user isolation works correctly.
 """
 
-from inmemory import Memory
+from selfmemory import Memory
 
 
 def test_user_isolation():

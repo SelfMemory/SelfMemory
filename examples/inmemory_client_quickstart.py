@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
 """
-InMemory Client Quick Start - Copy & Paste Ready
+SelfMemory Client Quick Start - Copy & Paste Ready
 
-Simple example showing how to use the InmemoryClient for the managed/hosted
-InMemory service.
+Simple example showing how to use the SelfMemoryClient for the managed/hosted
+SelfMemory service.
 
 Prerequisites:
 - Set INMEM_API_KEY environment variable
-- Optionally set INMEMORY_API_HOST for local development
+- Optionally set SELFMEMORY_API_HOST for local development
 
 Usage:
     export INMEM_API_KEY="your_api_key_here"
-    python examples/inmemory_client_quickstart.py
+    python examples/selfmemory_client_quickstart.py
 """
 
 import os
 
-from inmemory import InmemoryClient
+from selfmemory import SelfMemoryClient
 
 
 def main():
-    print("🚀 InMemory Client Quick Start")
+    print("🚀 SelfMemory Client Quick Start")
 
     # 1. Get API credentials
     api_key = os.getenv("INMEM_API_KEY")
-    api_host = os.getenv("INMEMORY_API_HOST")  # Optional for local development
+    api_host = os.getenv("SELFMEMORY_API_HOST")  # Optional for local development
 
     if not api_key:
         print("❌ Please set INMEM_API_KEY environment variable")
@@ -34,10 +34,10 @@ def main():
     # 2. Initialize client
     try:
         if api_host:
-            client = InmemoryClient(api_key=api_key, host=api_host)
+            client = SelfMemoryClient(api_key=api_key, host=api_host)
             print(f"✅ Connected to: {api_host}")
         else:
-            client = InmemoryClient(api_key=api_key)
+            client = SelfMemoryClient(api_key=api_key)
             print("✅ Connected to production API")
     except Exception as e:
         print(f"❌ Connection failed: {e}")

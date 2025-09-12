@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-InMemory SDK Quick Start - FIXED VERSION
+SelfMemory SDK Quick Start - FIXED VERSION
 This version ensures data persistence by setting on_disk=True
 """
 
-# Install first: pip install inmemory
-from inmemory import Memory
+# Install first: pip install selfmemory
+from selfmemory import Memory
 
 
 def main():
-    print("🚀 InMemory SDK Quick Start - FIXED VERSION")
+    print("🚀 SelfMemory SDK Quick Start - FIXED VERSION")
 
     # 1. Configure Memory with PERSISTENT storage (on_disk=True is crucial!)
     config = {

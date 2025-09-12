@@ -2,7 +2,7 @@
 Debug the filtering issue specifically.
 """
 
-from inmemory import Memory
+from selfmemory import Memory
 
 
 def debug_filtering():
