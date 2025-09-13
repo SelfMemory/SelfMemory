@@ -1,0 +1,29 @@
+name: Failed Question
+description: tell the question which is not work in some scenarios
+title: "[Question] "
+labels: ["help wanted"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for giving the question which is not work in some scenarios! Please tell me more about it so we can fix it.
+
+  - type: input
+    id: client
+    attributes:
+      label: Client
+      description: Where are you using it?
+      placeholder: Eg. Claude Desktop, Cursor, Custom App, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario
+      description: A clear and concise description of the scenario.
+      placeholder: Describe the scenario...
+    validations:
+      required: false
