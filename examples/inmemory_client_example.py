@@ -72,7 +72,6 @@ def basic_client_usage():
         print("Please set your API key: export INMEM_API_KEY='your_api_key_here'")
         return False
 
-    print(f"🔑 Using API key: {api_key[:8]}...")
     if api_host:
         print(f"🌐 Using custom API host: {api_host}")
 
@@ -717,7 +716,6 @@ def main():
         print("2. Set host: export SELFMEMORY_API_HOST='http://localhost:8081'")
         return
 
-    print(f"✅ API Key found: {api_key[:8]}...")
 
     api_host = os.getenv("SELFMEMORY_API_HOST")
     if api_host:

@@ -82,9 +82,7 @@ def authenticate_user(authorization: str = Header(None)) -> tuple[str, str]:
 
             # If found old format, migrate it to new format
             if stored_key:
-                logger.info(
-                    f"🔄 Migrating old API key format to keyHash for key: {api_key[:12]}..."
-                )
+
                 mongo_db.api_keys.update_one(
                     {"_id": stored_key["_id"]},
                     {"$set": {"keyHash": key_hash}, "$unset": {"api_key": ""}},
@@ -92,7 +90,6 @@ def authenticate_user(authorization: str = Header(None)) -> tuple[str, str]:
                 stored_key["keyHash"] = key_hash  # Update local copy
 
         if not stored_key:
-            logger.warning(f"❌ Invalid API key attempted: {api_key[:12]}...")
             raise HTTPException(status_code=401, detail="Invalid API key")
 
         # Check if key is expired

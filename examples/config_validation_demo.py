@@ -136,7 +136,6 @@ def demo_qdrant_validation():
             url="https://example.qdrant.io", api_key="test-key-1234567890"
         )
         print(f"     URL: {config.url}")
-        print(f"     API Key: {config.api_key[:10]}...")
         print(f"     Collection: {config.collection_name}")
 
     except Exception as e:
