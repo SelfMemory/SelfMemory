@@ -180,8 +180,6 @@ async def get_memories(
             }
             formatted_memories.append(formatted_memory)
 
-        logger.info(f"Retrieved {len(formatted_memories)} memories for user {user_id}")
-
         return {"results": formatted_memories}
 
     except Exception as e:
@@ -233,10 +231,6 @@ async def search_memories(
                 "updated_at": memory.get("updated_at", datetime.now().isoformat()),
             }
             formatted_memories.append(formatted_memory)
-
-        logger.info(
-            f"Found {len(formatted_memories)} memories for query '{request.query}'"
-        )
 
         return {"results": formatted_memories, "total": len(formatted_memories)}
 

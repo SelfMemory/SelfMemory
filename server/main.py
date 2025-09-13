@@ -323,7 +323,7 @@ def health_check():
     except Exception as e:
         logging.exception("Error in health_check:")
         return JSONResponse(
-            status_code=500, content={"status": "unhealthy", "error": str(e)}
+            status_code=500, content={"status": "unhealthy", "error": "An internal error occurred"}
         )
 
 
