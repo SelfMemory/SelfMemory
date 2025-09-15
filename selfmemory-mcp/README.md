@@ -219,7 +219,6 @@ curl -X POST http://localhost:8080/mcp \
 1. **Authentication Failed**
    - Check that your API key is valid and active
    - Ensure the core server is running on the configured host
-   - Verify the API key format (sk_im_... or inmem_sk_...)
 
 2. **Connection Refused**
    - Check that the core server is running on the configured port
