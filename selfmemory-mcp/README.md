@@ -125,7 +125,6 @@ For MCP clients that support remote servers:
 
 SelfMemory API keys can be in either format:
 - `sk_im_...` (preferred format)
-- `inmem_sk_...` (legacy format)
 
 ## Architecture
 
