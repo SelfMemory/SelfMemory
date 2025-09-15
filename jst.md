@@ -5754,11 +5754,11 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 
 
-The above is the content creating a MCP server. We need to create in @/Users/shrijayan.rajendran/projects/personal/dash-project-mem/selfmemory/selfmemory-core/selfmemory-mcp and the core server is running in @/Users/shrijayan.rajendran/projects/personal/dash-project-mem/selfmemory/selfmemory-core/inmemory/memory and @/Users/shrijayan.rajendran/projects/personal/dash-project-mem/selfmemory/selfmemory-core/server for refrence implementation use mem0 @/Users/shrijayan.rajendran/projects/personal/dash-project-mem/selfmemory/mem0/openmemory
+The above is the content creating a MCP server. We need to create in @/Users/shrijayan.rajendran/projects/personal/dash-project-mem/selfmemory/selfmemory-core/selfmemory-mcp and the core server is running in @/Users/shrijayan.rajendran/projects/personal/dash-project-mem/selfmemory/selfmemory-core/inmemory/memory and @/Users/shrijayan.rajendran/projects/personal/dash-project-mem/selfmemory/selfmemory-core/server for refrence implementation use selfmemory @/Users/shrijayan.rajendran/projects/personal/dash-project-mem/selfmemory/selfmemory/openmemory
 
 we will implement only two tools like - `add_memory` - Store new memories with metadata
 
 - `search_memories` - Semantic search with filters
 which you can check in the mcp main.py
 
-main problem with the current implementation also the auth. check @/Users/shrijayan.rajendran/projects/personal/dash-project-mem/selfmemory/mem0/openmemory/api/app/mcp_server.py for that
+main problem with the current implementation also the auth. check @/Users/shrijayan.rajendran/projects/personal/dash-project-mem/selfmemory/selfmemory/openmemory/api/app/mcp_server.py for that

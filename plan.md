@@ -417,9 +417,9 @@ Since you want to start immediately, here's what Phase 1 will include:
 
 Would you like me to proceed with **Phase 1** implementation? I'm ready to start with the testing infrastructure and core Memory class tests, following the patterns I observed in  codebase.
 
-Perfect! Let's create a detailed phase-by-phase implementation plan that exactly mirrors mem0's approach. Here's the comprehensive roadmap:
+Perfect! Let's create a detailed phase-by-phase implementation plan that exactly mirrors selfmemory's approach. Here's the comprehensive roadmap:
 
-## Phase-by-Phase Implementation Plan: mem0-Style User Isolation
+## Phase-by-Phase Implementation Plan: selfmemory-Style User Isolation
 
 ### **Phase 1: Add User Context to Memory Class**
 
@@ -430,11 +430,11 @@ class Memory(MemoryBase):
         # No user context
 ```
 
-**Target mem0-style Memory class:**
+**Target selfmemory-style Memory class:**
 ```python
 class Memory(MemoryBase):
     def __init__(self, user_id: str, agent_id: str = None, run_id: str = None, config: InMemoryConfig = None):
-        # Add user context like mem0
+        # Add user context like selfmemory
         self.user_id = user_id
         self.agent_id = agent_id  
         self.run_id = run_id
@@ -449,11 +449,11 @@ class Memory(MemoryBase):
 
 ---
 
-### **Phase 2: Implement mem0's Metadata Filtering System**
+### **Phase 2: Implement selfmemory's Metadata Filtering System**
 
-**mem0's approach from their code:**
+**selfmemory's approach from their code:**
 ```python
-# From mem0's _build_filters_and_metadata function
+# From selfmemory's _build_filters_and_metadata function
 def _build_filters_and_metadata(
     user_id: Optional[str] = None,
     agent_id: Optional[str] = None, 
@@ -467,9 +467,9 @@ def _build_filters_and_metadata(
 **Our implementation:**
 ```python
 def _build_user_metadata_and_filters(self, additional_metadata: dict = None) -> tuple[dict, dict]:
-    """Build metadata for storage and filters for querying (mem0 style)"""
+    """Build metadata for storage and filters for querying (selfmemory style)"""
     
-    # Base metadata for storage (like mem0)
+    # Base metadata for storage (like selfmemory)
     storage_metadata = {
         "user_id": self.user_id,
         "created_at": datetime.now().isoformat(),
@@ -499,7 +499,7 @@ def _build_user_metadata_and_filters(self, additional_metadata: dict = None) -> 
 
 ---
 
-### **Phase 3: Update add() Method (mem0 Style)**
+### **Phase 3: Update add() Method (selfmemory Style)**
 
 **Current inmemory add():**
 ```python
@@ -511,10 +511,10 @@ def add(self, memory_content: str, tags: str = None, **kwargs):
     }
 ```
 
-**Target mem0-style add():**
+**Target selfmemory-style add():**
 ```python
 def add(self, memory_content: str, tags: str = None, project_id: str = "default", **metadata):
-    # Build user-scoped metadata (like mem0)
+    # Build user-scoped metadata (like selfmemory)
     storage_metadata, _ = self._build_user_metadata_and_filters(metadata)
     
     # Add memory-specific data
@@ -539,7 +539,7 @@ def add(self, memory_content: str, tags: str = None, project_id: str = "default"
 
 ---
 
-### **Phase 4: Update search() Method (mem0 Style)**
+### **Phase 4: Update search() Method (selfmemory Style)**
 
 **Current inmemory search():**
 ```python
@@ -548,10 +548,10 @@ def search(self, query: str, limit: int = 10, **kwargs):
     results = self.vector_store.search(query=query, vectors=embedding, limit=limit)
 ```
 
-**Target mem0-style search():**
+**Target selfmemory-style search():**
 ```python
 def search(self, query: str, limit: int = 10, project_id: str = None, **kwargs):
-    # Build user filters (like mem0)
+    # Build user filters (like selfmemory)
     _, query_filters = self._build_user_metadata_and_filters()
     
     # Add project filter if specified
@@ -561,7 +561,7 @@ def search(self, query: str, limit: int = 10, project_id: str = None, **kwargs):
     # Generate embedding
     query_embedding = self.embedding_provider.embed(query)
     
-    # Execute search with user filtering (like mem0)
+    # Execute search with user filtering (like selfmemory)
     results = self.vector_store.search(
         query=query,
         vectors=query_embedding,
@@ -574,7 +574,7 @@ def search(self, query: str, limit: int = 10, project_id: str = None, **kwargs):
 
 ---
 
-### **Phase 5: Update get_all() Method (mem0 Style)**
+### **Phase 5: Update get_all() Method (selfmemory Style)**
 
 **Current inmemory get_all():**
 ```python
@@ -583,17 +583,17 @@ def get_all(self, limit: int = 100):
     results = self.vector_store.list(filters=None, limit=limit)
 ```
 
-**Target mem0-style get_all():**
+**Target selfmemory-style get_all():**
 ```python
 def get_all(self, limit: int = 100, project_id: str = None, **kwargs):
-    # Build user filters (like mem0)
+    # Build user filters (like selfmemory)
     _, query_filters = self._build_user_metadata_and_filters()
     
     # Add project filter if specified
     if project_id:
         query_filters["project_id"] = project_id
     
-    # Get only user's memories (like mem0)
+    # Get only user's memories (like selfmemory)
     results = self.vector_store.list(
         filters=query_filters,  # User isolation
         limit=limit
@@ -604,7 +604,7 @@ def get_all(self, limit: int = 100, project_id: str = None, **kwargs):
 
 ---
 
-### **Phase 6: Update delete() Method (mem0 Style)**
+### **Phase 6: Update delete() Method (selfmemory Style)**
 
 **Current inmemory delete():**
 ```python
@@ -613,15 +613,15 @@ def delete(self, memory_id: str):
     success = self.vector_store.delete(memory_id)
 ```
 
-**Target mem0-style delete():**
+**Target selfmemory-style delete():**
 ```python
 def delete(self, memory_id: str):
-    # Validate user owns this memory (like mem0's approach)
+    # Validate user owns this memory (like selfmemory's approach)
     memory = self.vector_store.get(vector_id=memory_id)
     if not memory:
         return {"success": False, "error": "Memory not found"}
     
-    # Check ownership (mem0 style validation)
+    # Check ownership (selfmemory style validation)
     if memory.payload.get("user_id") != self.user_id:
         return {"success": False, "error": "Access denied"}
     
@@ -632,7 +632,7 @@ def delete(self, memory_id: str):
 
 ---
 
-### **Phase 7: Update delete_all() Method (mem0 Style)**
+### **Phase 7: Update delete_all() Method (selfmemory Style)**
 
 **Current inmemory delete_all():**
 ```python
@@ -641,10 +641,10 @@ def delete_all(self):
     success = self.vector_store.delete_all()
 ```
 
-**Target mem0-style delete_all():**
+**Target selfmemory-style delete_all():**
 ```python
 def delete_all(self, project_id: str = None):
-    # Build user filters (like mem0)
+    # Build user filters (like selfmemory)
     _, query_filters = self._build_user_metadata_and_filters()
     
     # Add project filter if specified
@@ -655,7 +655,7 @@ def delete_all(self, project_id: str = None):
     memories = self.vector_store.list(filters=query_filters)
     deleted_count = 0
     
-    # Delete only user's memories (like mem0)
+    # Delete only user's memories (like selfmemory)
     for memory in memories[0] if isinstance(memories, tuple) else memories:
         if self.vector_store.delete(memory.id):
             deleted_count += 1
@@ -665,11 +665,11 @@ def delete_all(self, project_id: str = None):
 
 ---
 
-### **Phase 8: Add Helper Methods (mem0 Style)**
+### **Phase 8: Add Helper Methods (selfmemory Style)**
 
 ```python
 def _format_results(self, results):
-    """Format results consistently (like mem0)"""
+    """Format results consistently (like selfmemory)"""
     formatted_results = []
     
     # Handle different result formats from vector stores
@@ -690,7 +690,7 @@ def _format_results(self, results):
     return formatted_results
 
 def _validate_user_access(self, memory_id: str) -> bool:
-    """Validate user can access memory (mem0 style)"""
+    """Validate user can access memory (selfmemory style)"""
     memory = self.vector_store.get(vector_id=memory_id)
     if not memory:
         return False
@@ -708,9 +708,9 @@ memory = Memory()
 memory.add("I love pizza")
 ```
 
-**Target mem0-style usage:**
+**Target selfmemory-style usage:**
 ```python
-# User-scoped memory instances (like mem0)
+# User-scoped memory instances (like selfmemory)
 user1_memory = Memory(user_id="user_123")
 user2_memory = Memory(user_id="user_456")
 
@@ -745,7 +745,7 @@ user2_results = user2_memory.search("food")  # Only gets "sushi"
 5. **Phase 9:** Update documentation and examples
 6. **Phase 10:** Comprehensive testing
 
-This gives you **exactly mem0's approach** with:
+This gives you **exactly selfmemory's approach** with:
 - ✅ Single embedding model per instance
 - ✅ User isolation via metadata filtering  
 - ✅ Clean separation of concerns
@@ -774,7 +774,7 @@ __3 Major Changes Required:__
 
 1. __Hybrid Dynamic Import System__ (inmemory/configs/base.py + inmemory/utils/factory.py)
 2. __Server Architecture Fix__ (server/main.py - remove global instance, add per-request instances)
-3. __API Key Authentication__ (server/main.py - implement mem0-style auth)
+3. __API Key Authentication__ (server/main.py - implement selfmemory-style auth)
 
 ---
 
@@ -1251,7 +1251,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # Load environment variables
 load_dotenv()
 
-# Environment configuration (following mem0 pattern)
+# Environment configuration (following selfmemory pattern)
 QDRANT_HOST = os.environ.get("QDRANT_HOST", "localhost")
 QDRANT_PORT = os.environ.get("QDRANT_PORT", "6333")
 QDRANT_COLLECTION = os.environ.get("QDRANT_COLLECTION", "inmemory_memories")
@@ -1259,7 +1259,7 @@ QDRANT_COLLECTION = os.environ.get("QDRANT_COLLECTION", "inmemory_memories")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
 
-# Default configuration (mem0 style)
+# Default configuration (selfmemory style)
 DEFAULT_CONFIG = {
     "embedding": {
         "provider": "ollama",
@@ -1287,7 +1287,7 @@ __Step 2.2.2: Add Authentication Function__
 ```python
 def authenticate_api_key(authorization: str = Header(None)) -> str:
     """
-    Authenticate API key and return user_id following mem0 pattern.
+    Authenticate API key and return user_id following selfmemory pattern.
     
     Args:
         authorization: Authorization header with Bearer token
@@ -1319,7 +1319,7 @@ def authenticate_api_key(authorization: str = Header(None)) -> str:
             detail="Invalid API key format. Must start with 'inmem_sk_' and be at least 20 characters"
         )
     
-    # Generate deterministic user_id from API key (like mem0)
+    # Generate deterministic user_id from API key (like selfmemory)
     user_id = hashlib.md5(api_key.encode()).hexdigest()
     
     logging.info(f"API key authenticated for user: {user_id[:8]}...")
@@ -1328,7 +1328,7 @@ def authenticate_api_key(authorization: str = Header(None)) -> str:
 
 def _create_user_memory_instance(user_id: str) -> Memory:
     """
-    Create a user-scoped Memory instance following mem0 patterns.
+    Create a user-scoped Memory instance following selfmemory patterns.
     
     Args:
         user_id: Required user identifier for memory isolation
@@ -1348,7 +1348,7 @@ def _create_user_memory_instance(user_id: str) -> Memory:
 __Step 2.2.3: Update Pydantic Models__
 
 ```python
-# Pydantic models (adapted for mem0-style multi-user support)
+# Pydantic models (adapted for selfmemory-style multi-user support)
 class Message(BaseModel):
     role: str = Field(..., description="Role of the message (user or assistant).")
     content: str = Field(..., description="Message content.")
@@ -1369,7 +1369,7 @@ class SearchRequest(BaseModel):
 __Step 2.2.4: Update All Endpoints with Authentication__
 
 ```python
-# API Endpoints (following mem0 multi-user pattern)
+# API Endpoints (following selfmemory multi-user pattern)
 
 @app.post("/configure", summary="Configure InMemory")
 def set_config(config: Dict[str, Any], user_id: str = Depends(authenticate_api_key)):
@@ -1406,7 +1406,7 @@ def add_memory(memory_create: MemoryCreate, user_id: str = Depends(authenticate_
             metadata=memory_create.metadata
         )
         
-        # Format response to match mem0 style
+        # Format response to match selfmemory style
         if response.get("success"):
             return JSONResponse(content={
                 "results": [{
@@ -2497,7 +2497,7 @@ class TestServerIntegration:
 
 - [ ] __Step 2.2.1__: Remove global Memory instance from `server/main.py`
 - [ ] __Step 2.2.2__: Add authentication function with API key → user_id mapping
-- [ ] __Step 2.2.3__: Update Pydantic models for mem0 compatibility
+- [ ] __Step 2.2.3__: Update Pydantic models for selfmemory compatibility
 - [ ] __Step 2.2.4__: Update all endpoints with user authentication and isolation
 
 ### __Phase 3: Config Validation__
@@ -2537,11 +2537,11 @@ This completes the extremely detailed implementation plan! Would you like me to 
 ------------------------------------
 
 
-Perfect! After analyzing Mem0's codebase, I can now see exactly what they have in their closed source platform. Here's what Mem0 likely has in their `api.mem0.ai` service that's missing from open source:
+Perfect! After analyzing selfmemory's codebase, I can now see exactly what they have in their closed source platform. Here's what selfmemory likely has in their `api.selfmemory.ai` service that's missing from open source:
 
-## **What Mem0's Closed Source Platform Contains**
+## **What selfmemory's Closed Source Platform Contains**
 
-Based on the code analysis, here's what they have behind `api.mem0.ai`:
+Based on the code analysis, here's what they have behind `api.selfmemory.ai`:
 
 ### **1. Multi-Tenant Architecture**
 - **Organizations & Projects**: Full org/project hierarchy with member management
@@ -2661,7 +2661,7 @@ inmemory-cloud/
 ## **Database Schema Preview**
 
 ```sql
--- Core entities (like Mem0's openmemory)
+-- Core entities (like selfmemory's openmemory)
 users (id, user_id, email, name, created_at)
 organizations (id, name, owner_id, created_at)
 projects (id, org_id, name, container_tag, created_at)
@@ -2673,7 +2673,7 @@ memory_access_logs (id, memory_id, user_id, accessed_at)
 memory_status_history (id, memory_id, old_state, new_state, changed_by)
 ```
 
-This mirrors exactly what Mem0 has built but keeps it closed source for competitive advantage. Should we start with Phase 1?
+This mirrors exactly what selfmemory has built but keeps it closed source for competitive advantage. Should we start with Phase 1?
 
 
 
