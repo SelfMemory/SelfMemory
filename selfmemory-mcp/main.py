@@ -53,7 +53,8 @@ logger.info(f"SelfMemory MCP Server initialized - Core server: {CORE_SERVER_HOST
 
 def validate_and_get_client(ctx: Context) -> SelfMemoryClient:
     """
-    Validate Bearer token and create authenticated SelfMemoryClient.
+    Validate request and create authenticated SelfMemoryClient.
+    Supports both dashboard session auth and direct API key auth.
 
     Args:
         ctx: FastMCP Context containing request information
