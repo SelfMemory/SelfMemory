@@ -278,7 +278,10 @@ class Memory(MemoryBase):
             }
 
         except Exception as e:
-            return {"success": False, "error": "An internal error occurred while adding memory."}
+            logger.error(f"Memory.add() failed for user '{user_id}': {e}")
+            logger.error(f"Exception type: {type(e)}")
+            logger.error(f"Exception details: {str(e)}")
+            return {"success": False, "error": f"Memory addition failed: {str(e)}"}
 
     def search(
         self,
