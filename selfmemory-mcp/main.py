@@ -66,7 +66,7 @@ def validate_and_get_client(ctx: Context) -> SelfMemoryClient:
         ValueError: If authentication fails
     """
     try:
-        # Extract Authorization header from the HTTP request
+        # Extract headers from the HTTP request
         request = ctx.request_context.request
         auth_header = request.headers.get("Authorization")
 
