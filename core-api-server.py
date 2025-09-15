@@ -6,6 +6,7 @@ Runs on port 8081 and provides /api/memories endpoints.
 """
 
 import hashlib
+from argon2 import PasswordHasher
 import logging
 import os
 import sys
@@ -32,6 +33,9 @@ mongo_db = mongo_client.get_database()
 
 # Use the existing selfmemory client
 from selfmemory.client import SelfMemoryClient
+
+# Instantiate a single PasswordHasher instance for efficiency
+ph = PasswordHasher()
 
 # Setup logging
 logging.basicConfig(
@@ -68,11 +72,32 @@ def authenticate_user(authorization: str = Header(None)) -> tuple[str, str]:
         raise HTTPException(status_code=401, detail="Invalid API key format")
 
     try:
-        # Hash the provided API key to match stored hash
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        # Try Argon2 verification first (for new/migrated keys)
+        stored_keys = mongo_db.api_keys.find({"isActive": True, "keyHash": {"$exists": True}})
+        stored_key = None
+        
+        for candidate_key in stored_keys:
+            try:
+                if ph.verify(candidate_key["keyHash"], api_key):
+                    stored_key = candidate_key
+                    break
+            except Exception:
+                # Not an Argon2 hash, continue to next candidate
+                continue
 
-        # Look for API key using keyHash (unified format)
-        stored_key = mongo_db.api_keys.find_one({"keyHash": key_hash, "isActive": True})
+        # Fallback: Check SHA256 hashes (existing keys) and migrate them
+        if not stored_key:
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+            stored_key = mongo_db.api_keys.find_one({"keyHash": key_hash, "isActive": True})
+            
+            if stored_key:
+                # Migrate SHA256 to Argon2
+                migrated_hash = ph.hash(api_key)
+                mongo_db.api_keys.update_one(
+                    {"_id": stored_key["_id"]},
+                    {"$set": {"keyHash": migrated_hash}}
+                )
+                stored_key["keyHash"] = migrated_hash  # Update local copy
 
         # Fallback: Look for old plain text keys for backward compatibility
         if not stored_key:
@@ -80,14 +105,14 @@ def authenticate_user(authorization: str = Header(None)) -> tuple[str, str]:
                 {"api_key": api_key, "isActive": True}
             )
 
-            # If found old format, migrate it to new format
+            # If found old format, migrate it to Argon2 format
             if stored_key:
-
+                migrated_hash = ph.hash(api_key)
                 mongo_db.api_keys.update_one(
                     {"_id": stored_key["_id"]},
-                    {"$set": {"keyHash": key_hash}, "$unset": {"api_key": ""}},
+                    {"$set": {"keyHash": migrated_hash}, "$unset": {"api_key": ""}},
                 )
-                stored_key["keyHash"] = key_hash  # Update local copy
+                stored_key["keyHash"] = migrated_hash  # Update local copy
 
         if not stored_key:
             raise HTTPException(status_code=401, detail="Invalid API key")
