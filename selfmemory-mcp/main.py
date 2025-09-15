@@ -78,7 +78,7 @@ def validate_and_get_client(ctx: Context) -> SelfMemoryClient:
         client = SelfMemoryClient(api_key=token, host=CORE_SERVER_HOST)
 
         logger.info(
-            f"Token validated successfully for user: {client.user_info.get('user_id', 'unknown')}"
+            f"✅ MCP: API key authenticated for user: {client.user_info.get('user_id', 'unknown')}"
         )
         return client
 
