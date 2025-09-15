@@ -219,10 +219,10 @@ class SelfMemoryClient:
             except Exception:
                 error_message = str(e)
             logger.error(f"Failed to add memory: {error_message}")
-            return {"success": False, "error": error_message}
+            return {"success": False, "error": "An internal error occurred while adding a new memory."}
         except Exception as e:
             logger.error(f"Failed to add memory: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "An internal error occurred while adding a new memory."}
 
     def search(
         self,

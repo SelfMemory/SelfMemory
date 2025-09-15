@@ -300,7 +300,10 @@ async def create_memory(
             }
         error_msg = result.get("error", "Unknown error")
         logger.error(f"Failed to create memory: {error_msg}")
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(
+            status_code=500,
+            detail="An internal error occurred while creating a new memory."
+        )
 
     except HTTPException:
         raise
