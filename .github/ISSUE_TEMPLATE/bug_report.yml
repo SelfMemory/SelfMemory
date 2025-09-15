@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug in InMemory
+description: Report a bug in SelfMemory
 title: "[BUG] "
 labels: ["bug", "triage"]
 assignees: []
@@ -18,7 +18,7 @@ body:
       options:
         - label: I have searched existing issues to make sure this is not a duplicate
           required: true
-        - label: I have tested this with the latest version of InMemory
+        - label: I have tested this with the latest version of SelfMemory
           required: true
         - label: I have provided all the information requested below
           required: true
@@ -69,11 +69,11 @@ body:
       label: Environment
       description: Please provide information about your environment.
       value: |
-        - InMemory version: [e.g. 0.1.0]
+        - SelfMemory version: [e.g. 0.1.0]
         - Python version: [e.g. 3.12.0]
         - Operating System: [e.g. macOS 14.0]
         - Storage backend: [e.g. file, mongodb]
-        - Installation method: [e.g. pip install inmemory, pip install inmemory[full]]
+        - Installation method: [e.g. pip install selfmemory, pip install selfmemory[full]]
     validations:
       required: true
 
@@ -84,7 +84,7 @@ body:
       description: If applicable, provide a minimal code example that reproduces the issue.
       render: python
       placeholder: |
-        from inmemory import Memory
+        from selfmemory import Memory
 
         memory = Memory()
         # Your code that reproduces the bug

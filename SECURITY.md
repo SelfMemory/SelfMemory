@@ -12,11 +12,11 @@ We take security seriously and will provide security updates for the following v
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-If you discover a security vulnerability in InMemory, please report it to us in a responsible manner:
+If you discover a security vulnerability in SelfMemory, please report it to us in a responsible manner:
 
 ### How to Report
 
-1. **Email**: Send details to `security@inmemory.dev`
+1. **Email**: Send details to `info@cpluz.com`
 2. **Subject**: Include "SECURITY" in the subject line
 3. **Details**: Provide as much information as possible:
    - Description of the vulnerability
@@ -45,7 +45,7 @@ We follow responsible disclosure principles:
 
 ### Data Protection
 
-InMemory handles sensitive memory data and implements several security measures:
+SelfMemory handles sensitive memory data and implements several security measures:
 
 **Encryption at Rest:**
 - Memory content can be encrypted using AES-256
@@ -107,7 +107,7 @@ api_key = "im_12345..."  # Never do this
 
 **Secure Configuration:**
 ```python
-config = InMemoryConfig(
+config = SelfMemoryConfig(
     storage={
         "type": "mongodb",
         "mongodb_uri": os.getenv("MONGODB_URI")  # From environment
@@ -171,7 +171,7 @@ Security updates will be released as patch versions and announced through:
 
 ## Compliance
 
-InMemory is designed to help organizations meet various compliance requirements:
+SelfMemory is designed to help organizations meet various compliance requirements:
 
 **GDPR (General Data Protection Regulation):**
 - User data isolation and deletion capabilities
@@ -213,13 +213,13 @@ We regularly monitor our dependencies for security vulnerabilities:
 
 For security-related questions or concerns:
 
-- **Security Email**: security@inmemory.dev
+- **Security Email**: info@cpluz.com
 - **General Issues**: GitHub Issues (for non-security bugs)
 - **Documentation**: See CONTRIBUTING.md for development security practices
 
 ## Acknowledgments
 
-We appreciate the security research community and thank all researchers who responsibly disclose vulnerabilities to help keep InMemory secure.
+We appreciate the security research community and thank all researchers who responsibly disclose vulnerabilities to help keep SelfMemory secure.
 
 ---
 

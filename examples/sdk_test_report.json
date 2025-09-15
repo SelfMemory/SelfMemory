@@ -1,0 +1,20 @@
+{
+  "local_memory": {
+    "config_default": "\u2705 PASS",
+    "config_custom_ollama": "\u2705 PASS",
+    "crud_operations": "\u2705 PASS",
+    "user_isolation": "\u2705 PASS",
+    "advanced_search": "\u2705 PASS",
+    "error_handling": "\u2705 PASS"
+  },
+  "managed_client": {
+    "skipped": "No API key provided"
+  },
+  "performance": {
+    "bulk_add_rate": 39.45439115111743,
+    "avg_search_time": 0.028490543365478516,
+    "get_all_time": 0.0005769729614257812,
+    "total_memories": 50
+  },
+  "errors": []
+}

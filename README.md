@@ -1,4 +1,4 @@
-# InMemory - Enhanced Memory Management for AI
+# SelfMemory - Enhanced Memory Management for AI
 
 <p align="center">
   <strong>🧠 Long-term memory for AI Agents with zero-setup simplicity</strong>
@@ -10,8 +10,8 @@
 
 ## 🔥 Key Features
 
-- **🚀 Zero Setup**: `pip install inmemory` and start using immediately
-- **🏗️ Dual Architecture**: Local Memory class + Managed InmemoryClient
+- **🚀 Zero Setup**: `pip install selfmemory` and start using immediately
+- **🏗️ Dual Architecture**: Local Memory class + Managed SelfMemoryClient
 - **🔍 Advanced Search**: Semantic similarity with ChromaDB embeddings
 - **🌐 Two Usage Modes**: Direct library usage OR REST API server
 - **💼 Dashboard Ready**: MongoDB authentication + clean REST endpoints
@@ -21,11 +21,11 @@
 ### Zero-Setup Library Usage
 
 ```bash
-pip install inmemory
+pip install selfmemory
 ```
 
 ```python
-from inmemory import Memory
+from selfmemory import Memory
 
 # Works immediately - no setup required!
 memory = Memory()
@@ -57,10 +57,10 @@ print(f"Status: {health['status']}")
 ### Managed Client Usage (Dashboard Integration)
 
 ```python
-from inmemory import InmemoryClient
+from selfmemory import SelfMemoryClient
 
 # Connect to managed service
-client = InmemoryClient(
+client = SelfMemoryClient(
     api_key="your_api_key",
     host="http://localhost:8081"
 )
@@ -73,12 +73,12 @@ results = client.search("meeting notes")
 ### REST API Server Mode
 
 ```bash
-# Start the server (from inmemory-core directory)
+# Start the server (from selfmemory-core directory)
 cd server/
 python main.py
 
 # Or with custom configuration
-MONGODB_URI=mongodb://localhost:27017/inmemory python main.py
+MONGODB_URI=mongodb://localhost:27017/selfmemory python main.py
 ```
 
 Server runs on http://localhost:8081 with endpoints:
@@ -91,16 +91,16 @@ Server runs on http://localhost:8081 with endpoints:
 
 | Mode | Command | Dependencies | Use Case |
 |------|---------|--------------|----------|
-| **Basic SDK** | `pip install inmemory` | Zero external deps | Development, testing, simple apps |
-| **API Server** | `pip install inmemory[server]` | FastAPI, Uvicorn | Integration, dashboards |
-| **Enterprise** | `pip install inmemory[enterprise]` | MongoDB, OAuth | Production, multi-user |
-| **Full** | `pip install inmemory[full]` | Everything + MCP | Complete installation |
+| **Basic SDK** | `pip install selfmemory` | Zero external deps | Development, testing, simple apps |
+| **API Server** | `pip install selfmemory[server]` | FastAPI, Uvicorn | Integration, dashboards |
+| **Enterprise** | `pip install selfmemory[enterprise]` | MongoDB, OAuth | Production, multi-user |
+| **Full** | `pip install selfmemory[full]` | Everything + MCP | Complete installation |
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     InMemory Package                         │
+│                     SelfMemory Package                         │
 ├─────────────────────────────────────────────────────────────┤
 │  SDK Layer    │ Memory Class (Primary Interface)            │
 │  API Layer    │ FastAPI Server (Optional)                   │
@@ -114,7 +114,7 @@ Server runs on http://localhost:8081 with endpoints:
 ### Memory Class
 
 ```python
-from inmemory import Memory
+from selfmemory import Memory
 
 # Initialize with different backends
 memory = Memory()                        # Auto-detect (file by default)
@@ -142,10 +142,10 @@ stats = memory.get_user_stats(user_id)
 ### Configuration
 
 ```python
-from inmemory import InMemoryConfig, Memory
+from selfmemory import SelfMemoryConfig, Memory
 
 # Custom configuration
-config = InMemoryConfig(
+config = SelfMemoryConfig(
     storage={
         "type": "file",           # or "mongodb"
         "path": "~/my-memories"   # for file storage
@@ -165,7 +165,7 @@ memory = Memory(config=config)
 
 ## 🌐 REST API Endpoints
 
-When running in server mode (`inmemory serve`), these endpoints are available:
+When running in server mode (`selfmemory serve`), these endpoints are available:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -184,13 +184,13 @@ When running in server mode (`inmemory serve`), these endpoints are available:
 
 ```bash
 # Storage backend
-export INMEMORY_STORAGE_TYPE="file"           # or "mongodb"
-export INMEMORY_DATA_DIR="~/.inmemory"        # for file storage
-export MONGODB_URI="mongodb://localhost:27017/inmemory" # for mongodb
+export SELFMEMORY_STORAGE_TYPE="file"           # or "mongodb"
+export SELFMEMORY_DATA_DIR="~/.selfmemory"        # for file storage
+export MONGODB_URI="mongodb://localhost:27017/selfmemory" # for mongodb
 
 # Server settings
-export INMEMORY_HOST="0.0.0.0"
-export INMEMORY_PORT="8081"
+export SELFMEMORY_HOST="0.0.0.0"
+export SELFMEMORY_PORT="8081"
 
 # Qdrant settings
 export QDRANT_HOST="localhost"
@@ -199,12 +199,12 @@ export QDRANT_PORT="6333"
 
 ### YAML Configuration
 
-Create `~/.inmemory/config.yaml`:
+Create `~/.selfmemory/config.yaml`:
 
 ```yaml
 storage:
   type: "file"              # or "mongodb"
-  path: "~/.inmemory/data"
+  path: "~/.selfmemory/data"
 
 auth:
   type: "simple"            # or "oauth", "api_key"
@@ -225,13 +225,13 @@ embedding:
 ### Single File Deployment
 ```bash
 # Just run the server - file storage included
-inmemory serve --port 8080
+selfmemory serve --port 8080
 ```
 
 ### Docker Deployment
 ```bash
 # Simple mode (file storage)
-docker run -p 8080:8080 -v inmemory-data:/root/.inmemory inmemory:latest
+docker run -p 8080:8080 -v selfmemory-data:/root/.selfmemory selfmemory:latest
 
 # Enterprise mode (MongoDB)
 docker-compose up  # Uses provided docker-compose.yml
@@ -240,11 +240,11 @@ docker-compose up  # Uses provided docker-compose.yml
 ### Production Deployment
 ```bash
 # Enterprise mode with MongoDB
-export MONGODB_URI="mongodb://prod-mongo:27017/inmemory"
+export MONGODB_URI="mongodb://prod-mongo:27017/selfmemory"
 export GOOGLE_CLIENT_ID="your-prod-client-id"
 export GOOGLE_CLIENT_SECRET="your-prod-client-secret"
 
-inmemory serve --host 0.0.0.0 --port 8080
+selfmemory serve --host 0.0.0.0 --port 8080
 ```
 
 ## 🔄 Migration Between Modes
@@ -252,7 +252,7 @@ inmemory serve --host 0.0.0.0 --port 8080
 Easily migrate from simple file storage to enterprise MongoDB:
 
 ```python
-from inmemory.stores import FileBasedStore, MongoDBStore
+from selfmemory.stores import FileBasedStore, MongoDBStore
 
 # Initialize both backends
 file_store = FileBasedStore()
@@ -267,26 +267,26 @@ print(f"Migration {'successful' if success else 'failed'}!")
 
 ```bash
 # Install with development tools
-pip install inmemory[dev]
+pip install selfmemory[dev]
 
 # Run tests
-inmemory test
+selfmemory test
 
 # Check configuration
-inmemory config
+selfmemory config
 
 # View storage statistics
-inmemory stats
+selfmemory stats
 
 # Initialize with sample data
-inmemory init
+selfmemory init
 ```
 
 ## 🤝 Integration Examples
 
 ### Personal AI Assistant
 ```python
-from inmemory import Memory
+from selfmemory import Memory
 from openai import OpenAI
 
 class PersonalAssistant:
@@ -317,7 +317,7 @@ class PersonalAssistant:
 
 ### Customer Support Bot
 ```python
-from inmemory import Memory
+from selfmemory import Memory
 
 class SupportBot:
     def __init__(self):
@@ -351,7 +351,7 @@ class SupportBot:
 
 ## 🏢 Enterprise Features
 
-For enterprise deployments, InMemory provides:
+For enterprise deployments, SelfMemory provides:
 
 - **Multi-user Support**: MongoDB backend with user isolation
 - **OAuth Integration**: Google OAuth for dashboard authentication
@@ -361,17 +361,56 @@ For enterprise deployments, InMemory provides:
 
 ## 🤖 MCP Server Integration
 
-InMemory works seamlessly with MCP (Model Context Protocol) for AI agent integration:
+SelfMemory includes a built-in MCP (Model Context Protocol) server for AI agent integration:
 
 ```bash
-# Separate repository for MCP server
-git clone https://github.com/you/inmemory-mcp
-cd inmemory-mcp
-pip install -e .
+# MCP server is included in the monorepo
+cd selfmemory-mcp/
 
-# Configure to connect to any InMemory API
-export INMEMORY_API_URL="http://localhost:8080"
-python src/server.py
+# Install MCP dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
+
+# Start required services
+docker run -p 6333:6333 qdrant/qdrant  # Qdrant vector database
+ollama serve && ollama pull nomic-embed-text  # Ollama embeddings
+
+# Run the MCP server
+python main.py
+```
+
+### MCP Server Features
+
+- **Modern FastMCP Implementation**: Clean, maintainable code
+- **Lazy Initialization**: Safe startup with proper error handling
+- **Context Management**: User and client context using contextvars
+- **Multiple Tools**: add_memory, search_memory, list_memories, delete_memory, delete_all_memories
+- **SSE Transport**: Server-Sent Events for real-time communication
+- **Flexible Configuration**: Support for Ollama and OpenAI embeddings
+
+### MCP Client Configuration
+
+Configure your MCP client to connect to:
+```
+http://localhost:8080/mcp/{client_name}/sse/{user_id}
+```
+
+Example for Claude Desktop:
+```json
+{
+  "mcpServers": {
+    "selfmemory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"],
+      "env": {
+        "MCP_SERVER_URL": "http://localhost:8080/mcp/claude/sse/user123"
+      }
+    }
+  }
+}
 ```
 
 ## 🛠️ Requirements
@@ -404,13 +443,13 @@ We welcome contributions! Please see:
 
 ```bash
 # Development setup
-git clone https://github.com/you/inmemory
-cd inmemory
+git clone https://github.com/you/selfmemory
+cd selfmemory
 pip install -e .[dev]
 pre-commit install
 
 # Run tests
-inmemory test
+selfmemory test
 pytest
 ```
 

@@ -1,15 +1,16 @@
-# InMemory Server
+# SelfMemory Server
 
-A FastAPI REST API server for InMemory that uses the `inmemory` library internally.
+A multi-user FastAPI REST API server for SelfMemory following the selfmemory pattern with complete user isolation.
 
 ## Overview
 
-This server provides REST endpoints for the InMemory memory management system:
+This server provides REST endpoints for the SelfMemory memory management system with full multi-user support:
 
-- **Library First**: Uses the `inmemory` library (from parent directory) internally
-- **Clean Separation**: Server logic separate from library logic
-- **Dashboard Ready**: Provides endpoints for dashboard integration
-- **Zero Setup**: Uses embedded ChromaDB for storage
+- **Multi-User Architecture**: Complete user isolation with user-scoped Memory instances
+- **User Context Required**: All operations require `user_id` for memory isolation
+- **Environment Configuration**: All settings via environment variables
+- **selfmemory Compatible API**: Follows selfmemory's multi-user API patterns
+- **SDK Integration**: Uses the `selfmemory` library directly with user isolation
 
 ## Quick Start
 
@@ -19,7 +20,7 @@ This server provides REST endpoints for the InMemory memory management system:
 # From the server/ directory
 pip install -r requirements.txt
 
-# OR install the inmemory library in development mode
+# Install the selfmemory library in development mode
 cd .. && pip install -e . && cd server/
 ```
 
@@ -28,10 +29,21 @@ cd .. && pip install -e . && cd server/
 ```bash
 # Copy and edit environment file
 cp .env.example .env
-# Edit .env with your MongoDB URI and other settings
+# Edit .env with your Qdrant and Ollama settings
 ```
 
-### 3. Run the Server
+### 3. Start Required Services
+
+```bash
+# Start Qdrant (if not running)
+docker run -p 6333:6333 qdrant/qdrant
+
+# Start Ollama (if not running)
+ollama serve
+ollama pull nomic-embed-text
+```
+
+### 4. Run the Server
 
 ```bash
 # Method 1: Direct execution
@@ -40,8 +52,8 @@ python main.py
 # Method 2: Using uvicorn directly
 uvicorn main:app --host 0.0.0.0 --port 8081 --reload
 
-# Method 3: With environment variables
-MONGODB_URI=mongodb://localhost:27017/inmemory python main.py
+# Method 3: With custom environment
+QDRANT_HOST=localhost OLLAMA_HOST=http://localhost:11434 python main.py
 ```
 
 The server will start on http://localhost:8081
@@ -50,68 +62,140 @@ The server will start on http://localhost:8081
 
 ### Health Check
 ```bash
-curl http://localhost:8081/v1/health
+curl http://localhost:8081/health
 ```
 
-### Authentication
+### Add Memory (Multi-User)
 ```bash
-curl -H "Authorization: Bearer your_api_key" \
-     http://localhost:8081/v1/auth/validate
-```
-
-### Add Memory
-```bash
-curl -X POST http://localhost:8081/v1/memories \
-  -H "Authorization: Bearer your_api_key" \
+curl -X POST http://localhost:8081/memories \
   -H "Content-Type: application/json" \
   -d '{
-    "memory_content": "I love pizza",
-    "tags": "food,personal",
-    "people_mentioned": "Sarah",
-    "topic_category": "preferences"
+    "messages": [
+      {"role": "user", "content": "I love pizza"}
+    ],
+    "user_id": "alice",
+    "metadata": {"tags": "food,personal"}
   }'
 ```
 
-### Search Memories
+### Search Memories (Multi-User)
 ```bash
-curl -X POST http://localhost:8081/v1/search \
-  -H "Authorization: Bearer your_api_key" \
+curl -X POST http://localhost:8081/search \
   -H "Content-Type: application/json" \
   -d '{
     "query": "pizza",
+    "user_id": "alice",
     "limit": 10
   }'
 ```
 
-### Get All Memories
+### Get All Memories (Multi-User)
 ```bash
-curl -H "Authorization: Bearer your_api_key" \
-     "http://localhost:8081/v1/memories?limit=10&offset=0"
+curl "http://localhost:8081/memories?user_id=alice&limit=10"
 ```
 
-### Delete Memory
+### Get Specific Memory (Multi-User)
 ```bash
-curl -X DELETE \
-  -H "Authorization: Bearer your_api_key" \
-  http://localhost:8081/v1/memories/memory_id_here
+curl "http://localhost:8081/memories/memory_id_here?user_id=alice"
 ```
 
-## Architecture Benefits
+### Delete Memory (Multi-User)
+```bash
+curl -X DELETE "http://localhost:8081/memories/memory_id_here?user_id=alice"
+```
 
-### 1. Clean Separation
-- **Server**: FastAPI app with REST endpoints
-- **Library**: Core inmemory logic (Memory, InmemoryClient classes)
-- **Storage**: Embedded ChromaDB (zero external dependencies)
+### Delete All Memories (Multi-User)
+```bash
+curl -X DELETE "http://localhost:8081/memories?user_id=alice"
+```
 
-### 2. Dashboard Integration
-- **Authentication**: MongoDB-based API key validation
-- **Compatible**: Same endpoints as original main.py
-- **Reliable**: Uses library's zero-setup Memory class internally
+### Reset User Memories
+```bash
+curl -X POST "http://localhost:8081/reset?user_id=alice"
+```
 
-### 3. Development Friendly
-- **Hot Reload**: `uvicorn --reload` for development
-- **Library Import**: `from inmemory import Memory`
-- **Zero Setup**: No complex configuration required
+### Get Statistics
+```bash
+curl http://localhost:8081/stats
+```
+
+### Configure Server
+```bash
+curl -X POST http://localhost:8081/configure \
+  -H "Content-Type: application/json" \
+  -d '{
+    "embedding": {
+      "provider": "ollama",
+      "config": {"model": "nomic-embed-text"}
+    },
+    "vector_store": {
+      "provider": "qdrant",
+      "config": {"host": "localhost", "port": 6333}
+    }
+  }'
+```
+
+## Architecture
+
+### Multi-User Design (Following selfmemory)
+- **User-Scoped Instances**: Each request creates `Memory(user_id=user_id)` for complete isolation
+- **No Global State**: No shared memory instances between users
+- **Environment Configuration**: All settings via environment variables
+- **Direct SDK Usage**: Uses `selfmemory.Memory` class with user isolation
+- **Ownership Validation**: Users can only access their own memories
+- **selfmemory API Compatibility**: Follows selfmemory's multi-user patterns
+
+### Configuration
+```python
+DEFAULT_CONFIG = {
+    "embedding": {
+        "provider": "ollama",
+        "config": {
+            "model": "nomic-embed-text",
+            "ollama_base_url": "http://localhost:11434"
+        }
+    },
+    "vector_store": {
+        "provider": "qdrant",
+        "config": {
+            "host": "localhost",
+            "port": 6333,
+            "collection_name": "selfmemory_memories"
+        }
+    }
+}
+```
+
+### Multi-User Isolation
+
+Each user gets completely isolated memory:
+
+```python
+# User Alice's memories
+alice_memory = Memory(user_id="alice")
+alice_memory.add("I love pizza")
+
+# User Bob's memories  
+bob_memory = Memory(user_id="bob")
+bob_memory.add("I love sushi")
+
+# Users can only see their own memories
+alice_results = alice_memory.search("food")  # Only Alice's memories
+bob_results = bob_memory.search("food")      # Only Bob's memories
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SELFMEMORY_SERVER_HOST` | `0.0.0.0` | Server bind address |
+| `SELFMEMORY_SERVER_PORT` | `8081` | Server port |
+| `QDRANT_HOST` | `localhost` | Qdrant server host |
+| `QDRANT_PORT` | `6333` | Qdrant server port |
+| `QDRANT_COLLECTION` | `selfmemory_memories` | Qdrant collection name |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
+| `EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model name |
+| `LOG_LEVEL` | `INFO` | Logging level |
 
 ## Development
 
@@ -126,49 +210,59 @@ uvicorn main:app --reload --port 8081
 
 ### Testing
 ```bash
-# Test the API
-pytest test_server.py  # (create tests as needed)
-
-# Manual testing
-curl http://localhost:8081/v1/health
+# Test the API endpoints
+curl http://localhost:8081/health
+curl http://localhost:8081/docs  # OpenAPI documentation
 ```
 
-## Configuration
+### Docker Support (Future)
+```bash
+# Build and run (when Dockerfile is added)
+docker build -t selfmemory-server .
+docker run -p 8081:8081 selfmemory-server
+```
 
-### Environment Variables
+## Key Differences from Old Server
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MONGODB_URI` | `mongodb://localhost:27017/inmemory` | MongoDB connection for auth |
-| `INMEMORY_SERVER_HOST` | `0.0.0.0` | Server bind address |
-| `INMEMORY_SERVER_PORT` | `8081` | Server port |
-| `CHROMA_DB_PATH` | `/tmp/inmemory/chromadb` | ChromaDB storage path |
-| `LOG_LEVEL` | `INFO` | Logging level |
+### Removed
+- ❌ MongoDB authentication complexity
+- ❌ User management and API keys
+- ❌ Multiple initialization patterns
+- ❌ Hardcoded configurations
+- ❌ Complex dashboard compatibility layers
 
-### Authentication
-
-The server uses MongoDB for API key validation (shared with dashboard):
-
-1. Dashboard creates API keys → MongoDB
-2. Server validates API keys → MongoDB
-3. Memory operations → Local ChromaDB
+### Added
+- ✅ Single global Memory instance (selfmemory pattern)
+- ✅ Environment-based configuration
+- ✅ Clean Pydantic models
+- ✅ Direct Memory class usage
+- ✅ Proper error handling
+- ✅ Configuration endpoint
+- ✅ Simple, maintainable code
 
 ## Dashboard Integration
 
-Your dashboard should connect to this server instead of the old main.py:
+Your dashboard can connect to this server using either endpoint format:
 
 ```javascript
-// Dashboard API calls
-const response = await fetch('http://localhost:8081/v1/memories', {
+// Standard endpoints
+const response = await fetch('http://localhost:8081/memories', {
   method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${apiKey}`,
-    'Content-Type': 'application/json'
-  },
+  headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     memory_content: 'User message',
     tags: 'dashboard',
     topic_category: 'conversation'
+  })
+});
+
+// v1 endpoints (for compatibility)
+const response = await fetch('http://localhost:8081/v1/memories', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    memory_content: 'User message',
+    tags: 'dashboard'
   })
 });
 ```
@@ -176,6 +270,13 @@ const response = await fetch('http://localhost:8081/v1/memories', {
 ## Next Steps
 
 1. **Test the server**: `python main.py`
-2. **Update dashboard**: Point to `http://localhost:8081` instead of old endpoints
-3. **Deploy**: Use this server in production
+2. **Update dashboard**: Point to `http://localhost:8081` 
+3. **Add authentication**: If needed, add API key middleware
 4. **Scale**: Add load balancing, monitoring as needed
+5. **Deploy**: Use this server in production
+
+## Documentation
+
+- **API Docs**: http://localhost:8081/docs (Swagger UI)
+- **ReDoc**: http://localhost:8081/redoc (Alternative docs)
+- **Health**: http://localhost:8081/health (Health check)

@@ -114,7 +114,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          uv run pytest --cov=inmemory --cov-report=xml --cov-report=term-missing
+          uv run pytest --cov=selfmemory --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -152,7 +152,7 @@ jobs:
       - name: Run bandit security linter
         run: |
           uv add bandit --dev
-          uv run bandit -r inmemory/ -f json || true
+          uv run bandit -r selfmemory/ -f json || true
 
       - name: Scan for secrets
         run: |
@@ -228,25 +228,25 @@ jobs:
         if: matrix.install-type == 'basic'
         run: |
           uv pip install dist/*.whl
-          python -c "from inmemory import Memory; print('✅ Basic installation successful')"
+          python -c "from selfmemory import Memory; print('✅ Basic installation successful')"
 
       - name: Test server installation
         if: matrix.install-type == 'server'
         run: |
           uv pip install "dist/*.whl[server]"
-          python -c "from inmemory import Memory; print('✅ Server installation successful')"
+          python -c "from selfmemory import Memory; print('✅ Server installation successful')"
 
       - name: Test enterprise installation
         if: matrix.install-type == 'enterprise'
         run: |
           uv pip install "dist/*.whl[enterprise]"
-          python -c "from inmemory import Memory; print('✅ Enterprise installation successful')"
+          python -c "from selfmemory import Memory; print('✅ Enterprise installation successful')"
 
       - name: Test full installation
         if: matrix.install-type == 'full'
         run: |
           uv pip install "dist/*.whl[full]"
-          python -c "from inmemory import Memory; print('✅ Full installation successful')"
+          python -c "from selfmemory import Memory; print('✅ Full installation successful')"
 
   publish-test-pypi:
     name: Publish to Test PyPI
@@ -309,7 +309,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: yourusername/inmemory
+          images: yourusername/selfmemory
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -373,5 +373,5 @@ jobs:
     steps:
       - name: Notify Discord/Slack
         run: |
-          echo "🎉 InMemory ${{ github.event.release.tag_name }} has been released!"
-          echo "📦 Available on PyPI: https://pypi.org/project/inmemory/"
+          echo "🎉 SelfMemory ${{ github.event.release.tag_name }} has been released!"
+          echo "📦 Available on PyPI: https://pypi.org/project/selfmemory/"
