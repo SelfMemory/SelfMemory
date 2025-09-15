@@ -85,6 +85,9 @@ def validate_and_get_client(ctx: Context) -> SelfMemoryClient:
     except AttributeError as e:
         logger.error(f"Context structure error: {e}")
         raise ValueError("Request context not available")
+    except ValueError:
+        # Re-raise ValueError as-is (these are our custom auth errors)
+        raise
     except Exception as e:
         logger.error(f"Authentication error: {e}")
         raise ValueError("Authentication failed")
