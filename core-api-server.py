@@ -85,20 +85,7 @@ def authenticate_user(authorization: str = Header(None)) -> tuple[str, str]:
                 # Not an Argon2 hash, continue to next candidate
                 continue
 
-        # Fallback: Check SHA256 hashes (existing keys) and migrate them
-        if not stored_key:
-            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-            stored_key = mongo_db.api_keys.find_one({"keyHash": key_hash, "isActive": True})
-            
-            if stored_key:
-                # Migrate SHA256 to Argon2
-                migrated_hash = ph.hash(api_key)
-                mongo_db.api_keys.update_one(
-                    {"_id": stored_key["_id"]},
-                    {"$set": {"keyHash": migrated_hash}}
-                )
-                stored_key["keyHash"] = migrated_hash  # Update local copy
-
+        # Fallback: Removed SHA256 authentication for security reasons; only Argon2 hashes are now accepted.
         # Fallback: Look for old plain text keys for backward compatibility
         if not stored_key:
             stored_key = mongo_db.api_keys.find_one(
