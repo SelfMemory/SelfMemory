@@ -193,7 +193,7 @@ async def search_memories(
         # Validate token and get authenticated client
         client = validate_and_get_client(ctx)
 
-        # Perform search using the client
+        # Use SelfMemoryClient properly (no circular dependency)
         result = client.search(
             query=query,
             limit=limit,
