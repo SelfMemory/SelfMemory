@@ -156,6 +156,11 @@ async def get_memories(
         result = client.search(query="", limit=limit)
         client.close()
 
+        # If SelfMemoryClient returned an error, log it and return a generic error to the API client
+        if "error" in result:
+            logger.error(f"SelfMemoryClient search error for user {user_id}: {result['error']}")
+            raise HTTPException(status_code=500, detail="An internal error occurred while retrieving memories.")
+
         memories = result.get("results", [])
 
         # Transform memories to match dashboard format
