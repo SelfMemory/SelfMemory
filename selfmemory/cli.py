@@ -214,8 +214,8 @@ def stats_command(args):
             print(f"👥 Total Users: {stats.get('total_users', 0)}")
 
             if args.verbose:
-                print(f"🔑 Total API Keys: {stats.get('total_api_keys', 0)}")
-                print(f"🟢 Active API Keys: {stats.get('active_api_keys', 0)}")
+                # Omitted logging of total and active API keys to avoid exposing sensitive information.
+                
                 print("\n📋 Detailed Statistics:")
                 import json
 
