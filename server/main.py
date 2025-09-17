@@ -297,7 +297,7 @@ def search_memories(
 def delete_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
     """Delete a specific memory (selfmemory style)."""
     try:
-        MEMORY_INSTANCE.delete(memory_id=memory_id, user_id=user_id)
+        MEMORY_INSTANCE.delete(memory_id)
         return {"message": "Memory deleted successfully"}
     except Exception as e:
         logging.exception("Error in delete_memory:")
