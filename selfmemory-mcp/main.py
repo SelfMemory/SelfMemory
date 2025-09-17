@@ -1,31 +1,33 @@
-"""
-SelfMemory MCP Server
+"""SelfMemory MCP Server
 
-This module implements an MCP (Model Context Protocol) server that provides
-memory operations for SelfMemory using simple Bearer token authentication.
+Implements an MCP (Model Context Protocol) server that provides memory operations
+for SelfMemory using simple Bearer token authentication.
 
 Features:
 - Simple Bearer token authentication with SelfMemory API keys
 - Per-request client creation for proper user isolation
 - Graceful error handling when core server is unavailable
-- Clean add_memory and search_memories tools
+- Tools: add_memory and search_memories
 - Streamable HTTP transport for production deployment
 """
 
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-load_dotenv()  # Load environment variables from .env
-
 from mcp.server.fastmcp import Context, FastMCP
 
 from selfmemory import SelfMemoryClient
+
+# Ensure project root is in sys.path (two levels up from this file)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
+load_dotenv()  # Load environment variables from .env
 
 # Configure logging
 logging.basicConfig(
@@ -85,13 +87,13 @@ def validate_and_get_client(ctx: Context) -> SelfMemoryClient:
 
     except AttributeError as e:
         logger.error(f"Context structure error: {e}")
-        raise ValueError("Request context not available")
+        raise ValueError("Request context not available") from e
     except ValueError:
         # Re-raise ValueError as-is (these are our custom auth errors)
         raise
     except Exception as e:
         logger.error(f"Authentication error: {e}")
-        raise ValueError("Authentication failed")
+        raise ValueError("Authentication failed") from e
 
 
 @mcp.tool()

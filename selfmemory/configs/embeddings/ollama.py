@@ -79,7 +79,7 @@ class OllamaConfig(BaseModel):
             return v.rstrip("/")
 
         except Exception as e:
-            raise ValueError(f"Invalid URL format: {e}")
+            raise ValueError(f"Invalid URL format: {e}") from e
 
     @validator("timeout")
     def validate_timeout(cls, v):

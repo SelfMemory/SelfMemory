@@ -28,3 +28,24 @@ pyyaml>=6.0.0
 mcp[cli]>=1.0.0
 fastmcp>=2.0.0
 sse-starlette>=1.6.0
+
+# SelfMemory Server Requirements
+# Clean FastAPI server following selfmemory pattern
+
+# Core SelfMemory library (install from parent directory)
+# Run: pip install -e ..
+
+# FastAPI server requirements
+fastapi>=0.100.0
+uvicorn>=0.20.0
+python-dotenv>=1.0.0
+
+# Database
+pymongo>=4.0.0
+
+# HTTP client for potential external calls
+httpx>=0.25.0
+
+# Development dependencies (optional)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0

@@ -25,7 +25,9 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: |
+          uv sync
+          uv add ruff --dev
 
       - name: Run ruff linting
         run: uv run ruff check .
@@ -53,12 +55,12 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: |
+          uv sync
+          uv add build --dev
 
       - name: Build package
-        run: |
-          uv add build --dev
-          uv run python -m build
+        run: uv run python -m build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

@@ -1,6 +1,6 @@
 import logging
-import os
 import shutil
+from pathlib import Path
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -64,8 +64,9 @@ class Qdrant(VectorStoreBase):
                 params["path"] = path
                 self.is_local = True
                 if not on_disk and path:
-                    if os.path.exists(path) and os.path.isdir(path):
-                        shutil.rmtree(path)
+                    p = Path(path)
+                    if p.exists() and p.is_dir():
+                        shutil.rmtree(p)
             else:
                 self.is_local = False
 
