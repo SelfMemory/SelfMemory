@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
 jobs:
   lint-and-format:
     name: Code Quality
