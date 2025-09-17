@@ -7,6 +7,7 @@ similar to how  provides MemoryClient for their hosted solution.
 
 import logging
 import os
+from contextlib import suppress
 from typing import Any
 
 import httpx
@@ -109,35 +110,26 @@ class SelfMemoryClient:
 
         for host in candidate_hosts:
             try:
-                # Create a temporary client to test this host
                 temp_client = httpx.Client(
                     base_url=host,
                     headers={
                         "Authorization": f"Bearer {self.api_key}",
                         "Content-Type": "application/json",
                     },
-                    timeout=5.0,  # Short timeout for discovery
+                    timeout=5.0,
                 )
-
-                # Try to ping this host
                 response = temp_client.get("/api/v1/ping")
                 response.raise_for_status()
                 data = response.json()
-
-                # If we get a valid response, this is our host
                 if data.get("status") == "ok":
                     temp_client.close()
                     logger.info(f"✅ Discovered host: {host}")
                     return host
-
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 broad for discovery loop; logs then continues
                 logger.debug(f"Host {host} failed: {e}")
-                continue
             finally:
-                try:
+                with suppress(BaseException):
                     temp_client.close()
-                except:
-                    pass
 
         # If no host worked, fall back to default
         logger.warning("Could not auto-discover host, using default")
@@ -219,10 +211,16 @@ class SelfMemoryClient:
             except Exception:
                 error_message = str(e)
             logger.error(f"Failed to add memory: {error_message}")
-            return {"success": False, "error": "An internal error occurred while adding a new memory."}
+            return {
+                "success": False,
+                "error": "An internal error occurred while adding a new memory.",
+            }
         except Exception as e:
             logger.error(f"Failed to add memory: {e}")
-            return {"success": False, "error": "An internal error occurred while adding a new memory."}
+            return {
+                "success": False,
+                "error": "An internal error occurred while adding a new memory.",
+            }
 
     def search(
         self,

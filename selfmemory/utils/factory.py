@@ -75,7 +75,7 @@ class EmbeddingFactory:
         try:
             embedding_class = load_class(class_path)
         except (ImportError, AttributeError) as e:
-            raise ValueError(f"Failed to load provider '{provider_name}': {e}")
+            raise ValueError(f"Failed to load provider '{provider_name}': {e}") from e
 
         # Handle both Pydantic config objects and raw dicts
         if hasattr(config, "model_dump"):
@@ -223,7 +223,7 @@ class VectorStoreFactory:
         try:
             vector_store_class = load_class(class_path)
         except (ImportError, AttributeError) as e:
-            raise ValueError(f"Failed to load provider '{provider_name}': {e}")
+            raise ValueError(f"Failed to load provider '{provider_name}': {e}") from e
 
         # Handle both Pydantic config objects and raw dicts
         if hasattr(config, "model_dump"):

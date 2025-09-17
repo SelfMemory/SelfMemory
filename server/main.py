@@ -113,7 +113,6 @@ def authenticate_api_key(authorization: str = Header(None)) -> str:
 
             # If found old format, migrate it to new format
             if stored_key:
-
                 mongo_db.api_keys.update_one(
                     {"_id": stored_key["_id"]},
                     {"$set": {"keyHash": key_hash}, "$unset": {"api_key": ""}},
@@ -153,7 +152,7 @@ def authenticate_api_key(authorization: str = Header(None)) -> str:
         raise
     except Exception as e:
         logging.error(f"API key authentication error: {e}")
-        raise HTTPException(status_code=500, detail="Authentication error")
+        raise HTTPException(status_code=500, detail="Authentication error") from e
 
 
 # API Endpoints (selfmemory exact pattern)
@@ -214,7 +213,7 @@ def add_memory(
         return JSONResponse(content=response)
     except Exception as e:
         logging.exception("Error in add_memory:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/memories", summary="Get memories")
@@ -224,7 +223,7 @@ def get_all_memories(user_id: str = Depends(authenticate_api_key)):
         return MEMORY_INSTANCE.get_all(user_id=user_id)
     except Exception as e:
         logging.exception("Error in get_all_memories:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/memories/{memory_id}", summary="Get a memory")
@@ -234,7 +233,7 @@ def get_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
         return MEMORY_INSTANCE.get(memory_id, user_id=user_id)
     except Exception as e:
         logging.exception("Error in get_memory:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/memories/search", summary="Search memories")
@@ -290,7 +289,7 @@ def search_memories(
         return MEMORY_INSTANCE.search(query=search_req.query, **params)
     except Exception as e:
         logging.exception("Error in search_memories:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.delete("/api/memories/{memory_id}", summary="Delete a memory")
@@ -301,7 +300,7 @@ def delete_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
         return {"message": "Memory deleted successfully"}
     except Exception as e:
         logging.exception("Error in delete_memory:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.delete("/api/memories", summary="Delete all memories")
@@ -312,7 +311,7 @@ def delete_all_memories(user_id: str = Depends(authenticate_api_key)):
         return {"message": "All memories deleted"}
     except Exception as e:
         logging.exception("Error in delete_all_memories:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/health", summary="Health check")
@@ -320,10 +319,11 @@ def health_check():
     """Health check (selfmemory style)."""
     try:
         return MEMORY_INSTANCE.health_check()
-    except Exception as e:
+    except Exception:
         logging.exception("Error in health_check:")
         return JSONResponse(
-            status_code=500, content={"status": "unhealthy", "error": "An internal error occurred"}
+            status_code=500,
+            content={"status": "unhealthy", "error": "An internal error occurred"},
         )
 
 
@@ -335,7 +335,7 @@ def reset_memory():
         return {"message": "All memories reset"}
     except Exception as e:
         logging.exception("Error in reset_memory:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/", summary="Redirect to docs")

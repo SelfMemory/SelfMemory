@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+
+
 class BaseEmbedderConfig:
     """
     Base configuration class for all embedding providers.
@@ -28,7 +31,6 @@ class BaseEmbedderConfig:
 
 
 # Keep the dataclass version for backward compatibility if needed
-from dataclasses import dataclass
 
 
 @dataclass

@@ -23,11 +23,9 @@ from pydantic import BaseModel, Field, model_validator, validator
 
 logger = logging.getLogger(__name__)
 
-# Set up the directory path
-home_dir = os.path.expanduser("~")
-selfmemory_dir = os.environ.get("SELFMEMORY_DIR") or os.path.join(
-    home_dir, ".selfmemory"
-)
+# Set up the directory path using pathlib
+home_dir = Path.home()
+selfmemory_dir = Path(os.environ.get("SELFMEMORY_DIR") or (home_dir / ".selfmemory"))
 
 
 class AuthConfig(BaseModel):
@@ -171,7 +169,7 @@ class SelfMemoryConfig(BaseModel):
 
     history_db_path: str = Field(
         description="Path to the history database",
-        default=os.path.join(selfmemory_dir, "history.db"),
+        default=str(selfmemory_dir / "history.db"),
     )
     version: str = Field(
         description="The version of the API",

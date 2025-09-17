@@ -89,9 +89,8 @@ class QdrantConfig(BaseModel):
     @validator("port")
     def validate_port(cls, v):
         """Validate port number."""
-        if v is not None:
-            if v <= 0 or v > 65535:
-                raise ValueError("Port must be between 1 and 65535")
+        if v is not None and (v <= 0 or v > 65535):
+            raise ValueError("Port must be between 1 and 65535")
         return v
 
     @validator("path")
@@ -102,16 +101,15 @@ class QdrantConfig(BaseModel):
             if not v:
                 return None
 
-            # Expand user home directory
-            expanded_path = os.path.expanduser(v)
-
-            # Check if parent directory exists or can be created
+            expanded_path = str(Path(v).expanduser())
             parent_dir = Path(expanded_path).parent
             if not parent_dir.exists():
                 try:
                     parent_dir.mkdir(parents=True, exist_ok=True)
                 except OSError as e:
-                    raise ValueError(f"Cannot create directory {parent_dir}: {e}")
+                    raise ValueError(
+                        f"Cannot create directory {parent_dir}: {e}"
+                    ) from e
 
             return expanded_path
         return v
@@ -177,9 +175,8 @@ class QdrantConfig(BaseModel):
             )
 
         # Validate cloud configuration
-        if url and api_key:
-            if not url.startswith("https://"):
-                raise ValueError("Cloud Qdrant (with API key) requires HTTPS URL")
+        if url and api_key and not url.startswith("https://"):
+            raise ValueError("Cloud Qdrant (with API key) requires HTTPS URL")
 
         return values
 

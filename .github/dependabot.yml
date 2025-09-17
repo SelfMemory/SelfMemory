@@ -5,14 +5,11 @@
 
 version: 2
 updates:
-  - package-ecosystem: "pip" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "pip" # Python dependencies via requirements / pyproject
+    directory: "/"
     schedule:
       interval: "weekly"
-
-version: 2
-updates:
-  - package-ecosystem: "uv" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "uv" # uv lockfile updates (preview support)
+    directory: "/"
     schedule:
       interval: "weekly"
