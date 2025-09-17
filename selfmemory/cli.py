@@ -212,10 +212,10 @@ def stats_command(args):
 
             print(f"🗄️  Storage Type: {stats.get('storage_type', 'unknown')}")
             print(f"👥 Total Users: {stats.get('total_users', 0)}")
-            print(f"🔑 Total API Keys: {stats.get('total_api_keys', 0)}")
-            print(f"🟢 Active API Keys: {stats.get('active_api_keys', 0)}")
 
             if args.verbose:
+                print(f"🔑 Total API Keys: {stats.get('total_api_keys', 0)}")
+                print(f"🟢 Active API Keys: {stats.get('active_api_keys', 0)}")
                 print("\n📋 Detailed Statistics:")
                 import json
 
