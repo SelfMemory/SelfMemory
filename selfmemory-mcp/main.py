@@ -53,6 +53,33 @@ mcp = FastMCP(
 logger.info(f"SelfMemory MCP Server initialized - Core server: {CORE_SERVER_HOST}")
 
 
+def _extract_memory_contents(search_result: dict[str, Any]) -> list[str]:
+    """Extract only content strings from search results for LLM consumption.
+
+    Args:
+        search_result: Full search result dictionary from client.search()
+
+    Returns:
+        List of memory content strings, empty list if no results
+    """
+    if "results" not in search_result or not search_result["results"]:
+        return []
+
+    return [memory.get("content", "") for memory in search_result["results"]]
+
+
+def _generate_memory_confirmation(content: str) -> str:
+    """Generate a personalized confirmation message for stored memory.
+
+    Args:
+        content: The memory content that was stored
+
+    Returns:
+        Personalized confirmation message string
+    """
+    return "I learnt more about you with this!"
+
+
 def validate_and_get_client(ctx: Context) -> SelfMemoryClient:
     """
     Validate request and create authenticated SelfMemoryClient.
@@ -99,7 +126,7 @@ def validate_and_get_client(ctx: Context) -> SelfMemoryClient:
 @mcp.tool()
 async def add_memory(
     content: str, ctx: Context, tags: str = "", people: str = "", category: str = ""
-) -> dict[str, Any]:
+) -> str:
     """
     Store new memories with metadata.
 
@@ -110,12 +137,12 @@ async def add_memory(
         category: Optional topic category (e.g., "work", "personal", "learning")
 
     Returns:
-        Dict containing success status and memory details or error information
+        Personalized confirmation message string
 
     Examples:
-        - add_memory("Had a great meeting about the new project", tags="work,meeting", people="Sarah,Mike")
-        - add_memory("Learned about Python decorators today", category="learning")
-        - add_memory("Birthday party this weekend", tags="personal,social", people="Emma")
+        - add_memory("Had a great meeting about the new project", tags="work,meeting", people="Sarah,Mike") -> "I learnt more about you with this!"
+        - add_memory("Learned about Python decorators today", category="learning") -> "I learnt more about you with this!"
+        - add_memory("Birthday party this weekend", tags="personal,social", people="Emma") -> "I learnt more about you with this!"
     """
     try:
         logger.info(f"Adding memory: {content[:50]}...")
@@ -136,22 +163,23 @@ async def add_memory(
         # Use the client's underlying httpx client to send the correct format
         response = client.client.post("/api/memories", json=memory_data)
         response.raise_for_status()
-        result = response.json()
 
         # Close the client connection
         client.close()
 
         logger.info("Memory added successfully")
-        return result
+
+        # Generate personalized confirmation message
+        return _generate_memory_confirmation(content)
 
     except ValueError as e:
         error_msg = f"Authentication error: {str(e)}"
         logger.error(error_msg)
-        return {"success": False, "error": error_msg}
+        return f"Authentication failed: {str(e)}"
     except Exception as e:
         error_msg = f"Failed to add memory: {str(e)}"
         logger.error(error_msg)
-        return {"success": False, "error": error_msg}
+        return f"Failed to store memory: {str(e)}"
 
 
 @mcp.tool()
@@ -163,7 +191,7 @@ async def search_memories(
     people: list[str] | None = None,
     category: str | None = None,
     threshold: float | None = None,
-) -> dict[str, Any]:
+) -> list[str]:
     """
     Search memories using semantic search with optional filters.
 
@@ -176,12 +204,12 @@ async def search_memories(
         threshold: Optional minimum similarity score (0.0 to 1.0)
 
     Returns:
-        Dict containing search results with memories and metadata
+        List of memory content strings for LLM consumption
 
     Examples:
-        - search_memories("project meeting")
-        - search_memories("Python", tags=["learning"], limit=5)
-        - search_memories("birthday", people=["Emma"], category="personal")
+        - search_memories("project meeting") -> ["Had a meeting about the new project", ...]
+        - search_memories("Python", tags=["learning"], limit=5) -> ["Learned Python decorators", ...]
+        - search_memories("birthday", people=["Emma"], category="personal") -> ["Emma's birthday party", ...]
     """
     try:
         logger.info(f"Searching memories: '{query}'")
@@ -211,16 +239,17 @@ async def search_memories(
         results_count = len(result.get("results", []))
         logger.info(f"Search completed: {results_count} results found")
 
-        return result
+        # Extract only content strings for LLM consumption
+        return _extract_memory_contents(result)
 
     except ValueError as e:
         error_msg = f"Authentication error: {str(e)}"
         logger.error(error_msg)
-        return {"results": [], "error": error_msg}
+        return []
     except Exception as e:
         error_msg = f"Search failed: {str(e)}"
         logger.error(error_msg)
-        return {"results": [], "error": error_msg}
+        return []
 
 
 def main():
