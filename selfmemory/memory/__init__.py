@@ -6,6 +6,6 @@ for local memory management with zero-setup requirements.
 """
 
 from selfmemory.memory.base import MemoryBase
-from selfmemory.memory.main import Memory
+from selfmemory.memory.main import SelfMemory
 
-__all__ = ["Memory", "MemoryBase"]
+__all__ = ["SelfMemory", "MemoryBase"]

@@ -73,7 +73,7 @@ def _build_filters_and_metadata(
     return processed_metadata, effective_filters
 
 
-class Memory(MemoryBase):
+class SelfMemory(MemoryBase):
     """
     User-scoped Memory class with automatic isolation.
 

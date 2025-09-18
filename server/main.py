@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from pymongo import MongoClient
 
-from selfmemory import Memory
+from selfmemory import SelfMemory
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -45,7 +45,7 @@ DEFAULT_CONFIG = {
 }
 
 # Global Memory instance (selfmemory style - single instance for all users)
-MEMORY_INSTANCE = Memory(config=DEFAULT_CONFIG)
+MEMORY_INSTANCE = SelfMemory(config=DEFAULT_CONFIG)
 
 # FastAPI app
 app = FastAPI(
@@ -94,8 +94,8 @@ def authenticate_api_key(authorization: str = Header(None)) -> str:
 
     api_key = authorization.replace("Bearer ", "")
 
-    # Accept both formats: sk_im_ and inmem_sk_
-    if not (api_key.startswith("sk_im_") or api_key.startswith("inmem_sk_")):
+    # Accept only format: sk_im_
+    if not api_key.startswith("sk_im_"):
         raise HTTPException(status_code=401, detail="Invalid API key format")
 
     try:
@@ -172,7 +172,7 @@ def ping_endpoint(user_id: str = Depends(authenticate_api_key)):
 def set_config(config: dict[str, Any]):
     """Set memory configuration (selfmemory style)."""
     global MEMORY_INSTANCE
-    MEMORY_INSTANCE = Memory(config=config)
+    MEMORY_INSTANCE = SelfMemory(config=config)
     return {"message": "Configuration set successfully"}
 
 
