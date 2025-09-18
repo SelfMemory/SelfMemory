@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from .common.constants import APIConstants
+from ..common.constants import APIConstants
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ class SelfMemoryClient:
                     temp_client.close()
                     logger.info(f"✅ Discovered host: {host}")
                     return host
-            except Exception as e:  # noqa: BLE001 broad for discovery loop; logs then continues
+            except (httpx.RequestError, httpx.TimeoutException, ConnectionError) as e:
                 logger.debug(f"Host {host} failed: {e}")
             finally:
                 with suppress(BaseException):

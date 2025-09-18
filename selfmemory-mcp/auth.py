@@ -11,7 +11,7 @@ import os
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 
-from selfmemory.client import SelfMemoryClient
+from selfmemory.client.main import SelfMemoryClient
 
 logger = logging.getLogger(__name__)
 

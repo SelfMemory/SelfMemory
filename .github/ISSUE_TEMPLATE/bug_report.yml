@@ -84,9 +84,9 @@ body:
       description: If applicable, provide a minimal code example that reproduces the issue.
       render: python
       placeholder: |
-        from selfmemory import Memory
+        from selfmemory import SelfMemory
 
-        memory = Memory()
+        memory = SelfMemory()
         # Your code that reproduces the bug
 
   - type: textarea

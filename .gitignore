@@ -84,6 +84,11 @@ instance/
 # Scrapy stuff:
 .scrapy
 
+# AI
+/.claude/
+/.clinerules/
+.cursorrules/
+
 # Sphinx documentation
 docs/_build/
 

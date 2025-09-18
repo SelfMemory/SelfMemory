@@ -99,7 +99,7 @@ SelfMemory handles sensitive memory data and implements several security measure
 ```python
 # Good: Use environment variables
 import os
-api_key = os.getenv("INMEMORY_API_KEY")
+api_key = os.getenv("API_KEY")
 
 # Bad: Hardcoded in source code
 api_key = "im_12345..."  # Never do this
@@ -122,8 +122,8 @@ config = SelfMemoryConfig(
 **File Permissions:**
 ```bash
 # Ensure data directory is secure
-chmod 700 ~/.inmemory/
-chmod 600 ~/.inmemory/config.yaml
+chmod 700 ~/.selfmemory/
+chmod 600 ~/.selfmemory/config.yaml
 ```
 
 ### For Developers

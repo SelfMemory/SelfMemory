@@ -1,14 +1,14 @@
-# Contributing to InMemory
+# Contributing to SelfMemory
 
-We welcome contributions to InMemory! This document provides guidelines for contributing to the project.
+We welcome contributions to SelfMemory! This document provides guidelines for contributing to the project.
 
 ## 🚀 Quick Start
 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/yourusername/inmemory.git
-   cd inmemory
+   git clone https://github.com/selfmemory/selfmemory.git
+   cd selfmemory
    ```
 3. **Set up development environment**:
    ```bash
@@ -62,7 +62,7 @@ pytest tests/integration/   # Integration tests
 pytest tests/examples/      # README example validation
 
 # Run with coverage
-pytest --cov=inmemory --cov-report=html
+pytest --cov=selfmemory --cov-report=html
 ```
 
 **Test Requirements:**
@@ -173,8 +173,8 @@ git commit -m "feat!: redesign configuration API"
 ## 🏗️ Project Structure
 
 ```
-inmemory/
-├── inmemory/           # Core package
+selfmemory/
+├── selfmemory/           # Core package
 │   ├── __init__.py     # Package exports
 │   ├── memory.py       # Main Memory class
 │   ├── client.py       # Managed service client
@@ -244,7 +244,7 @@ Steps to reproduce the behavior:
 What you expected to happen.
 
 **Environment:**
-- InMemory version: [e.g. 0.1.0]
+- SelfMemory version: [e.g. 0.1.0]
 - Python version: [e.g. 3.12.0]
 - Operating System: [e.g. macOS 14.0]
 - Storage backend: [e.g. file, mongodb]
@@ -337,12 +337,12 @@ Contributors are recognized in:
 
 ## 📄 License
 
-By contributing to InMemory, you agree that your contributions will be licensed under the [Apache 2.0 License](LICENSE.txt).
+By contributing to SelfMemory, you agree that your contributions will be licensed under the [Apache 2.0 License](LICENSE.txt).
 
 ---
 
 ## 🙏 Thank You
 
-Thank you for your interest in contributing to InMemory! Your contributions help make this project better for everyone. If you have questions about contributing, please don't hesitate to ask in GitHub Discussions or open an issue.
+Thank you for your interest in contributing to SelfMemory! Your contributions help make this project better for everyone. If you have questions about contributing, please don't hesitate to ask in GitHub Discussions or open an issue.
 
 **Happy coding!** 🚀

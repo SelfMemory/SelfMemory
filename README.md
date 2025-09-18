@@ -25,10 +25,10 @@ pip install selfmemory
 ```
 
 ```python
-from selfmemory import Memory
+from selfmemory import SelfMemory
 
 # Works immediately - no setup required!
-memory = Memory()
+memory = SelfMemory()
 
 # Add memories with metadata
 memory.add(
@@ -114,12 +114,12 @@ Server runs on http://localhost:8081 with endpoints:
 ### Memory Class
 
 ```python
-from selfmemory import Memory
+from selfmemory import SelfMemory
 
 # Initialize with different backends
-memory = Memory()                        # Auto-detect (file by default)
-memory = Memory(storage_type="file")     # Force file storage
-memory = Memory(storage_type="mongodb")  # Force MongoDB (requires deps)
+memory = SelfMemory()                        # Auto-detect (file by default)
+memory = SelfMemory(storage_type="file")     # Force file storage
+memory = SelfMemory(storage_type="mongodb")  # Force MongoDB (requires deps)
 
 # Memory operations
 result = memory.add(content, user_id, tags=None, people_mentioned=None, topic_category=None)
@@ -286,7 +286,7 @@ selfmemory init
 
 ### Personal AI Assistant
 ```python
-from selfmemory import Memory
+from selfmemory import SelfMemory
 from openai import OpenAI
 
 class PersonalAssistant:
@@ -317,7 +317,7 @@ class PersonalAssistant:
 
 ### Customer Support Bot
 ```python
-from selfmemory import Memory
+from selfmemory import SelfMemory
 
 class SupportBot:
     def __init__(self):

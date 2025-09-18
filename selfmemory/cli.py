@@ -14,7 +14,7 @@ from .config import (
     create_sample_configs,
     load_config,
 )
-from .memory import Memory
+from .memory import SelfMemory
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def init_command(args):
 
     # Test basic functionality
     try:
-        memory = Memory()
+        memory = SelfMemory()
         test_user = args.user or "test_user"
 
         # Test adding a memory
@@ -119,7 +119,9 @@ def test_command(args):
     try:
         # Test with specified storage type or auto-detect
         memory = (
-            Memory(storage_type=args.storage_type) if args.storage_type else Memory()
+            SelfMemory(storage_type=args.storage_type)
+            if args.storage_type
+            else SelfMemory()
         )
 
         test_user = args.user or "cli_test_user"
@@ -202,7 +204,9 @@ def stats_command(args):
     """Show storage statistics."""
     try:
         memory = (
-            Memory(storage_type=args.storage_type) if args.storage_type else Memory()
+            SelfMemory(storage_type=args.storage_type)
+            if args.storage_type
+            else SelfMemory()
         )
 
         print("📊 SelfMemory Storage Statistics:")
@@ -215,7 +219,7 @@ def stats_command(args):
 
             if args.verbose:
                 # Omitted logging of total and active API keys to avoid exposing sensitive information.
-                
+
                 print("\n📋 Detailed Statistics:")
                 import json
 
