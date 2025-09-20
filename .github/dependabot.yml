@@ -1,15 +1,215 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# Enhanced Dependabot configuration for SelfMemory project
+# Comprehensive dependency management for multi-package Python project with MCP server
+# Documentation: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
+
 updates:
-  - package-ecosystem: "pip" # Python dependencies via requirements / pyproject
+  # Main Python package (selfmemory-core) - Core deps every 2 days
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    versioning-strategy: "increase-if-necessary"
+    labels:
+      - "dependencies"
+      - "python"
+      - "core"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      # Core framework dependencies (every 2 days via cooldown)
+      core-framework:
+        patterns:
+          - "fastapi*"
+          - "uvicorn*"
+          - "starlette*"
+          - "pydantic*"
+          - "httpx*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Vector database and AI dependencies (every 2 days)
+      ai-vector:
+        patterns:
+          - "qdrant-client*"
+          - "chromadb*"
+          - "ollama*"
+          - "openai*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Security and authentication (daily - no cooldown)
+      security:
+        patterns:
+          - "cryptography*"
+          - "authlib*"
+          - "google-auth*"
+          - "argon2-cffi*"
+        update-types:
+          - "patch"
+
+      # Development and testing tools (every 3 days via cooldown)
+      dev-tools:
+        dependency-type: "development"
+        patterns:
+          - "pytest*"
+          - "ruff*"
+          - "pre-commit*"
+          - "build*"
+          - "twine*"
+        update-types:
+          - "minor"
+          - "patch"
+    cooldown:
+      default-days: 2  # Core dependencies every 2 days
+      include:
+        - "fastapi*"
+        - "uvicorn*"
+        - "starlette*"
+        - "pydantic*"
+        - "httpx*"
+        - "qdrant-client*"
+        - "chromadb*"
+        - "ollama*"
+        - "openai*"
+        - "pytest*"
+        - "ruff*"
+        - "pre-commit*"
+        - "build*"
+        - "twine*"
+      exclude:
+        # Security dependencies get daily updates (no cooldown)
+        - "cryptography*"
+        - "authlib*"
+        - "google-auth*"
+        - "argon2-cffi*"
+    ignore:
+      # Ignore major version updates for critical dependencies that need manual review
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "qdrant-client"
+        update-types: ["version-update:semver-major"]
+
+  # UV lockfile updates for main package - every 2 days
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "10:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "uv-lockfile"
+      - "core"
+    commit-message:
+      prefix: "deps(uv)"
+      include: "scope"
+    cooldown:
+      default-days: 2  # Every 2 days
+
+  # MCP subproject Python dependencies - every 2-3 days
+  - package-ecosystem: "pip"
+    directory: "/selfmemory-mcp"
+    schedule:
+      interval: "daily"
+      time: "11:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    versioning-strategy: "increase-if-necessary"
+    labels:
+      - "dependencies"
+      - "python"
+      - "mcp"
+    commit-message:
+      prefix: "deps(mcp)"
+      include: "scope"
+    groups:
+      # MCP and server dependencies
+      mcp-server:
+        patterns:
+          - "mcp*"
+          - "fastmcp*"
+          - "fastapi*"
+          - "uvicorn*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Common utilities for MCP
+      mcp-utils:
+        patterns:
+          - "pydantic*"
+          - "httpx*"
+          - "python-dotenv*"
+          - "cryptography*"
+        update-types:
+          - "minor"
+          - "patch"
+    cooldown:
+      default-days: 2  # Most MCP dependencies every 2 days
+      exclude:
+        # Security dependencies get daily updates
+        - "cryptography*"
+    ignore:
+      # MCP is still evolving, be careful with major updates
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions workflow dependencies - weekly (as requested)
+  - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-  - package-ecosystem: "uv" # uv lockfile updates (preview support)
+      day: "monday"
+      time: "12:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci-cd"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      # GitHub Actions updates
+      actions:
+        patterns:
+          - "actions/*"
+          - "github/*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Docker dependencies (if any Dockerfiles exist) - weekly
+  - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "tuesday"
+      time: "13:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "docker"
+      include: "scope"
+    ignore:
+      # Only allow patch and minor updates for base images
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+# Global settings for better PR management
+# Note: These settings help reduce noise and improve maintainability
