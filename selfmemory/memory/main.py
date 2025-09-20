@@ -546,8 +546,6 @@ class SelfMemory(MemoryBase):
             logger.error(f"Failed to delete all memories for user '{user_id}': {e}")
             return {"success": False, "error": str(e)}
 
-    # Helper Methods (selfmemory Style)
-
     def _format_results(
         self, results, include_metadata: bool = True, include_score: bool = True
     ) -> list[dict[str, Any]]:
