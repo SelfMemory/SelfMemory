@@ -16,6 +16,10 @@
 - **🌐 Two Usage Modes**: Direct library usage OR REST API server
 - **💼 Dashboard Ready**: MongoDB authentication + clean REST endpoints
 
+# 📁 Resources
+
+Access decks, logos, and other resources here: [Google Drive Folder](https://drive.google.com/drive/folders/1paB9DkpPGv58_MC3P5C1el_Bw7lzYh-3?usp=drive_link)
+
 ## 🚀 Quick Start
 
 ### Zero-Setup Library Usage

@@ -28,27 +28,27 @@ home_dir = Path.home()
 selfmemory_dir = Path(os.environ.get("SELFMEMORY_DIR") or (home_dir / ".selfmemory"))
 
 
-class AuthConfig(BaseModel):
-    """Configuration for authentication."""
+# class AuthConfig(BaseModel):
+#     """Configuration for authentication."""
 
-    type: str = Field(default="simple", description="Authentication type")
-    default_user: str | None = Field(
-        default="default_user", description="Default user for simple auth"
-    )
-    require_api_key: bool = Field(
-        default=False, description="Whether API key is required"
-    )
+#     type: str = Field(default="simple", description="Authentication type")
+#     # default_user: str | None = Field(
+#     #     default="default_user", description="Default user for simple auth"
+#     # )
+#     # require_api_key: bool = Field(
+#     #     default=False, description="Whether API key is required"
+#     # )
 
-    # OAuth configuration
-    google_client_id: str | None = Field(default=None)
-    google_client_secret: str | None = Field(default=None)
+#     # OAuth configuration
+#     google_client_id: str | None = Field(default=None)
+#     google_client_secret: str | None = Field(default=None)
 
-    @validator("type")
-    def validate_auth_type(cls, v):
-        supported_types = ["simple", "oauth", "api_key"]
-        if v not in supported_types:
-            raise ValueError(f"Auth type must be one of: {supported_types}")
-        return v
+#     @validator("type")
+#     def validate_auth_type(cls, v):
+#         supported_types = ["simple", "oauth", "api_key"]
+#         if v not in supported_types:
+#             raise ValueError(f"Auth type must be one of: {supported_types}")
+#         return v
 
 
 class VectorStoreConfig(BaseModel):
@@ -62,7 +62,6 @@ class VectorStoreConfig(BaseModel):
     # Simple provider registry (selfmemory style)
     _provider_configs: dict[str, str] = {
         "qdrant": "QdrantConfig",
-        "chroma": "ChromaConfig",
         "chromadb": "ChromaConfig",
         "pinecone": "PineconeConfig",
         "weaviate": "WeaviateConfig",
@@ -162,19 +161,19 @@ class ServerConfig(BaseModel):
 class SelfMemoryConfig(BaseModel):
     """Main configuration for SelfMemory."""
 
-    auth: AuthConfig = Field(default_factory=AuthConfig)
+    # auth: AuthConfig = Field(default_factory=AuthConfig)
     vector_store: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
 
-    history_db_path: str = Field(
-        description="Path to the history database",
-        default=str(selfmemory_dir / "history.db"),
-    )
-    version: str = Field(
-        description="The version of the API",
-        default="v1.0",
-    )
+    # history_db_path: str = Field(
+    #     description="Path to the history database",
+    #     default=str(selfmemory_dir / "history.db"),
+    # )
+    # version: str = Field(
+    #     description="The version of the API",
+    #     default="v1.0",
+    # )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary."""
@@ -280,24 +279,24 @@ def _load_env_config() -> dict[str, Any]:
     """
     env_config = {}
 
-    # Authentication configuration
-    if os.getenv("SELFMEMORY_AUTH_TYPE"):
-        env_config.setdefault("auth", {})["type"] = os.getenv("SELFMEMORY_AUTH_TYPE")
+    # # Authentication configuration
+    # if os.getenv("SELFMEMORY_AUTH_TYPE"):
+    #     env_config.setdefault("auth", {})["type"] = os.getenv("SELFMEMORY_AUTH_TYPE")
 
-    if os.getenv("SELFMEMORY_DEFAULT_USER"):
-        env_config.setdefault("auth", {})["default_user"] = os.getenv(
-            "SELFMEMORY_DEFAULT_USER"
-        )
+    # if os.getenv("SELFMEMORY_DEFAULT_USER"):
+    #     env_config.setdefault("auth", {})["default_user"] = os.getenv(
+    #         "SELFMEMORY_DEFAULT_USER"
+    #     )
 
-    if os.getenv("GOOGLE_CLIENT_ID"):
-        env_config.setdefault("auth", {})["google_client_id"] = os.getenv(
-            "GOOGLE_CLIENT_ID"
-        )
+    # if os.getenv("GOOGLE_CLIENT_ID"):
+    #     env_config.setdefault("auth", {})["google_client_id"] = os.getenv(
+    #         "GOOGLE_CLIENT_ID"
+    #     )
 
-    if os.getenv("GOOGLE_CLIENT_SECRET"):
-        env_config.setdefault("auth", {})["google_client_secret"] = os.getenv(
-            "GOOGLE_CLIENT_SECRET"
-        )
+    # if os.getenv("GOOGLE_CLIENT_SECRET"):
+    #     env_config.setdefault("auth", {})["google_client_secret"] = os.getenv(
+    #         "GOOGLE_CLIENT_SECRET"
+    #     )
 
     # Server configuration
     if os.getenv("SELFMEMORY_HOST"):
@@ -327,18 +326,18 @@ def get_default_config() -> SelfMemoryConfig:
     return SelfMemoryConfig()
 
 
-def get_enterprise_config() -> SelfMemoryConfig:
-    """
-    Get default enterprise configuration with OAuth authentication.
+# def get_enterprise_config() -> SelfMemoryConfig:
+#     """
+#     Get default enterprise configuration with OAuth authentication.
 
-    Returns:
-        SelfMemoryConfig: Enterprise configuration with OAuth
-    """
-    return SelfMemoryConfig(
-        auth=AuthConfig(
-            type="oauth",
-            require_api_key=True,
-            google_client_id=os.getenv("GOOGLE_CLIENT_ID"),
-            google_client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-        ),
-    )
+#     Returns:
+#         SelfMemoryConfig: Enterprise configuration with OAuth
+#     """
+#     return SelfMemoryConfig(
+#         auth=AuthConfig(
+#             type="oauth",
+#             require_api_key=True,
+#             google_client_id=os.getenv("GOOGLE_CLIENT_ID"),
+#             google_client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+#         ),
+#     )
