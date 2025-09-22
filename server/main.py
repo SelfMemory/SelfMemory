@@ -208,7 +208,7 @@ def add_memory(
             tags=tags,
             people_mentioned=people_mentioned,
             topic_category=topic_category,
-            metadata=metadata,
+            # metadata=metadata,
         )
         return JSONResponse(content=response)
     except Exception as e:
