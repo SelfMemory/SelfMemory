@@ -2,7 +2,7 @@ import hashlib
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -10,8 +10,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from pymongo import MongoClient
+from bson import ObjectId
 
 from selfmemory import SelfMemory
+
+
+# Authentication context for multi-tenant support
+class AuthContext(NamedTuple):
+    user_id: str
+    project_id: str | None = None
+    organization_id: str | None = None
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -86,9 +94,26 @@ class SearchRequest(BaseModel):
     filters: dict[str, Any] | None = None
 
 
-# Database-based authentication (same as dashboard)
-def authenticate_api_key(authorization: str = Header(None)) -> str:
-    """Database-based API key authentication - looks up real user ID from MongoDB."""
+# Multi-tenant Pydantic models
+class OrganizationCreate(BaseModel):
+    name: str = Field(..., description="Organization name.", min_length=1, max_length=100)
+
+
+class ProjectCreate(BaseModel):
+    name: str = Field(..., description="Project name.", min_length=1, max_length=100)
+    organization_id: str = Field(..., description="Organization ID this project belongs to.")
+
+
+class ApiKeyCreate(BaseModel):
+    name: str = Field(..., description="API key name.", min_length=1, max_length=100)
+    project_id: str = Field(..., description="Project ID this API key is scoped to.")
+    permissions: list[str] = Field(default=["read", "write"], description="API key permissions.")
+    expires_in_days: int | None = Field(default=None, description="API key expiration in days (optional).")
+
+
+# Database-based authentication with multi-tenant support
+def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
+    """Database-based API key authentication - returns full multi-tenant context from MongoDB."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization header required")
 
@@ -138,15 +163,41 @@ def authenticate_api_key(authorization: str = Header(None)) -> str:
             )
             raise HTTPException(status_code=401, detail="User account inactive")
 
+        # Extract multi-tenant context from API key
+        user_id = str(stored_key["userId"])
+        project_id = None
+        organization_id = None
+
+        # Get project context if API key has projectId
+        if stored_key.get("projectId"):
+            project = mongo_db.projects.find_one({"_id": stored_key["projectId"]})
+            if project:
+                project_id = str(project["_id"])
+                organization_id = str(project["organizationId"])
+                
+                # Verify user has access to this project
+                if project["ownerId"] != stored_key["userId"]:
+                    logging.warning(f"❌ User {user_id} attempted to access project {project_id} they don't own")
+                    raise HTTPException(status_code=403, detail="Access denied to project")
+                
+                logging.info(f"✅ Multi-tenant context: user={user.get('email', user_id)}, project={project_id}, org={organization_id}")
+            else:
+                logging.warning(f"❌ API key references non-existent project: {stored_key['projectId']}")
+                raise HTTPException(status_code=404, detail="Project not found")
+        else:
+            # Backward compatibility: API key without project context
+            logging.info(f"✅ Legacy context: user={user.get('email', user_id)} (no project context)")
+
         # Update last used timestamp
         mongo_db.api_keys.update_one(
             {"_id": stored_key["_id"]}, {"$set": {"lastUsed": datetime.now()}}
         )
 
-        # Return the real user ID (as string)
-        user_id = str(stored_key["userId"])
-        logging.info(f"✅ API key authenticated for user {user.get('email', user_id)}")
-        return user_id
+        return AuthContext(
+            user_id=user_id,
+            project_id=project_id,
+            organization_id=organization_id
+        )
 
     except HTTPException:
         raise
@@ -155,13 +206,22 @@ def authenticate_api_key(authorization: str = Header(None)) -> str:
         raise HTTPException(status_code=500, detail="Authentication error") from e
 
 
-# API Endpoints (selfmemory exact pattern)
+# Legacy authentication for backward compatibility
+def authenticate_api_key_legacy(authorization: str = Header(None)) -> str:
+    """Legacy authentication that returns only user_id for backward compatibility."""
+    auth_context = authenticate_api_key(authorization)
+    return auth_context.user_id
+
+
+# API Endpoints (enhanced for multi-tenant support)
 @app.get("/api/v1/ping", summary="Ping endpoint for client validation")
-def ping_endpoint(user_id: str = Depends(authenticate_api_key)):
-    """Ping endpoint that returns user info on successful authentication."""
+def ping_endpoint(auth: AuthContext = Depends(authenticate_api_key)):
+    """Ping endpoint that returns user info on successful authentication with multi-tenant context."""
     return {
         "status": "ok",
-        "user_id": user_id,
+        "user_id": auth.user_id,
+        "project_id": auth.project_id,
+        "organization_id": auth.organization_id,
         "key_id": "default",
         "permissions": ["read", "write"],
         "name": "SelfMemory User",
@@ -176,13 +236,13 @@ def set_config(config: dict[str, Any]):
     return {"message": "Configuration set successfully"}
 
 
-@app.post("/api/memories", summary="Create memories")
+@app.post("/api/memories", summary="Create memories with strict API key isolation")
 def add_memory(
-    memory_create: MemoryCreate, user_id: str = Depends(authenticate_api_key)
+    memory_create: MemoryCreate, auth: AuthContext = Depends(authenticate_api_key)
 ):
-    """Store new memories (selfmemory style with user isolation)."""
+    """Store new memories with strict API key-based isolation (no project switching allowed)."""
     if not any(
-        [memory_create.user_id, memory_create.agent_id, memory_create.run_id, user_id]
+        [memory_create.user_id, memory_create.agent_id, memory_create.run_id, auth.user_id]
     ):
         raise HTTPException(
             status_code=400, detail="At least one identifier is required."
@@ -200,48 +260,106 @@ def add_memory(
         tags = metadata.get("tags", "")
         people_mentioned = metadata.get("people_mentioned", "")
         topic_category = metadata.get("topic_category", "")
+        
+        # STRICT ISOLATION: Only use API key's project/organization context
+        # Reject any attempts to specify different project/org in metadata
+        if metadata.get("project_id") and metadata.get("project_id") != auth.project_id:
+            logging.warning(f"❌ ISOLATION VIOLATION: User {auth.user_id} attempted to create memory in project {metadata.get('project_id')} but API key is scoped to {auth.project_id}")
+            raise HTTPException(status_code=403, detail="API key is not authorized for the requested project")
+        
+        if metadata.get("organization_id") and metadata.get("organization_id") != auth.organization_id:
+            logging.warning(f"❌ ISOLATION VIOLATION: User {auth.user_id} attempted to create memory in org {metadata.get('organization_id')} but API key is scoped to {auth.organization_id}")
+            raise HTTPException(status_code=403, detail="API key is not authorized for the requested organization")
 
-        # Use the single global instance with user_id for isolation (selfmemory-core pattern)
+        # Enforce API key's project/organization context (no overrides allowed)
+        if not auth.project_id or not auth.organization_id:
+            logging.error(f"❌ ISOLATION ERROR: API key missing project/organization context for user {auth.user_id}")
+            raise HTTPException(status_code=400, detail="API key must be scoped to a specific project and organization")
+
+        # Use ONLY the API key's isolation context
         response = MEMORY_INSTANCE.add(
             memory_content=memory_content,
-            user_id=user_id or memory_create.user_id,  # Data-level isolation
+            user_id=auth.user_id or memory_create.user_id,  # Multi-tenant isolation
             tags=tags,
             people_mentioned=people_mentioned,
             topic_category=topic_category,
-            # metadata=metadata,
+            project_id=auth.project_id,  # STRICT: Use only API key's project
+            organization_id=auth.organization_id,  # STRICT: Use only API key's organization
         )
+        
+        logging.info(f"✅ Memory created with strict isolation: user={auth.user_id}, project={auth.project_id}, org={auth.organization_id}")
         return JSONResponse(content=response)
     except Exception as e:
         logging.exception("Error in add_memory:")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.get("/api/memories", summary="Get memories")
-def get_all_memories(user_id: str = Depends(authenticate_api_key)):
-    """Retrieve stored memories (selfmemory style)."""
+@app.get("/api/memories", summary="Get memories with strict API key isolation")
+def get_all_memories(
+    project_id: str | None = None,
+    organization_id: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    auth: AuthContext = Depends(authenticate_api_key)
+):
+    """Retrieve stored memories with strict API key-based isolation (no project switching allowed)."""
     try:
-        return MEMORY_INSTANCE.get_all(user_id=user_id)
+        # STRICT ISOLATION: Reject any attempts to specify different project/org in query params
+        if project_id and project_id != auth.project_id:
+            logging.warning(f"❌ ISOLATION VIOLATION: User {auth.user_id} attempted to access project {project_id} but API key is scoped to {auth.project_id}")
+            raise HTTPException(status_code=403, detail="API key is not authorized for the requested project")
+        
+        if organization_id and organization_id != auth.organization_id:
+            logging.warning(f"❌ ISOLATION VIOLATION: User {auth.user_id} attempted to access org {organization_id} but API key is scoped to {auth.organization_id}")
+            raise HTTPException(status_code=403, detail="API key is not authorized for the requested organization")
+
+        # Enforce API key's project/organization context (no overrides allowed)
+        if not auth.project_id or not auth.organization_id:
+            logging.error(f"❌ ISOLATION ERROR: API key missing project/organization context for user {auth.user_id}")
+            raise HTTPException(status_code=400, detail="API key must be scoped to a specific project and organization")
+
+        # Use ONLY the API key's isolation context
+        result = MEMORY_INSTANCE.get_all(
+            user_id=auth.user_id,
+            project_id=auth.project_id,  # STRICT: Use only API key's project
+            organization_id=auth.organization_id,  # STRICT: Use only API key's organization
+            limit=limit,
+            offset=offset
+        )
+        
+        logging.info(f"✅ Retrieved memories with strict isolation: user={auth.user_id}, project={auth.project_id}, org={auth.organization_id}")
+        return result
     except Exception as e:
         logging.exception("Error in get_all_memories:")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.get("/api/memories/{memory_id}", summary="Get a memory")
-def get_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
-    """Retrieve a specific memory by ID (selfmemory style)."""
+@app.get("/api/memories/{memory_id}", summary="Get a memory (legacy endpoint)")
+def get_memory(memory_id: str, auth: AuthContext = Depends(authenticate_api_key)):
+    """Retrieve a specific memory by ID - Note: Individual memory retrieval uses legacy user_id only."""
     try:
-        return MEMORY_INSTANCE.get(memory_id, user_id=user_id)
+        return MEMORY_INSTANCE.get(memory_id, user_id=auth.user_id)
     except Exception as e:
         logging.exception("Error in get_memory:")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.post("/api/memories/search", summary="Search memories")
+@app.post("/api/memories/search", summary="Search memories with multi-tenant isolation")
 def search_memories(
-    search_req: SearchRequest, user_id: str = Depends(authenticate_api_key)
+    search_req: SearchRequest, auth: AuthContext = Depends(authenticate_api_key)
 ):
-    """Search for memories (selfmemory style)."""
+    """Search for memories with multi-tenant isolation (enhanced selfmemory style)."""
     try:
+        # STRICT PROJECT CONTEXT VALIDATION - Reject searches without project context
+        if not auth.project_id or not auth.organization_id:
+            logging.warning(f"❌ Search rejected: Missing project context for user {auth.user_id}")
+            raise HTTPException(
+                status_code=400, 
+                detail="Search requires valid project context. Please select a project."
+            )
+
+        logging.info(f"🔍 Search initiated for user={auth.user_id}, project={auth.project_id}, org={auth.organization_id}")
+
         # Build base parameters - exclude query, filters, and None values
         params = {
             k: v
@@ -249,9 +367,10 @@ def search_memories(
             if v is not None and k not in ["query", "filters"]
         }
 
-        # Override with authenticated user_id if available (takes precedence)
-        if user_id:
-            params["user_id"] = user_id
+        # Use authenticated multi-tenant context
+        params["user_id"] = auth.user_id
+        params["project_id"] = auth.project_id  # Project-level isolation
+        params["organization_id"] = auth.organization_id  # Organization-level isolation
 
         # Handle filters parameter by extracting supported filter options
         if search_req.filters:
@@ -273,10 +392,8 @@ def search_memories(
 
                     # Handle special cases for data type conversion
                     if filter_key == "tags" and isinstance(filter_value, list):
-                        # Convert list of tags to comma-separated string if needed
-                        params[filter_key] = (
-                            filter_value  # Keep as list - Memory.search() expects list
-                        )
+                        # Keep as list - Memory.search() expects list
+                        params[filter_key] = filter_value
                     elif filter_key == "people_mentioned" and isinstance(
                         filter_value, list
                     ):
@@ -285,16 +402,16 @@ def search_memories(
                     else:
                         params[filter_key] = filter_value
 
-        # Call search with query and unpacked params (selfmemory pattern)
+        # Call search with multi-tenant context (enhanced selfmemory pattern)
         return MEMORY_INSTANCE.search(query=search_req.query, **params)
     except Exception as e:
         logging.exception("Error in search_memories:")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.delete("/api/memories/{memory_id}", summary="Delete a memory")
-def delete_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
-    """Delete a specific memory (selfmemory style)."""
+@app.delete("/api/memories/{memory_id}", summary="Delete a memory (legacy endpoint)")
+def delete_memory(memory_id: str, auth: AuthContext = Depends(authenticate_api_key)):
+    """Delete a specific memory - Note: Individual memory deletion uses legacy approach."""
     try:
         MEMORY_INSTANCE.delete(memory_id)
         return {"message": "Memory deleted successfully"}
@@ -303,14 +420,505 @@ def delete_memory(memory_id: str, user_id: str = Depends(authenticate_api_key)):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.delete("/api/memories", summary="Delete all memories")
-def delete_all_memories(user_id: str = Depends(authenticate_api_key)):
-    """Delete all memories for a user (selfmemory style)."""
+@app.delete("/api/memories", summary="Delete all memories with multi-tenant isolation")
+def delete_all_memories(auth: AuthContext = Depends(authenticate_api_key)):
+    """Delete all memories with multi-tenant isolation (enhanced selfmemory style)."""
     try:
-        MEMORY_INSTANCE.delete_all(user_id=user_id)
-        return {"message": "All memories deleted"}
+        result = MEMORY_INSTANCE.delete_all(
+            user_id=auth.user_id,
+            project_id=auth.project_id,  # Project-level isolation
+            organization_id=auth.organization_id,  # Organization-level isolation
+        )
+        return {
+            "message": result.get("message", "All memories deleted"),
+            "deleted_count": result.get("deleted_count", 0)
+        }
     except Exception as e:
         logging.exception("Error in delete_all_memories:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# Helper function for ensuring default organization and project
+def ensure_default_org_and_project(user_id: str) -> tuple[str, str]:
+    """Ensure user has default organization and project, creating them if needed."""
+    try:
+        user_obj_id = ObjectId(user_id)
+        
+        # Check if user already has a personal organization
+        personal_org = mongo_db.organizations.find_one({
+            "ownerId": user_obj_id,
+            "type": "personal"
+        })
+        
+        if not personal_org:
+            # Create personal organization
+            org_doc = {
+                "name": "Personal Organization",
+                "ownerId": user_obj_id,
+                "type": "personal",
+                "createdAt": datetime.now(),
+                "updatedAt": datetime.now()
+            }
+            org_result = mongo_db.organizations.insert_one(org_doc)
+            org_id = org_result.inserted_id
+            logging.info(f"Created personal organization for user {user_id}")
+        else:
+            org_id = personal_org["_id"]
+        
+        # Check if default project exists
+        default_project = mongo_db.projects.find_one({
+            "organizationId": org_id,
+            "ownerId": user_obj_id,
+            "name": "Default Project"
+        })
+        
+        if not default_project:
+            # Create default project
+            project_doc = {
+                "name": "Default Project",
+                "organizationId": org_id,
+                "ownerId": user_obj_id,
+                "createdAt": datetime.now(),
+                "updatedAt": datetime.now()
+            }
+            project_result = mongo_db.projects.insert_one(project_doc)
+            project_id = project_result.inserted_id
+            logging.info(f"Created default project for user {user_id}")
+        else:
+            project_id = default_project["_id"]
+        
+        return str(org_id), str(project_id)
+        
+    except Exception as e:
+        logging.error(f"Error ensuring default org/project for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create default organization and project")
+
+
+# Organization Management Endpoints
+@app.get("/api/organizations", summary="List user's organizations")
+def list_organizations(auth: AuthContext = Depends(authenticate_api_key)):
+    """List all organizations the user has access to."""
+    try:
+        user_obj_id = ObjectId(auth.user_id)
+        
+        # Get user's organizations (they own)
+        organizations = list(mongo_db.organizations.find({
+            "ownerId": user_obj_id
+        }))
+        
+        # Convert ObjectId to string for JSON serialization
+        for org in organizations:
+            org["_id"] = str(org["_id"])
+            org["ownerId"] = str(org["ownerId"])
+        
+        return {"organizations": organizations}
+        
+    except Exception as e:
+        logging.exception("Error in list_organizations:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/organizations", summary="Create new organization")
+def create_organization(
+    org_create: OrganizationCreate, auth: AuthContext = Depends(authenticate_api_key)
+):
+    """Create a new organization."""
+    try:
+        user_obj_id = ObjectId(auth.user_id)
+        
+        # Check if organization name already exists for this user
+        existing_org = mongo_db.organizations.find_one({
+            "name": org_create.name,
+            "ownerId": user_obj_id
+        })
+        
+        if existing_org:
+            raise HTTPException(status_code=400, detail="Organization name already exists")
+        
+        # Create organization
+        org_doc = {
+            "name": org_create.name,
+            "ownerId": user_obj_id,
+            "type": "custom",  # User-created organizations are "custom"
+            "createdAt": datetime.now(),
+            "updatedAt": datetime.now()
+        }
+        
+        result = mongo_db.organizations.insert_one(org_doc)
+        org_id = str(result.inserted_id)
+        
+        logging.info(f"Created organization '{org_create.name}' for user {auth.user_id}")
+        
+        return {
+            "organization_id": org_id,
+            "name": org_create.name,
+            "message": "Organization created successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("Error in create_organization:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/api/organizations/{org_id}", summary="Get organization details")
+def get_organization(org_id: str, auth: AuthContext = Depends(authenticate_api_key)):
+    """Get details of a specific organization."""
+    try:
+        user_obj_id = ObjectId(auth.user_id)
+        org_obj_id = ObjectId(org_id)
+        
+        # Get organization and verify ownership
+        organization = mongo_db.organizations.find_one({
+            "_id": org_obj_id,
+            "ownerId": user_obj_id
+        })
+        
+        if not organization:
+            raise HTTPException(status_code=404, detail="Organization not found")
+        
+        # Convert ObjectId to string
+        organization["_id"] = str(organization["_id"])
+        organization["ownerId"] = str(organization["ownerId"])
+        
+        return organization
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("Error in get_organization:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# Project Management Endpoints
+@app.get("/api/projects", summary="List user's projects")
+def list_projects(auth: AuthContext = Depends(authenticate_api_key)):
+    """List all projects the user has access to."""
+    try:
+        user_obj_id = ObjectId(auth.user_id)
+        
+        # Get user's projects (they own)
+        projects = list(mongo_db.projects.find({
+            "ownerId": user_obj_id
+        }))
+        
+        # Convert ObjectId to string for JSON serialization
+        for project in projects:
+            project["_id"] = str(project["_id"])
+            project["ownerId"] = str(project["ownerId"])
+            project["organizationId"] = str(project["organizationId"])
+        
+        return {"projects": projects}
+        
+    except Exception as e:
+        logging.exception("Error in list_projects:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/projects", summary="Create new project")
+def create_project(
+    project_create: ProjectCreate, auth: AuthContext = Depends(authenticate_api_key)
+):
+    """Create a new project."""
+    try:
+        user_obj_id = ObjectId(auth.user_id)
+        org_obj_id = ObjectId(project_create.organization_id)
+        
+        # Verify user owns the organization
+        organization = mongo_db.organizations.find_one({
+            "_id": org_obj_id,
+            "ownerId": user_obj_id
+        })
+        
+        if not organization:
+            raise HTTPException(status_code=404, detail="Organization not found or access denied")
+        
+        # Check if project name already exists in this organization
+        existing_project = mongo_db.projects.find_one({
+            "name": project_create.name,
+            "organizationId": org_obj_id
+        })
+        
+        if existing_project:
+            raise HTTPException(status_code=400, detail="Project name already exists in this organization")
+        
+        # Create project
+        project_doc = {
+            "name": project_create.name,
+            "organizationId": org_obj_id,
+            "ownerId": user_obj_id,
+            "createdAt": datetime.now(),
+            "updatedAt": datetime.now()
+        }
+        
+        result = mongo_db.projects.insert_one(project_doc)
+        project_id = str(result.inserted_id)
+        
+        logging.info(f"Created project '{project_create.name}' for user {auth.user_id}")
+        
+        return {
+            "project_id": project_id,
+            "name": project_create.name,
+            "organization_id": project_create.organization_id,
+            "message": "Project created successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("Error in create_project:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/api/projects/{project_id}", summary="Get project details")
+def get_project(project_id: str, auth: AuthContext = Depends(authenticate_api_key)):
+    """Get details of a specific project."""
+    try:
+        user_obj_id = ObjectId(auth.user_id)
+        project_obj_id = ObjectId(project_id)
+        
+        # Get project and verify ownership
+        project = mongo_db.projects.find_one({
+            "_id": project_obj_id,
+            "ownerId": user_obj_id
+        })
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Convert ObjectId to string
+        project["_id"] = str(project["_id"])
+        project["ownerId"] = str(project["ownerId"])
+        project["organizationId"] = str(project["organizationId"])
+        
+        return project
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("Error in get_project:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/api/organizations/{org_id}/projects", summary="List projects in organization")
+def list_organization_projects(org_id: str, auth: AuthContext = Depends(authenticate_api_key)):
+    """List all projects in a specific organization."""
+    try:
+        user_obj_id = ObjectId(auth.user_id)
+        org_obj_id = ObjectId(org_id)
+        
+        # Verify user owns the organization
+        organization = mongo_db.organizations.find_one({
+            "_id": org_obj_id,
+            "ownerId": user_obj_id
+        })
+        
+        if not organization:
+            raise HTTPException(status_code=404, detail="Organization not found or access denied")
+        
+        # Get projects in this organization
+        projects = list(mongo_db.projects.find({
+            "organizationId": org_obj_id,
+            "ownerId": user_obj_id
+        }))
+        
+        # Convert ObjectId to string for JSON serialization
+        for project in projects:
+            project["_id"] = str(project["_id"])
+            project["ownerId"] = str(project["ownerId"])
+            project["organizationId"] = str(project["organizationId"])
+        
+        return {"projects": projects}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("Error in list_organization_projects:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# API Key Management Endpoints
+@app.get("/api/projects/{project_id}/api-keys", summary="List API keys for project")
+def list_project_api_keys(project_id: str, auth: AuthContext = Depends(authenticate_api_key)):
+    """List all API keys for a specific project."""
+    try:
+        user_obj_id = ObjectId(auth.user_id)
+        project_obj_id = ObjectId(project_id)
+        
+        # Verify user owns the project
+        project = mongo_db.projects.find_one({
+            "_id": project_obj_id,
+            "ownerId": user_obj_id
+        })
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found or access denied")
+        
+        # Get API keys for this project
+        api_keys = list(mongo_db.api_keys.find({
+            "projectId": project_obj_id,
+            "userId": user_obj_id
+        }))
+        
+        # Convert ObjectId to string and remove sensitive data
+        for key in api_keys:
+            key["_id"] = str(key["_id"])
+            key["userId"] = str(key["userId"])
+            key["projectId"] = str(key["projectId"])
+            # Remove sensitive fields
+            key.pop("keyHash", None)
+            key.pop("api_key", None)  # Legacy field
+        
+        return {"api_keys": api_keys}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("Error in list_project_api_keys:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/projects/{project_id}/api-keys", summary="Create API key for project")
+def create_project_api_key(
+    project_id: str, 
+    key_create: ApiKeyCreate, 
+    auth: AuthContext = Depends(authenticate_api_key)
+):
+    """Create a new API key for a specific project."""
+    try:
+        import secrets
+        import string
+        
+        user_obj_id = ObjectId(auth.user_id)
+        project_obj_id = ObjectId(project_id)
+        
+        # Verify project_id matches the request body
+        if key_create.project_id != project_id:
+            raise HTTPException(status_code=400, detail="Project ID mismatch")
+        
+        # Verify user owns the project
+        project = mongo_db.projects.find_one({
+            "_id": project_obj_id,
+            "ownerId": user_obj_id
+        })
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found or access denied")
+        
+        # Generate API key
+        alphabet = string.ascii_letters + string.digits
+        api_key = "sk_im_" + ''.join(secrets.choice(alphabet) for _ in range(40))
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        key_prefix = api_key[:10] + "..."
+        
+        # Calculate expiration if specified
+        expires_at = None
+        if key_create.expires_in_days:
+            from datetime import timedelta
+            expires_at = datetime.now() + timedelta(days=key_create.expires_in_days)
+        
+        # Create API key document
+        key_doc = {
+            "name": key_create.name,
+            "userId": user_obj_id,
+            "projectId": project_obj_id,
+            "keyHash": key_hash,
+            "keyPrefix": key_prefix,
+            "permissions": key_create.permissions,
+            "isActive": True,
+            "autoGenerated": False,
+            "expiresAt": expires_at,
+            "createdAt": datetime.now(),
+            "lastUsed": None
+        }
+        
+        result = mongo_db.api_keys.insert_one(key_doc)
+        key_id = str(result.inserted_id)
+        
+        logging.info(f"Created API key '{key_create.name}' for project {project_id}")
+        
+        return {
+            "api_key_id": key_id,
+            "name": key_create.name,
+            "api_key": api_key,  # Only returned on creation
+            "key_prefix": key_prefix,
+            "permissions": key_create.permissions,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+            "message": "API key created successfully. Store this key securely - it won't be shown again."
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("Error in create_project_api_key:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# User Initialization Endpoint
+@app.post("/api/initialize", summary="Initialize new user with default org and project")
+def initialize_user(auth: AuthContext = Depends(authenticate_api_key)):
+    """Initialize a new user with default organization, project, and API key."""
+    try:
+        # Ensure default organization and project exist
+        org_id, project_id = ensure_default_org_and_project(auth.user_id)
+        
+        # Check if user already has an API key for the default project
+        existing_key = mongo_db.api_keys.find_one({
+            "userId": ObjectId(auth.user_id),
+            "projectId": ObjectId(project_id),
+            "autoGenerated": True
+        })
+        
+        if existing_key:
+            # User already initialized
+            return {
+                "organization_id": org_id,
+                "project_id": project_id,
+                "api_key_id": str(existing_key["_id"]),
+                "key_prefix": existing_key.get("keyPrefix", "sk_im_..."),
+                "message": "User already initialized"
+            }
+        
+        # Create default API key
+        import secrets
+        import string
+        
+        alphabet = string.ascii_letters + string.digits
+        api_key = "sk_im_" + ''.join(secrets.choice(alphabet) for _ in range(40))
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        key_prefix = api_key[:10] + "..."
+        
+        key_doc = {
+            "name": "Default API Key",
+            "userId": ObjectId(auth.user_id),
+            "projectId": ObjectId(project_id),
+            "keyHash": key_hash,
+            "keyPrefix": key_prefix,
+            "permissions": ["read", "write"],
+            "isActive": True,
+            "autoGenerated": True,
+            "expiresAt": None,
+            "createdAt": datetime.now(),
+            "lastUsed": None
+        }
+        
+        result = mongo_db.api_keys.insert_one(key_doc)
+        key_id = str(result.inserted_id)
+        
+        logging.info(f"Initialized user {auth.user_id} with default org/project/key")
+        
+        return {
+            "organization_id": org_id,
+            "project_id": project_id,
+            "api_key_id": key_id,
+            "api_key": api_key,  # Only returned on creation
+            "key_prefix": key_prefix,
+            "message": "User initialized successfully with default organization, project, and API key"
+        }
+        
+    except Exception as e:
+        logging.exception("Error in initialize_user:")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

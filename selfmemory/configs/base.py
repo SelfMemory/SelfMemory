@@ -17,7 +17,7 @@ try:
 except ImportError:
     _YAML_AVAILABLE = False
 
-from pydantic import BaseModel, Field, model_validator, validator
+from pydantic import BaseModel, Field, model_validator
 
 # Static imports for core providers (always loaded for performance)
 

@@ -13,64 +13,10 @@ from typing import Any
 
 from selfmemory.configs import SelfMemoryConfig
 from selfmemory.memory.base import MemoryBase
+from selfmemory.memory.utils import build_add_metadata, build_search_filters, validate_isolation_context, audit_memory_access
 from selfmemory.utils.factory import EmbeddingFactory, VectorStoreFactory
 
 logger = logging.getLogger(__name__)
-
-
-def _build_filters_and_metadata(
-    *,  # Enforce keyword-only arguments
-    user_id: str,
-    input_metadata: dict[str, Any] | None = None,
-    input_filters: dict[str, Any] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """
-    Build filters and metadata for memory operations (simplified for user-only isolation).
-
-    This function creates user-scoped metadata and filters that ensure complete
-    isolation between users. Only user_id is required since this system doesn't
-    use agent_id or run_id concepts.
-
-    Args:
-        user_id: Required user identifier for memory isolation
-        input_metadata: Optional additional metadata to include
-        input_filters: Optional additional filters to include
-
-    Returns:
-        tuple: (processed_metadata, effective_filters)
-            - processed_metadata: Metadata to store with the memory
-            - effective_filters: Filters to use when querying memories
-
-    Raises:
-        ValueError: If user_id is not provided or is empty
-
-    Examples:
-        >>> metadata, filters = _build_filters_and_metadata(user_id="alice")
-        >>> metadata, filters = _build_filters_and_metadata(
-        ...     user_id="alice",
-        ...     input_metadata={"category": "work"}
-        ... )
-    """
-    # Validate that user_id is provided (required for this system)
-    if not user_id or not isinstance(user_id, str) or not user_id.strip():
-        raise ValueError("user_id is required and must be a non-empty string")
-
-    # Start with input metadata or empty dict
-    processed_metadata = input_metadata.copy() if input_metadata else {}
-
-    # Add user isolation metadata
-    processed_metadata["user_id"] = user_id.strip()
-
-    # Add timestamp for tracking
-    processed_metadata["created_at"] = datetime.now().isoformat()
-
-    # Build effective filters for querying
-    effective_filters = input_filters.copy() if input_filters else {}
-
-    # Add user isolation filter
-    effective_filters["user_id"] = user_id.strip()
-
-    return processed_metadata, effective_filters
 
 
 class SelfMemory(MemoryBase):
@@ -218,10 +164,12 @@ class SelfMemory(MemoryBase):
         tags: str | None = None,
         people_mentioned: str | None = None,
         topic_category: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        project_id: str | None = None,
+        organization_id: str | None = None,
+        # metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
-        Add a new memory to storage with user isolation (selfmemory style).
+        Add a new memory to storage with multi-tenant isolation (selfmemory style).
 
         Args:
             memory_content: The memory text to store
@@ -229,19 +177,33 @@ class SelfMemory(MemoryBase):
             tags: Optional comma-separated tags
             people_mentioned: Optional comma-separated people names
             topic_category: Optional topic category
+            project_id: Optional project identifier for project-level isolation
+            organization_id: Optional organization identifier for org-level isolation
             metadata: Optional additional metadata
 
         Returns:
             Dict: Result information including memory_id and status
 
         Examples:
+            Basic user isolation (backward compatible):
             >>> memory = Memory()
             >>> memory.add("I love pizza", user_id="alice", tags="food,personal")
+            
+            Multi-tenant isolation:
             >>> memory.add("Meeting notes from project discussion",
-            ...           user_id="alice", tags="work,meeting",
+            ...           user_id="alice", project_id="proj_123", 
+            ...           organization_id="org_456", tags="work,meeting",
             ...           people_mentioned="Sarah,Mike")
         """
         try:
+            # STRICT ISOLATION VALIDATION: Validate isolation context before proceeding
+            validate_isolation_context(
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id,
+                operation="memory_add"
+            )
+
             # Build memory-specific metadata
             memory_metadata = {
                 "data": memory_content,
@@ -250,13 +212,13 @@ class SelfMemory(MemoryBase):
                 "topic_category": topic_category or "",
             }
 
-            # Add any additional metadata
-            if metadata:
-                memory_metadata.update(metadata)
-
-            # Build user-scoped metadata and filters using helper function (selfmemory style)
-            storage_metadata, _ = _build_filters_and_metadata(
-                user_id=user_id, input_metadata=memory_metadata
+            # Build user-scoped metadata using specialized function for add operations
+            # Now supports multi-tenant isolation with project/organization context
+            storage_metadata = build_add_metadata(
+                user_id=user_id, 
+                input_metadata=memory_metadata,
+                project_id=project_id,
+                organization_id=organization_id
             )
 
             # Generate embedding using provider
@@ -265,12 +227,26 @@ class SelfMemory(MemoryBase):
             # Generate unique ID
             memory_id = str(uuid.uuid4())
 
-            # Insert using vector store provider with user-scoped metadata
+            # Insert using vector store provider with multi-tenant metadata
             self.vector_store.insert(
                 vectors=[embedding], payloads=[storage_metadata], ids=[memory_id]
             )
 
-            logger.info(f"Memory added for user '{user_id}': {memory_content[:50]}...")
+            # AUDIT: Log successful memory addition
+            audit_memory_access(
+                operation="memory_add",
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id,
+                memory_id=memory_id,
+                success=True
+            )
+
+            context_info = f"user='{user_id}'"
+            if project_id and organization_id:
+                context_info += f", project='{project_id}', org='{organization_id}'"
+            
+            logger.info(f"Memory added ({context_info}): {memory_content[:50]}...")
             return {
                 "success": True,
                 "memory_id": memory_id,
@@ -278,7 +254,21 @@ class SelfMemory(MemoryBase):
             }
 
         except Exception as e:
-            logger.error(f"Memory.add() failed for user '{user_id}': {e}")
+            # AUDIT: Log failed memory addition
+            audit_memory_access(
+                operation="memory_add",
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id,
+                success=False,
+                error=str(e)
+            )
+
+            context_info = f"user='{user_id}'"
+            if project_id and organization_id:
+                context_info += f", project='{project_id}', org='{organization_id}'"
+            
+            logger.error(f"Memory.add() failed ({context_info}): {e}")
             logger.error(f"Exception type: {type(e)}")
             logger.error(f"Exception details: {str(e)}")
             return {"success": False, "error": f"Memory addition failed: {str(e)}"}
@@ -297,12 +287,15 @@ class SelfMemory(MemoryBase):
         match_all_tags: bool = False,
         include_metadata: bool = True,
         sort_by: str = "relevance",  # "relevance", "timestamp", "score"
+        project_id: str | None = None,
+        organization_id: str | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         """
-        Search memories with user isolation (selfmemory style).
+        Search memories with multi-tenant isolation (selfmemory style).
 
-        All searches are scoped to the specified user's memories only.
-        Users cannot see or access memories from other users.
+        All searches are scoped to the specified user's memories, and optionally
+        to specific projects and organizations. Users cannot see or access 
+        memories from other users, projects, or organizations.
 
         Args:
             query: Search query string (empty string returns all memories)
@@ -316,41 +309,52 @@ class SelfMemory(MemoryBase):
             match_all_tags: Whether to match all tags (AND) or any tag (OR)
             include_metadata: Whether to include full metadata in results
             sort_by: Sort results by "relevance" (default), "timestamp", or "score"
+            project_id: Optional project identifier for project-level isolation
+            organization_id: Optional organization identifier for org-level isolation
 
         Returns:
-            Dict: Search results with "results" key containing list of user's memories only
+            Dict: Search results with "results" key containing list of memories within context
 
         Examples:
-            Basic search (user-isolated):
+            Basic search (user-isolated, backward compatible):
             >>> memory = Memory()
             >>> results = memory.search("pizza", user_id="alice")  # Only Alice's memories
 
-            Advanced filtering:
+            Multi-tenant search:
+            >>> results = memory.search("pizza", user_id="alice", 
+            ...                        project_id="proj_123", organization_id="org_456")
+
+            Advanced filtering with multi-tenant context:
             >>> results = memory.search(
             ...     query="meetings",
             ...     user_id="alice",
+            ...     project_id="proj_123",
+            ...     organization_id="org_456",
             ...     tags=["work", "important"],
             ...     people_mentioned=["John", "Sarah"],
             ...     temporal_filter="this_week",
             ...     match_all_tags=True,
             ...     limit=20
             ... )
-
-            Get all user's memories sorted by timestamp:
-            >>> results = memory.search(query="", user_id="alice", sort_by="timestamp", limit=100)
         """
         try:
-            # Handle empty query case - return all memories
-            is_empty_query = not query or not query.strip()
+            # STRICT ISOLATION VALIDATION: Validate isolation context before proceeding
+            validate_isolation_context(
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id,
+                operation="memory_search"
+            )
 
-            if is_empty_query:
-                logger.info(
-                    f"Retrieving all memories for user '{user_id}' (empty query)"
-                )
+            context_info = f"user='{user_id}'"
+            if project_id and organization_id:
+                context_info += f", project='{project_id}', org='{organization_id}'"
+
+            # Log search operation
+            if not query or not query.strip():
+                logger.info(f"Retrieving all memories ({context_info}) (empty query)")
             else:
-                logger.info(
-                    f"Searching memories for user '{user_id}' with query: '{query[:50]}...'"
-                )
+                logger.info(f"Searching memories ({context_info}) with query: '{query[:50]}...'")
 
             # Build additional filters from search parameters
             additional_filters = {}
@@ -364,54 +368,74 @@ class SelfMemory(MemoryBase):
             if temporal_filter:
                 additional_filters["temporal_filter"] = temporal_filter
 
-            # Build user-scoped filters using helper function (selfmemory style)
-            _, user_filters = _build_filters_and_metadata(
-                user_id=user_id, input_filters=additional_filters
+            # Build multi-tenant filters using specialized function for search operations
+            # Now supports project/organization context
+            user_filters = build_search_filters(
+                user_id=user_id, 
+                input_filters=additional_filters,
+                project_id=project_id,
+                organization_id=organization_id
             )
 
-            # Execute search based on query type
-            if is_empty_query:
-                # Get all user's memories using vector store's list method
-                results = self.vector_store.list(filters=user_filters, limit=limit)
-                # Use helper method to format results consistently
-                formatted_results = self._format_results(
-                    results, include_metadata, include_score=False
-                )
-            else:
-                # Generate embedding for semantic search
-                query_embedding = self.embedding_provider.embed(query.strip())
+            logger.info(f"🔍 Memory.search: Built filters for isolation: {user_filters}")
 
-                # Execute semantic search with user isolation (selfmemory style)
-                results = self.vector_store.search(
-                    query=query,
-                    vectors=query_embedding,
-                    limit=limit,
-                    filters=user_filters,  # Includes automatic user_id filtering
-                )
+            # Generate embedding for search (vector stores handle empty queries)
+            query_embedding = self.embedding_provider.embed(query.strip() if query else "")
 
-                # Use helper method to format results consistently
-                formatted_results = self._format_results(
-                    results, include_metadata, include_score=True
-                )
+            # Execute semantic search with multi-tenant isolation
+            logger.info(f"🔍 Memory.search: Calling vector_store.search with filters: {user_filters}")
+            results = self.vector_store.search(
+                query=query,
+                vectors=query_embedding,
+                limit=limit,
+                filters=user_filters,  # Includes automatic user_id + project_id + org_id filtering
+            )
+            logger.info(f"🔍 Memory.search: Received {len(results) if results else 0} raw results from vector store")
 
-                # Apply threshold filtering if specified
-                if threshold is not None:
-                    formatted_results = [
-                        result
-                        for result in formatted_results
-                        if result.get("score", 0) >= threshold
-                    ]
+            # Use helper method to format results consistently
+            formatted_results = self._format_results(
+                results, include_metadata, include_score=True
+            )
+
+            # Apply threshold filtering if specified
+            if threshold is not None:
+                formatted_results = [
+                    result
+                    for result in formatted_results
+                    if result.get("score", 0) >= threshold
+                ]
 
             # Apply sorting using helper method
             formatted_results = self._apply_sorting(formatted_results, sort_by)
 
-            logger.info(
-                f"Search completed for user '{user_id}': {len(formatted_results)} results"
+            # AUDIT: Log successful search operation
+            audit_memory_access(
+                operation="memory_search",
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id,
+                memory_count=len(formatted_results),
+                success=True
             )
+
+            logger.info(f"Search completed ({context_info}): {len(formatted_results)} results")
             return {"results": formatted_results}
 
         except Exception as e:
-            logger.error(f"Search failed for user '{user_id}': {e}")
+            # AUDIT: Log failed search operation
+            audit_memory_access(
+                operation="memory_search",
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id,
+                success=False,
+                error=str(e)
+            )
+
+            context_info = f"user='{user_id}'"
+            if project_id and organization_id:
+                context_info += f", project='{project_id}', org='{organization_id}'"
+            logger.error(f"Search failed ({context_info}): {e}")
             return {"results": []}
 
     def get_all(
@@ -420,31 +444,51 @@ class SelfMemory(MemoryBase):
         user_id: str,
         limit: int = 100,
         offset: int = 0,
+        project_id: str | None = None,
+        organization_id: str | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         """
-        Get all memories for the specified user with user isolation (selfmemory style).
+        Get all memories with multi-tenant isolation (selfmemory style).
 
-        Only returns memories belonging to the specified user. Users cannot see
-        memories from other users.
+        Only returns memories belonging to the specified user, and optionally
+        filtered by project and organization. Users cannot see memories from 
+        other users, projects, or organizations.
 
         Args:
             user_id: Required user identifier for memory isolation
             limit: Maximum number of memories to return
             offset: Number of memories to skip
+            project_id: Optional project identifier for project-level isolation
+            organization_id: Optional organization identifier for org-level isolation
 
         Returns:
-            Dict: User's memories with "results" key
+            Dict: Memories within context with "results" key
 
         Examples:
+            Basic user isolation (backward compatible):
             >>> memory = Memory()
             >>> all_memories = memory.get_all(user_id="alice")  # Only Alice's memories
             >>> recent_memories = memory.get_all(user_id="alice", limit=10)
+            
+            Multi-tenant isolation:
+            >>> project_memories = memory.get_all(user_id="alice", 
+            ...                                  project_id="proj_123",
+            ...                                  organization_id="org_456")
         """
         try:
-            # Build user-scoped filters using helper function (selfmemory style)
-            _, user_filters = _build_filters_and_metadata(user_id=user_id)
+            context_info = f"user='{user_id}'"
+            if project_id and organization_id:
+                context_info += f", project='{project_id}', org='{organization_id}'"
 
-            # Use list() method with user isolation filters
+            # Build multi-tenant filters using specialized function for search operations
+            # Now supports project/organization context
+            user_filters = build_search_filters(
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id
+            )
+
+            # Use list() method with multi-tenant isolation filters
             results = self.vector_store.list(filters=user_filters, limit=limit)
 
             # Use helper method to format results consistently
@@ -452,13 +496,14 @@ class SelfMemory(MemoryBase):
                 results, include_metadata=True, include_score=False
             )
 
-            logger.info(
-                f"Retrieved {len(formatted_results)} memories for user '{user_id}'"
-            )
+            logger.info(f"Retrieved {len(formatted_results)} memories ({context_info})")
             return {"results": formatted_results}
 
         except Exception as e:
-            logger.error(f"Failed to get memories for user '{user_id}': {e}")
+            context_info = f"user='{user_id}'"
+            if project_id and organization_id:
+                context_info += f", project='{project_id}', org='{organization_id}'"
+            logger.error(f"Failed to get memories ({context_info}): {e}")
             return {"results": []}
 
     def delete(self, memory_id: str) -> dict[str, Any]:
@@ -498,29 +543,50 @@ class SelfMemory(MemoryBase):
         self,
         *,  # Enforce keyword-only arguments
         user_id: str,
+        project_id: str | None = None,
+        organization_id: str | None = None,
     ) -> dict[str, Any]:
         """
-        Delete all memories for the specified user with user isolation (selfmemory style).
+        Delete all memories with multi-tenant isolation (selfmemory style).
 
-        Only deletes memories belonging to the specified user. Users cannot delete
-        memories from other users. This maintains complete user isolation.
+        Only deletes memories belonging to the specified user, and optionally
+        filtered by project and organization. Users cannot delete memories from 
+        other users, projects, or organizations.
 
         Args:
             user_id: Required user identifier for memory isolation
+            project_id: Optional project identifier for project-level isolation
+            organization_id: Optional organization identifier for org-level isolation
 
         Returns:
-            Dict: Deletion result with count of deleted memories for this user
+            Dict: Deletion result with count of deleted memories within context
 
         Examples:
+            Basic user isolation (backward compatible):
             >>> memory = Memory()
             >>> result = memory.delete_all(user_id="alice")  # Only deletes Alice's memories
             >>> print(result["deleted_count"])  # Number of Alice's memories deleted
+            
+            Multi-tenant isolation:
+            >>> result = memory.delete_all(user_id="alice", 
+            ...                           project_id="proj_123",
+            ...                           organization_id="org_456")
+            >>> print(result["deleted_count"])  # Number deleted within project context
         """
         try:
-            # Build user-scoped filters using helper function (selfmemory style)
-            _, user_filters = _build_filters_and_metadata(user_id=user_id)
+            context_info = f"user='{user_id}'"
+            if project_id and organization_id:
+                context_info += f", project='{project_id}', org='{organization_id}'"
 
-            # Get user's memories only (for counting)
+            # Build multi-tenant filters using specialized function for search operations
+            # Now supports project/organization context
+            user_filters = build_search_filters(
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id
+            )
+
+            # Get memories within context only (for counting)
             user_memories = self.vector_store.list(filters=user_filters, limit=10000)
 
             # Use helper method to extract points from results
@@ -528,22 +594,25 @@ class SelfMemory(MemoryBase):
 
             deleted_count = 0
 
-            # Delete only user's memories (like selfmemory approach)
+            # Delete only memories within the specified context
             for point in points:
                 memory_id = self._extract_memory_id(point)
 
                 if memory_id and self.vector_store.delete(memory_id):
                     deleted_count += 1
 
-            logger.info(f"User '{user_id}' deleted {deleted_count} memories")
+            logger.info(f"Deleted {deleted_count} memories ({context_info})")
             return {
                 "success": True,
                 "deleted_count": deleted_count,
-                "message": f"Deleted {deleted_count} memories for user '{user_id}'",
+                "message": f"Deleted {deleted_count} memories ({context_info})",
             }
 
         except Exception as e:
-            logger.error(f"Failed to delete all memories for user '{user_id}': {e}")
+            context_info = f"user='{user_id}'"
+            if project_id and organization_id:
+                context_info += f", project='{project_id}', org='{organization_id}'"
+            logger.error(f"Failed to delete all memories ({context_info}): {e}")
             return {"success": False, "error": str(e)}
 
     def _format_results(
