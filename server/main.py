@@ -662,6 +662,7 @@ def delete_all_memories(auth: AuthContext = Depends(authenticate_api_key)):
             # Log internal error detail if present, but do not expose to user
             internal_error_msg = result.get("error", "Unknown error")
             logging.error(f"delete_all_memories failed: {internal_error_msg}")
+            # Always return a generic error to the client
             raise HTTPException(status_code=500, detail="Internal server error")
     except Exception as e:
         logging.exception("Error in delete_all_memories:")
