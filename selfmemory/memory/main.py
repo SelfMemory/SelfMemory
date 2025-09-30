@@ -13,7 +13,12 @@ from typing import Any
 
 from selfmemory.configs import SelfMemoryConfig
 from selfmemory.memory.base import MemoryBase
-from selfmemory.memory.utils import build_add_metadata, build_search_filters, validate_isolation_context, audit_memory_access
+from selfmemory.memory.utils import (
+    audit_memory_access,
+    build_add_metadata,
+    build_search_filters,
+    validate_isolation_context,
+)
 from selfmemory.utils.factory import EmbeddingFactory, VectorStoreFactory
 
 logger = logging.getLogger(__name__)
@@ -188,10 +193,10 @@ class SelfMemory(MemoryBase):
             Basic user isolation (backward compatible):
             >>> memory = Memory()
             >>> memory.add("I love pizza", user_id="alice", tags="food,personal")
-            
+
             Multi-tenant isolation:
             >>> memory.add("Meeting notes from project discussion",
-            ...           user_id="alice", project_id="proj_123", 
+            ...           user_id="alice", project_id="proj_123",
             ...           organization_id="org_456", tags="work,meeting",
             ...           people_mentioned="Sarah,Mike")
         """
@@ -201,7 +206,7 @@ class SelfMemory(MemoryBase):
                 user_id=user_id,
                 project_id=project_id,
                 organization_id=organization_id,
-                operation="memory_add"
+                operation="memory_add",
             )
 
             # Build memory-specific metadata
@@ -215,10 +220,10 @@ class SelfMemory(MemoryBase):
             # Build user-scoped metadata using specialized function for add operations
             # Now supports multi-tenant isolation with project/organization context
             storage_metadata = build_add_metadata(
-                user_id=user_id, 
+                user_id=user_id,
                 input_metadata=memory_metadata,
                 project_id=project_id,
-                organization_id=organization_id
+                organization_id=organization_id,
             )
 
             # Generate embedding using provider
@@ -239,13 +244,13 @@ class SelfMemory(MemoryBase):
                 project_id=project_id,
                 organization_id=organization_id,
                 memory_id=memory_id,
-                success=True
+                success=True,
             )
 
             context_info = f"user='{user_id}'"
             if project_id and organization_id:
                 context_info += f", project='{project_id}', org='{organization_id}'"
-            
+
             logger.info(f"Memory added ({context_info}): {memory_content[:50]}...")
             return {
                 "success": True,
@@ -261,13 +266,13 @@ class SelfMemory(MemoryBase):
                 project_id=project_id,
                 organization_id=organization_id,
                 success=False,
-                error=str(e)
+                error=str(e),
             )
 
             context_info = f"user='{user_id}'"
             if project_id and organization_id:
                 context_info += f", project='{project_id}', org='{organization_id}'"
-            
+
             logger.error(f"Memory.add() failed ({context_info}): {e}")
             logger.error(f"Exception type: {type(e)}")
             logger.error(f"Exception details: {str(e)}")
@@ -294,7 +299,7 @@ class SelfMemory(MemoryBase):
         Search memories with multi-tenant isolation (selfmemory style).
 
         All searches are scoped to the specified user's memories, and optionally
-        to specific projects and organizations. Users cannot see or access 
+        to specific projects and organizations. Users cannot see or access
         memories from other users, projects, or organizations.
 
         Args:
@@ -321,7 +326,7 @@ class SelfMemory(MemoryBase):
             >>> results = memory.search("pizza", user_id="alice")  # Only Alice's memories
 
             Multi-tenant search:
-            >>> results = memory.search("pizza", user_id="alice", 
+            >>> results = memory.search("pizza", user_id="alice",
             ...                        project_id="proj_123", organization_id="org_456")
 
             Advanced filtering with multi-tenant context:
@@ -343,7 +348,7 @@ class SelfMemory(MemoryBase):
                 user_id=user_id,
                 project_id=project_id,
                 organization_id=organization_id,
-                operation="memory_search"
+                operation="memory_search",
             )
 
             context_info = f"user='{user_id}'"
@@ -354,7 +359,9 @@ class SelfMemory(MemoryBase):
             if not query or not query.strip():
                 logger.info(f"Retrieving all memories ({context_info}) (empty query)")
             else:
-                logger.info(f"Searching memories ({context_info}) with query: '{query[:50]}...'")
+                logger.info(
+                    f"Searching memories ({context_info}) with query: '{query[:50]}...'"
+                )
 
             # Build additional filters from search parameters
             additional_filters = {}
@@ -371,26 +378,34 @@ class SelfMemory(MemoryBase):
             # Build multi-tenant filters using specialized function for search operations
             # Now supports project/organization context
             user_filters = build_search_filters(
-                user_id=user_id, 
+                user_id=user_id,
                 input_filters=additional_filters,
                 project_id=project_id,
-                organization_id=organization_id
+                organization_id=organization_id,
             )
 
-            logger.info(f"🔍 Memory.search: Built filters for isolation: {user_filters}")
+            logger.info(
+                f"🔍 Memory.search: Built filters for isolation: {user_filters}"
+            )
 
             # Generate embedding for search (vector stores handle empty queries)
-            query_embedding = self.embedding_provider.embed(query.strip() if query else "")
+            query_embedding = self.embedding_provider.embed(
+                query.strip() if query else ""
+            )
 
             # Execute semantic search with multi-tenant isolation
-            logger.info(f"🔍 Memory.search: Calling vector_store.search with filters: {user_filters}")
+            logger.info(
+                f"🔍 Memory.search: Calling vector_store.search with filters: {user_filters}"
+            )
             results = self.vector_store.search(
                 query=query,
                 vectors=query_embedding,
                 limit=limit,
                 filters=user_filters,  # Includes automatic user_id + project_id + org_id filtering
             )
-            logger.info(f"🔍 Memory.search: Received {len(results) if results else 0} raw results from vector store")
+            logger.info(
+                f"🔍 Memory.search: Received {len(results) if results else 0} raw results from vector store"
+            )
 
             # Use helper method to format results consistently
             formatted_results = self._format_results(
@@ -415,10 +430,12 @@ class SelfMemory(MemoryBase):
                 project_id=project_id,
                 organization_id=organization_id,
                 memory_count=len(formatted_results),
-                success=True
+                success=True,
             )
 
-            logger.info(f"Search completed ({context_info}): {len(formatted_results)} results")
+            logger.info(
+                f"Search completed ({context_info}): {len(formatted_results)} results"
+            )
             return {"results": formatted_results}
 
         except Exception as e:
@@ -429,7 +446,7 @@ class SelfMemory(MemoryBase):
                 project_id=project_id,
                 organization_id=organization_id,
                 success=False,
-                error=str(e)
+                error=str(e),
             )
 
             context_info = f"user='{user_id}'"
@@ -451,7 +468,7 @@ class SelfMemory(MemoryBase):
         Get all memories with multi-tenant isolation (selfmemory style).
 
         Only returns memories belonging to the specified user, and optionally
-        filtered by project and organization. Users cannot see memories from 
+        filtered by project and organization. Users cannot see memories from
         other users, projects, or organizations.
 
         Args:
@@ -469,9 +486,9 @@ class SelfMemory(MemoryBase):
             >>> memory = Memory()
             >>> all_memories = memory.get_all(user_id="alice")  # Only Alice's memories
             >>> recent_memories = memory.get_all(user_id="alice", limit=10)
-            
+
             Multi-tenant isolation:
-            >>> project_memories = memory.get_all(user_id="alice", 
+            >>> project_memories = memory.get_all(user_id="alice",
             ...                                  project_id="proj_123",
             ...                                  organization_id="org_456")
         """
@@ -483,9 +500,7 @@ class SelfMemory(MemoryBase):
             # Build multi-tenant filters using specialized function for search operations
             # Now supports project/organization context
             user_filters = build_search_filters(
-                user_id=user_id,
-                project_id=project_id,
-                organization_id=organization_id
+                user_id=user_id, project_id=project_id, organization_id=organization_id
             )
 
             # Use list() method with multi-tenant isolation filters
@@ -550,7 +565,7 @@ class SelfMemory(MemoryBase):
         Delete all memories with multi-tenant isolation (selfmemory style).
 
         Only deletes memories belonging to the specified user, and optionally
-        filtered by project and organization. Users cannot delete memories from 
+        filtered by project and organization. Users cannot delete memories from
         other users, projects, or organizations.
 
         Args:
@@ -566,9 +581,9 @@ class SelfMemory(MemoryBase):
             >>> memory = Memory()
             >>> result = memory.delete_all(user_id="alice")  # Only deletes Alice's memories
             >>> print(result["deleted_count"])  # Number of Alice's memories deleted
-            
+
             Multi-tenant isolation:
-            >>> result = memory.delete_all(user_id="alice", 
+            >>> result = memory.delete_all(user_id="alice",
             ...                           project_id="proj_123",
             ...                           organization_id="org_456")
             >>> print(result["deleted_count"])  # Number deleted within project context
@@ -581,9 +596,7 @@ class SelfMemory(MemoryBase):
             # Build multi-tenant filters using specialized function for search operations
             # Now supports project/organization context
             user_filters = build_search_filters(
-                user_id=user_id,
-                project_id=project_id,
-                organization_id=organization_id
+                user_id=user_id, project_id=project_id, organization_id=organization_id
             )
 
             # Get memories within context only (for counting)
