@@ -653,13 +653,19 @@ def delete_all_memories(auth: AuthContext = Depends(authenticate_api_key)):
             project_id=auth.project_id,  # Project-level isolation
             organization_id=auth.organization_id,  # Organization-level isolation
         )
-        return {
-            "message": result.get("message", "All memories deleted"),
-            "deleted_count": result.get("deleted_count", 0),
-        }
+        if result.get("success", False):
+            return {
+                "message": result.get("message", "All memories deleted"),
+                "deleted_count": result.get("deleted_count", 0),
+            }
+        else:
+            # Log internal error detail if present, but do not expose to user
+            internal_error_msg = result.get("error", "Unknown error")
+            logging.error(f"delete_all_memories failed: {internal_error_msg}")
+            raise HTTPException(status_code=500, detail="Internal server error")
     except Exception as e:
         logging.exception("Error in delete_all_memories:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # Helper function for ensuring default organization and project
