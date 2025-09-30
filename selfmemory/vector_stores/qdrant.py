@@ -117,8 +117,8 @@ class Qdrant(VectorStoreBase):
 
         common_fields = [
             "user_id",
-            "project_id",        # Critical for multi-tenant project isolation
-            "organization_id",   # Critical for multi-tenant organization isolation
+            "project_id",  # Critical for multi-tenant project isolation
+            "organization_id",  # Critical for multi-tenant organization isolation
             "agent_id",
             "run_id",
             "actor_id",
@@ -177,21 +177,25 @@ class Qdrant(VectorStoreBase):
             return None
 
         logger.info(f"🔍 Qdrant: Creating filters from: {filters}")
-        
+
         conditions = []
         for key, value in filters.items():
             if isinstance(value, dict) and "gte" in value and "lte" in value:
                 condition = FieldCondition(
                     key=key, range=Range(gte=value["gte"], lte=value["lte"])
                 )
-                logger.info(f"🔍 Qdrant: Added range condition: {key} >= {value['gte']} <= {value['lte']}")
+                logger.info(
+                    f"🔍 Qdrant: Added range condition: {key} >= {value['gte']} <= {value['lte']}"
+                )
             else:
                 condition = FieldCondition(key=key, match=MatchValue(value=value))
                 logger.info(f"🔍 Qdrant: Added match condition: {key} = {value}")
             conditions.append(condition)
-        
+
         filter_obj = Filter(must=conditions) if conditions else None
-        logger.info(f"🔍 Qdrant: Created filter with {len(conditions)} conditions: {filter_obj}")
+        logger.info(
+            f"🔍 Qdrant: Created filter with {len(conditions)} conditions: {filter_obj}"
+        )
         return filter_obj
 
     def search(

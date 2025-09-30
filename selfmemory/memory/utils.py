@@ -18,23 +18,23 @@ def validate_isolation_context(
     user_id: str,
     project_id: str | None = None,
     organization_id: str | None = None,
-    operation: str = "operation"
+    operation: str = "operation",
 ) -> None:
     """
     Validate multi-tenant isolation context for memory operations.
-    
+
     This function performs strict validation to ensure that isolation
     parameters are consistent and prevent data leakage between tenants.
-    
+
     Args:
         user_id: Required user identifier for memory isolation
         project_id: Optional project identifier for project-level isolation
         organization_id: Optional organization identifier for org-level isolation
         operation: Name of the operation being performed (for logging)
-        
+
     Raises:
         ValueError: If isolation context is invalid or inconsistent
-        
+
     Examples:
         >>> validate_isolation_context(
         ...     user_id="alice",
@@ -45,19 +45,29 @@ def validate_isolation_context(
     """
     # Validate that user_id is provided (required for this system)
     if not user_id or not isinstance(user_id, str) or not user_id.strip():
-        raise ValueError(f"ISOLATION ERROR ({operation}): user_id is required and must be a non-empty string")
+        raise ValueError(
+            f"ISOLATION ERROR ({operation}): user_id is required and must be a non-empty string"
+        )
 
     # Validate project/organization consistency
     if project_id and not organization_id:
-        raise ValueError(f"ISOLATION ERROR ({operation}): organization_id is required when project_id is provided")
+        raise ValueError(
+            f"ISOLATION ERROR ({operation}): organization_id is required when project_id is provided"
+        )
     if organization_id and not project_id:
-        raise ValueError(f"ISOLATION ERROR ({operation}): project_id is required when organization_id is provided")
+        raise ValueError(
+            f"ISOLATION ERROR ({operation}): project_id is required when organization_id is provided"
+        )
 
     # Log isolation context for audit trail
     if project_id and organization_id:
-        logger.info(f"✅ ISOLATION VALIDATED ({operation}): user={user_id}, project={project_id}, org={organization_id}")
+        logger.info(
+            f"✅ ISOLATION VALIDATED ({operation}): user={user_id}, project={project_id}, org={organization_id}"
+        )
     else:
-        logger.info(f"✅ ISOLATION VALIDATED ({operation}): user={user_id} (backward compatibility mode)")
+        logger.info(
+            f"✅ ISOLATION VALIDATED ({operation}): user={user_id} (backward compatibility mode)"
+        )
 
 
 def audit_memory_access(
@@ -69,14 +79,14 @@ def audit_memory_access(
     memory_id: str | None = None,
     memory_count: int | None = None,
     success: bool = True,
-    error: str | None = None
+    error: str | None = None,
 ) -> None:
     """
     Audit memory access operations for security monitoring.
-    
+
     This function logs all memory access operations with full context
     to enable security monitoring and detect potential isolation violations.
-    
+
     Args:
         operation: Name of the operation being performed
         user_id: User identifier performing the operation
@@ -86,7 +96,7 @@ def audit_memory_access(
         memory_count: Optional count of memories affected
         success: Whether the operation was successful
         error: Optional error message if operation failed
-        
+
     Examples:
         >>> audit_memory_access(
         ...     operation="memory_search",
@@ -100,18 +110,18 @@ def audit_memory_access(
     context_info = f"user={user_id}"
     if project_id and organization_id:
         context_info += f", project={project_id}, org={organization_id}"
-    
+
     if memory_id:
         context_info += f", memory_id={memory_id}"
     if memory_count is not None:
         context_info += f", count={memory_count}"
-    
+
     status = "SUCCESS" if success else "FAILED"
     log_message = f"🔒 AUDIT [{status}] {operation}: {context_info}"
-    
+
     if error:
         log_message += f", error={error}"
-    
+
     if success:
         logger.info(log_message)
     else:
@@ -129,7 +139,7 @@ def build_add_metadata(
     Build metadata specifically for add operations with multi-tenant isolation.
 
     This function creates user-scoped metadata for storing memories with complete
-    isolation between users, projects, and organizations. Designed specifically 
+    isolation between users, projects, and organizations. Designed specifically
     for add operations where metadata is always required.
 
     Args:
@@ -153,7 +163,7 @@ def build_add_metadata(
         ...     user_id="alice",
         ...     input_metadata={"data": "I love pizza", "tags": "food"}
         ... )
-        
+
         Multi-tenant isolation:
         >>> metadata = build_add_metadata(
         ...     user_id="alice",
@@ -184,9 +194,13 @@ def build_add_metadata(
     if project_id and organization_id:
         processed_metadata["project_id"] = project_id.strip()
         processed_metadata["organization_id"] = organization_id.strip()
-        logger.info(f"Adding memory with multi-tenant context: user={user_id}, project={project_id}, org={organization_id}")
+        logger.info(
+            f"Adding memory with multi-tenant context: user={user_id}, project={project_id}, org={organization_id}"
+        )
     else:
-        logger.info(f"Adding memory with user-only context: user={user_id} (backward compatibility mode)")
+        logger.info(
+            f"Adding memory with user-only context: user={user_id} (backward compatibility mode)"
+        )
 
     # Add timestamp for tracking
     processed_metadata["created_at"] = datetime.now().isoformat()
@@ -205,7 +219,7 @@ def build_search_filters(
     Build filters specifically for search operations with multi-tenant isolation.
 
     This function creates user-scoped filters for querying memories with complete
-    isolation between users, projects, and organizations. Designed specifically 
+    isolation between users, projects, and organizations. Designed specifically
     for search operations where filters are needed.
 
     Args:
@@ -229,7 +243,7 @@ def build_search_filters(
         ...     user_id="alice",
         ...     input_filters={"tags": ["work"], "topic_category": "meetings"}
         ... )
-        
+
         Multi-tenant isolation:
         >>> filters = build_search_filters(
         ...     user_id="alice",
@@ -258,8 +272,12 @@ def build_search_filters(
     if project_id and organization_id:
         effective_filters["project_id"] = project_id.strip()
         effective_filters["organization_id"] = organization_id.strip()
-        logger.info(f"Searching memories with multi-tenant context: user={user_id}, project={project_id}, org={organization_id}")
+        logger.info(
+            f"Searching memories with multi-tenant context: user={user_id}, project={project_id}, org={organization_id}"
+        )
     else:
-        logger.info(f"Searching memories with user-only context: user={user_id} (backward compatibility mode)")
+        logger.info(
+            f"Searching memories with user-only context: user={user_id} (backward compatibility mode)"
+        )
 
     return effective_filters
