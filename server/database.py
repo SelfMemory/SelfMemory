@@ -243,6 +243,55 @@ def create_invitations_collection(db) -> bool:
         raise
 
 
+def create_api_keys_indexes(db) -> bool:
+    """
+    Create indexes for api_keys collection to optimize authentication queries.
+
+    Purpose: Improve API key verification performance by indexing key prefix lookups.
+
+    Indexes:
+    - Compound: {keyPrefix: 1, isActive: 1} - Optimizes auth query with both fields
+    - Single: {userId: 1} - For user-specific key queries
+    - Single: {projectId: 1} - For project-specific key queries
+
+    Args:
+        db: MongoDB database instance
+
+    Returns:
+        bool: True if indexes created successfully
+
+    Raises:
+        OperationFailure: If index creation fails
+    """
+    collection_name = "api_keys"
+
+    try:
+        if collection_name not in db.list_collection_names():
+            logger.warning(f"⚠️  Collection {collection_name} does not exist yet")
+            return False
+
+        # Define indexes
+        indexes = [
+            IndexModel(
+                [("keyPrefix", ASCENDING), ("isActive", ASCENDING)],
+                name="keyprefix_active_idx",
+            ),
+            IndexModel([("userId", ASCENDING)], name="user_idx"),
+            IndexModel([("projectId", ASCENDING)], name="project_idx"),
+        ]
+
+        # Create indexes
+        collection = db[collection_name]
+        collection.create_indexes(indexes)
+        logger.info(f"✅ Created indexes for {collection_name}")
+
+        return True
+
+    except OperationFailure as e:
+        logger.error(f"❌ Failed to create indexes for {collection_name}: {e}")
+        raise
+
+
 def verify_api_keys_schema(db) -> bool:
     """
     Verify api_keys collection has required fields for project-scoped keys.
@@ -323,6 +372,9 @@ def initialize_database_schema(db) -> dict:
         # Create invitations collection
         create_invitations_collection(db)
         results["collections_created"].append("invitations")
+
+        # Create indexes for api_keys collection
+        create_api_keys_indexes(db)
 
         # Verify api_keys schema
         verify_api_keys_schema(db)

@@ -74,6 +74,20 @@ class SecurityConfig:
     )
 
 
+class AuthConfig:
+    """Configuration for authentication and API key verification."""
+
+    # Maximum number of Argon2 hash verifications per authentication attempt
+    # Protects against performance attacks via prefix collision
+    MAX_HASH_VERIFICATIONS: int = int(os.getenv("AUTH_MAX_HASH_VERIFICATIONS", "10"))
+
+    # Threshold to warn about high prefix collision
+    # If exceeded, logs warning about potential system issue
+    COLLISION_WARNING_THRESHOLD: int = int(
+        os.getenv("AUTH_COLLISION_WARNING_THRESHOLD", "50")
+    )
+
+
 class PaginationConfig:
     """Configuration for pagination."""
 
@@ -209,6 +223,7 @@ class Config:
     error = ErrorConfig()
     database = DatabaseConfig()
     security = SecurityConfig()
+    auth = AuthConfig()
     pagination = PaginationConfig()
     email = EmailConfig()
     app = AppConfig()

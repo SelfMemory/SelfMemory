@@ -15,7 +15,6 @@ Following Uncle Bob's clean code principles:
 - Single responsibility per function
 """
 
-import hashlib
 import logging
 import secrets
 import string
@@ -31,6 +30,7 @@ from ..dependencies import (
     check_project_access,
     mongo_db,
 )
+from ..utils.crypto import hash_api_key
 from ..utils.datetime_helpers import utc_now
 from ..utils.permission_helpers import get_project_member, is_project_admin
 from ..utils.validators import validate_object_id
@@ -67,14 +67,14 @@ def get_user_project_permissions(project_id: ObjectId, user_id: ObjectId) -> dic
 
 def generate_api_key() -> tuple[str, str, str]:
     """
-    Generate a secure API key with hash and prefix.
+    Generate a secure API key with Argon2 hash and prefix.
 
     Returns:
         tuple: (api_key, key_hash, key_prefix)
     """
     alphabet = string.ascii_letters + string.digits
     api_key = "sk_im_" + "".join(secrets.choice(alphabet) for _ in range(40))
-    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    key_hash = hash_api_key(api_key)
     key_prefix = api_key[:10] + "..."
     return api_key, key_hash, key_prefix
 
