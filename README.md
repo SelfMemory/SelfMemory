@@ -468,3 +468,7 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENS
 <p align="center">
   <strong>Start simple. Scale seamlessly. 🚀</strong>
 </p>
+
+## Documentation
+
+Full documentation is available at [SelfMemory Docs](https://selfmemory.com/docs)
