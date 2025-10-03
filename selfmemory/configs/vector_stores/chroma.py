@@ -6,10 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 class ChromaDbConfig(BaseModel):
     try:
         from chromadb.api.client import Client
-    except ImportError:
+    except ImportError as err:
         raise ImportError(
             "The 'chromadb' library is required. Please install it using 'pip install chromadb'."
-        )
+        ) from err
     Client: ClassVar[type] = Client
 
     collection_name: str = Field(

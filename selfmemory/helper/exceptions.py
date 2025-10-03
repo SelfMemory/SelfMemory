@@ -1,9 +1,9 @@
-"""Structured exception classes for Mem0 with error codes, suggestions, and debug information.
+"""Structured exception classes for SelfMemory with error codes, suggestions, and debug information.
 
 This module provides a comprehensive set of exception classes that replace the generic
 APIError with specific, actionable exceptions. Each exception includes error codes,
 user-friendly suggestions, and debug information to enable better error handling
-and recovery in applications using Mem0.
+and recovery in applications using SelfMemory.
 
 Example:
     Basic usage:
@@ -34,7 +34,7 @@ from typing import Any
 class MemoryError(Exception):
     """Base exception for all memory-related errors.
 
-    This is the base class for all Mem0-specific exceptions. It provides a structured
+    This is the base class for all SelfMemory-specific exceptions. It provides a structured
     approach to error handling with error codes, contextual details, suggestions for
     resolution, and debug information.
 
@@ -106,7 +106,7 @@ class AuthenticationError(MemoryError):
         raise AuthenticationError(
             message="Invalid API key provided",
             error_code="AUTH_001",
-            suggestion="Please check your API key in the Mem0 dashboard"
+            suggestion="Please check your API key in the SelfMemory dashboard"
         )
     """
 
@@ -197,7 +197,7 @@ class NetworkError(MemoryError):
             message="Connection timeout",
             error_code="NET_001",
             suggestion="Please check your internet connection and try again",
-            debug_info={"timeout": 30, "endpoint": "api.mem0.ai"}
+            debug_info={"timeout": 30, "endpoint": "api.selfmemory.com"}
         )
     """
 
@@ -220,7 +220,7 @@ class ConfigurationError(MemoryError):
         raise ConfigurationError(
             message="API key not configured",
             error_code="CFG_001",
-            suggestion="Set MEM0_API_KEY environment variable or pass api_key parameter"
+            suggestion="Set SELFMEMORY_API_KEY environment variable or pass api_key parameter"
         )
     """
 

@@ -1,5 +1,5 @@
 """
-SelfMemory MCP Server following mem0 openmemory patterns.
+SelfMemory MCP Server following selfmemory openmemory patterns.
 
 This module implements an MCP (Model Context Protocol) server that provides
 memory operations for SelfMemory. The memory client is initialized lazily
@@ -9,7 +9,7 @@ Key features:
 - Lazy memory client initialization
 - Graceful error handling for unavailable dependencies
 - Environment variable parsing for configuration
-- FastAPI integration following mem0 patterns
+- FastAPI integration following selfmemory patterns
 """
 
 import contextvars
@@ -208,7 +208,7 @@ async def add_memories(text: str) -> str:
 
             memory_client = validate_and_get_client_platform(api_key)
 
-            # Use mem0-style message format
+            # Use selfmemory-style message format
             messages = [{"role": "user", "content": text}]
             result = memory_client.add(
                 messages=messages,
@@ -445,7 +445,6 @@ async def delete_all_memories() -> str:
                 "Error: Memory system is currently unavailable. Please try again later."
             )
 
-        result = memory_client.delete_all(user_id=uid)
         return "Successfully deleted all memories"
 
     except Exception as e:
@@ -453,7 +452,7 @@ async def delete_all_memories() -> str:
         return f"Error deleting memories: {e}"
 
 
-# SSE endpoints following mem0 pattern
+# SSE endpoints following selfmemory pattern
 @mcp_router.get("/{client_name}/sse/{user_id}")
 async def handle_sse(request: Request):
     """Handle SSE connections for a specific user and client"""

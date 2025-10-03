@@ -5,10 +5,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 try:
     from upstash_vector import Index
-except ImportError:
+except ImportError as err:
     raise ImportError(
         "The 'upstash_vector' library is required. Please install it using 'pip install upstash_vector'."
-    )
+    ) from err
 
 
 class UpstashVectorConfig(BaseModel):

@@ -1,30 +1,35 @@
 import json
 import os
 import uuid
+from pathlib import Path
 
 # Set up the directory path
 VECTOR_ID = str(uuid.uuid4())
-home_dir = os.path.expanduser("~")
-mem0_dir = os.environ.get("MEM0_DIR") or os.path.join(home_dir, ".mem0")
-os.makedirs(mem0_dir, exist_ok=True)
+home_dir = Path("~").expanduser()
+selfmemory_dir = (
+    Path(os.environ.get("SELFMEMORY_DIR"))
+    if os.environ.get("SELFMEMORY_DIR")
+    else home_dir / ".selfmemory"
+)
+selfmemory_dir.mkdir(parents=True, exist_ok=True)
 
 
 def setup_config():
-    config_path = os.path.join(mem0_dir, "config.json")
-    if not os.path.exists(config_path):
+    config_path = selfmemory_dir / "config.json"
+    if not config_path.exists():
         user_id = str(uuid.uuid4())
         config = {"user_id": user_id}
-        with open(config_path, "w") as config_file:
+        with config_path.open("w") as config_file:
             json.dump(config, config_file, indent=4)
 
 
 def get_user_id():
-    config_path = os.path.join(mem0_dir, "config.json")
-    if not os.path.exists(config_path):
+    config_path = selfmemory_dir / "config.json"
+    if not config_path.exists():
         return "anonymous_user"
 
     try:
-        with open(config_path) as config_file:
+        with config_path.open() as config_file:
             config = json.load(config_file)
             user_id = config.get("user_id")
             return user_id

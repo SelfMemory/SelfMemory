@@ -4,10 +4,10 @@ from typing import Literal
 
 try:
     import boto3
-except ImportError:
+except ImportError as err:
     raise ImportError(
         "The 'boto3' library is required. Please install it using 'pip install boto3'."
-    )
+    ) from err
 
 import numpy as np
 
@@ -87,7 +87,7 @@ class AWSBedrockEmbedding(EmbeddingBase):
 
             return embeddings
         except Exception as e:
-            raise ValueError(f"Error getting embedding from AWS Bedrock: {e}")
+            raise ValueError(f"Error getting embedding from AWS Bedrock: {e}") from e
 
     def embed(
         self, text, memory_action: Literal["add", "search", "update"] | None = None

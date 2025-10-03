@@ -171,7 +171,7 @@ class SelfMemory(MemoryBase):
         topic_category: str | None = None,
         project_id: str | None = None,
         organization_id: str | None = None,
-        # metadata: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Add a new memory to storage with multi-tenant isolation (selfmemory style).
@@ -216,6 +216,10 @@ class SelfMemory(MemoryBase):
                 "people_mentioned": people_mentioned or "",
                 "topic_category": topic_category or "",
             }
+
+            # Merge custom metadata if provided
+            if metadata:
+                memory_metadata.update(metadata)
 
             # Build user-scoped metadata using specialized function for add operations
             # Now supports multi-tenant isolation with project/organization context
@@ -504,15 +508,20 @@ class SelfMemory(MemoryBase):
             )
 
             # Use list() method with multi-tenant isolation filters
-            results = self.vector_store.list(filters=user_filters, limit=limit)
+            results = self.vector_store.list(filters=user_filters, limit=limit + offset)
 
             # Use helper method to format results consistently
             formatted_results = self._format_results(
                 results, include_metadata=True, include_score=False
             )
 
-            logger.info(f"Retrieved {len(formatted_results)} memories ({context_info})")
-            return {"results": formatted_results}
+            # Apply offset by slicing results
+            paginated_results = formatted_results[offset : offset + limit]
+
+            logger.info(
+                f"Retrieved {len(paginated_results)} memories ({context_info}) (offset={offset}, limit={limit})"
+            )
+            return {"results": paginated_results}
 
         except Exception as e:
             context_info = f"user='{user_id}'"

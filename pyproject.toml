@@ -43,6 +43,8 @@ dependencies = [
     "fastapi>=0.100.0", # API server
     "uvicorn>=0.20.0", # ASGI server
     "starlette>=0.27.0", # Web framework
+    "psutil>=5.9.0", # System and process utilities for health checks
+    "pymongo>=4.0.0", # MongoDB backend for multi-tenant server
     # Embedding providers
     "ollama>=0.1.0", # Ollama embeddings
     "openai>=1.0.0", # OpenAI embeddings
