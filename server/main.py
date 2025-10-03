@@ -1,4 +1,3 @@
-import hashlib
 import logging
 from typing import Any
 
@@ -23,6 +22,7 @@ from .routes.invitations import router as invitations_router
 from .routes.organizations import router as organizations_router
 from .routes.projects import router as projects_router
 from .routes.users import router as users_router
+from .utils.crypto import hash_api_key
 from .utils.datetime_helpers import utc_now
 from .utils.error_handlers import ErrorCode, create_error_response, get_request_id
 from .utils.rate_limiter import get_rate_limit_key, limiter
@@ -1353,7 +1353,7 @@ def initialize_user(auth: AuthContext = Depends(authenticate_api_key)):
 
         alphabet = string.ascii_letters + string.digits
         api_key = "sk_im_" + "".join(secrets.choice(alphabet) for _ in range(40))
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        key_hash = hash_api_key(api_key)
         key_prefix = api_key[:10] + "..."
 
         key_doc = {

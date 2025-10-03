@@ -11,7 +11,9 @@ from typing import NamedTuple
 
 from fastapi import Header, HTTPException
 
+from .config import config
 from .database import mongo_db
+from .utils.crypto import verify_api_key
 from .utils.datetime_helpers import is_expired, utc_now
 from .utils.validators import validate_object_id
 
@@ -296,27 +298,37 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
         raise HTTPException(status_code=401, detail="Invalid API key format")
 
     try:
-        # Hash the provided API key to match stored hash
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        # Find all active API keys with matching prefix for efficiency
+        key_prefix = api_key[:10] + "..."
+        potential_keys_cursor = mongo_db.api_keys.find(
+            {"keyPrefix": key_prefix, "isActive": True}
+        ).limit(100)
 
-        # Look for API key using keyHash (unified format)
-        stored_key = mongo_db.api_keys.find_one({"keyHash": key_hash, "isActive": True})
+        # Convert cursor to list and check count for monitoring
+        potential_keys = list(potential_keys_cursor)
 
-        # Fallback: Look for old plain text keys for backward compatibility
-        if not stored_key:
-            stored_key = mongo_db.api_keys.find_one(
-                {"api_key": api_key, "isActive": True}
+        # Security: Hash prefix before logging to avoid leaking sensitive info
+        if len(potential_keys) > config.auth.COLLISION_WARNING_THRESHOLD:
+            hashed_prefix = hashlib.sha256(key_prefix.encode()).hexdigest()[:8]
+            logger.warning(
+                f"⚠️  High API key prefix collision: {len(potential_keys)} keys (prefix hash: {hashed_prefix})"
             )
 
-            # If found old format, migrate it to new format
-            if stored_key:
-                mongo_db.api_keys.update_one(
-                    {"_id": stored_key["_id"]},
-                    {"$set": {"keyHash": key_hash}, "$unset": {"api_key": ""}},
-                )
-                stored_key["keyHash"] = key_hash  # Update local copy
+        # Performance: Limit expensive Argon2 hash verifications
+        checked_count = 0
+        stored_key = None
+        for candidate in potential_keys[: config.auth.MAX_HASH_VERIFICATIONS]:
+            checked_count += 1
+            if verify_api_key(api_key, candidate["keyHash"]):
+                stored_key = candidate
+                break
 
         if not stored_key:
+            if len(potential_keys) > config.auth.MAX_HASH_VERIFICATIONS:
+                logger.error(
+                    f"❌ Auth failed after {checked_count} hash verifications. "
+                    f"Total candidates: {len(potential_keys)}. Possible attack or system issue."
+                )
             raise HTTPException(status_code=401, detail="Invalid API key")
 
         # Check if key is expired
