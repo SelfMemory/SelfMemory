@@ -308,6 +308,8 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
         potential_keys = list(potential_keys_cursor)
 
         # Security: Hash prefix before logging to avoid leaking sensitive info
+        # Note: SHA256 is appropriate here as it's only for logging collision warnings,
+        # not for password hashing. API key verification uses Argon2.
         if len(potential_keys) > config.auth.COLLISION_WARNING_THRESHOLD:
             hashed_prefix = hashlib.sha256(key_prefix.encode()).hexdigest()[:8]
             logger.warning(
