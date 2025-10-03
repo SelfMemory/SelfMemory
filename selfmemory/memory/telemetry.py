@@ -8,15 +8,15 @@ from posthog import Posthog
 import selfmemory
 from selfmemory.memory.setup import get_or_create_user_id
 
-MEM0_TELEMETRY = os.environ.get("MEM0_TELEMETRY", "True")
+SELFMEMORY_TELEMETRY = os.environ.get("SELFMEMORY_TELEMETRY", "True")
 PROJECT_API_KEY = "phc_hgJkUVJFYtmaJqrvf6CYN67TIQ8yhXAkWzUn9AMU4yX"
 HOST = "https://us.i.posthog.com"
 
-if isinstance(MEM0_TELEMETRY, str):
-    MEM0_TELEMETRY = MEM0_TELEMETRY.lower() in ("true", "1", "yes")
+if isinstance(SELFMEMORY_TELEMETRY, str):
+    SELFMEMORY_TELEMETRY = SELFMEMORY_TELEMETRY.lower() in ("true", "1", "yes")
 
-if not isinstance(MEM0_TELEMETRY, bool):
-    raise ValueError("MEM0_TELEMETRY must be a boolean value.")
+if not isinstance(SELFMEMORY_TELEMETRY, bool):
+    raise ValueError("SELFMEMORY_TELEMETRY must be a boolean value.")
 
 logging.getLogger("posthog").setLevel(logging.CRITICAL + 1)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL + 1)
@@ -28,7 +28,7 @@ class AnonymousTelemetry:
 
         self.user_id = get_or_create_user_id(vector_store)
 
-        if not MEM0_TELEMETRY:
+        if not SELFMEMORY_TELEMETRY:
             self.posthog.disabled = True
 
     def capture_event(self, event_name, properties=None, user_email=None):

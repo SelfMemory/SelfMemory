@@ -20,6 +20,13 @@ all:
 	npm run start
 
 clean:
+	rm -rf .ruff_cache
+	rm -rf selfmemory.egg-info
+	rm -rf selfmemory-mcp/selfmemory_mcp.egg-info
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+	rm -rf dist/
+
+allclean:
 	rm -rf .venv
 	rm -rf .ruff_cache
 	rm -rf selfmemory.egg-info

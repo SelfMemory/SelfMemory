@@ -1,3 +1,4 @@
+import contextlib
 import json
 import logging
 
@@ -67,10 +68,8 @@ def api_error_handler(func):
             if e.response.status_code == 429:
                 retry_after = e.response.headers.get("Retry-After")
                 if retry_after:
-                    try:
+                    with contextlib.suppress(ValueError):
                         debug_info["retry_after"] = int(retry_after)
-                    except ValueError:
-                        pass
 
                 # Add rate limit headers if available
                 for header in [
@@ -90,7 +89,7 @@ def api_error_handler(func):
                 debug_info=debug_info,
             )
 
-            raise exception
+            raise exception from e
 
         except httpx.RequestError as e:
             logger.error(f"Request error occurred: {e}")
@@ -102,20 +101,20 @@ def api_error_handler(func):
                     error_code="NET_TIMEOUT",
                     suggestion="Please check your internet connection and try again",
                     debug_info={"error_type": "timeout", "original_error": str(e)},
-                )
+                ) from e
             if isinstance(e, httpx.ConnectError):
                 raise NetworkError(
                     message=f"Connection failed: {str(e)}",
                     error_code="NET_CONNECT",
                     suggestion="Please check your internet connection and try again",
                     debug_info={"error_type": "connection", "original_error": str(e)},
-                )
+                ) from e
             # Generic network error for other request errors
             raise NetworkError(
                 message=f"Network request failed: {str(e)}",
                 error_code="NET_GENERIC",
                 suggestion="Please check your internet connection and try again",
                 debug_info={"error_type": "request", "original_error": str(e)},
-            )
+            ) from e
 
     return wrapper

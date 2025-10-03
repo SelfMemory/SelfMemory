@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 class MongoDBConfig(BaseModel):
     """Configuration for MongoDB vector database."""
 
-    db_name: str = Field("mem0_db", description="Name of the MongoDB database")
+    db_name: str = Field("selfmemory_db", description="Name of the MongoDB database")
     collection_name: str = Field(
         "selfmemory", description="Name of the MongoDB collection"
     )

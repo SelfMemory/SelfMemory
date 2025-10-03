@@ -1,12 +1,11 @@
 import os
-from abc import ABC
 
 import httpx
 
 from selfmemory.configs.base import AzureConfig
 
 
-class BaseEmbedderConfig(ABC):
+class BaseEmbedderConfig:
     """
     Config for Embeddings.
     """
@@ -24,7 +23,7 @@ class BaseEmbedderConfig(ABC):
         model_kwargs: dict | None = None,
         huggingface_base_url: str | None = None,
         # AzureOpenAI specific
-        azure_kwargs: AzureConfig | None = {},
+        azure_kwargs: AzureConfig | None = None,
         http_client_proxies: dict | str | None = None,
         # VertexAI specific
         vertex_credentials_json: str | None = None,
@@ -90,7 +89,9 @@ class BaseEmbedderConfig(ABC):
         self.model_kwargs = model_kwargs or {}
         self.huggingface_base_url = huggingface_base_url
         # AzureOpenAI specific
-        self.azure_kwargs = AzureConfig(**azure_kwargs) or {}
+        self.azure_kwargs = (
+            AzureConfig(**azure_kwargs) if azure_kwargs else AzureConfig()
+        )
 
         # VertexAI specific
         self.vertex_credentials_json = vertex_credentials_json

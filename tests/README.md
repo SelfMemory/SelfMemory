@@ -1,6 +1,6 @@
 # SelfMemory Tests
 
-This directory contains the test suite for the selfmemory-core package, following Uncle Bob's clean code principles and inspired by mem0's testing patterns.
+This directory contains the test suite for the selfmemory-core package, following Uncle Bob's clean code principles and inspired by selfmemory's testing patterns.
 
 ## Test Structure
 
@@ -64,7 +64,7 @@ Following **Uncle Bob's Clean Code** principles:
 - **Self-Validating**: Clear pass/fail results
 - **Timely**: Tests are written alongside code
 
-Following **mem0's proven patterns**:
+Following **selfmemory's proven patterns**:
 - **Mock external dependencies**: No real databases or APIs needed
 - **Simple structure**: Direct test files without over-engineering
 - **Comprehensive coverage**: Test all methods and edge cases

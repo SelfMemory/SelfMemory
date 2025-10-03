@@ -5,10 +5,10 @@ from selfmemory.embeddings.base import EmbeddingBase
 
 try:
     from langchain.embeddings.base import Embeddings
-except ImportError:
+except ImportError as err:
     raise ImportError(
         "langchain is not installed. Please install it using `pip install langchain`"
-    )
+    ) from err
 
 
 class LangchainEmbedding(EmbeddingBase):

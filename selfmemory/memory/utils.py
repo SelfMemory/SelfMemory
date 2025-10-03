@@ -7,7 +7,7 @@ responsibility and clear separation of concerns.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -202,8 +202,8 @@ def build_add_metadata(
             f"Adding memory with user-only context: user={user_id} (backward compatibility mode)"
         )
 
-    # Add timestamp for tracking
-    processed_metadata["created_at"] = datetime.now().isoformat()
+    # Add timestamp for tracking (always use UTC)
+    processed_metadata["created_at"] = datetime.now(timezone.utc).isoformat()
 
     return processed_metadata
 

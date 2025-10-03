@@ -5,10 +5,10 @@ from pydantic import BaseModel
 try:
     import chromadb
     from chromadb.config import Settings
-except ImportError:
+except ImportError as err:
     raise ImportError(
         "The 'chromadb' library is required. Please install it using 'pip install chromadb'."
-    )
+    ) from err
 
 from selfmemory.vector_stores.base import VectorStoreBase
 
