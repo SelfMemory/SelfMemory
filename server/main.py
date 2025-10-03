@@ -870,6 +870,7 @@ def delete_all_memories(auth: AuthContext = Depends(authenticate_api_key)):
             organization_id=auth.organization_id,  # Organization-level isolation
         )
         if result.get("success", False):
+            # Only return safe fields - explicitly exclude any error field
             return {
                 "message": result.get("message", "All memories deleted"),
                 "deleted_count": result.get("deleted_count", 0),
