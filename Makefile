@@ -16,7 +16,6 @@ runmcp:
 	lsof -ti:8080 | xargs kill -9
 	cd selfmemory-mcp && uv run python3 main.py
 
-
 clean:
 	rm -rf .ruff_cache
 	rm -rf selfmemory.egg-info
