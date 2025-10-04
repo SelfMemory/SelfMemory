@@ -190,8 +190,7 @@ def create_project_api_key(
     }
 
     logger.info(
-        f"🔑 Storing API key document: userId={user_obj_id}, projectId={project_obj_id}, "
-        f"organizationId={organization_id}, permissions={api_key_permissions}"
+        "🔑 Storing API key document"
     )
 
     result = mongo_db.api_keys.insert_one(key_doc)
