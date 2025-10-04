@@ -24,7 +24,6 @@ from ..config import config
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import is_expired
 from ..utils.rate_limiter import limiter
-from ..utils.transaction_manager import transaction_context
 from ..utils.validators import validate_object_id
 from .invitation_helpers import (
     add_user_to_organization,
@@ -48,6 +47,7 @@ class InvitationResponse(BaseModel):
     """Response model for invitation details"""
 
     invitation_id: str
+    token: str
     email: str
     organization_id: str
     organization_name: str
@@ -323,6 +323,7 @@ def get_invitation_details(token: str):
 
     return InvitationResponse(
         invitation_id=str(invitation["_id"]),
+        token=invitation["token"],
         email=invitation["email"],
         organization_id=str(invitation["organizationId"]),
         organization_name=organization["name"],
@@ -376,18 +377,14 @@ def accept_invitation(
     # Validate invitation (checks expiry, status, email match)
     validate_invitation_for_acceptance(invitation, user.get("email"))
 
-    # Use transaction to ensure atomicity
-    with transaction_context() as session:
-        # Add user to organization
-        add_user_to_organization(user_obj_id, invitation, session)
+    # Add user to organization
+    add_user_to_organization(user_obj_id, invitation)
 
-        # Add user to projects (handles both single project and multi-project invitations)
-        projects_added = add_user_to_projects_from_invitation(
-            user_obj_id, invitation, session
-        )
+    # Add user to projects (handles both single project and multi-project invitations)
+    projects_added = add_user_to_projects_from_invitation(user_obj_id, invitation)
 
-        # Mark invitation as accepted
-        mark_invitation_accepted(invitation["_id"], session)
+    # Mark invitation as accepted
+    mark_invitation_accepted(invitation["_id"])
 
     # Get response details
     response_details = get_invitation_response_details(invitation)
@@ -465,6 +462,7 @@ def list_pending_invitations(auth: AuthContext = Depends(authenticate_api_key)):
         valid_invitations.append(
             InvitationResponse(
                 invitation_id=str(invitation["_id"]),
+                token=invitation["token"],
                 email=invitation["email"],
                 organization_id=str(invitation["organizationId"]),
                 organization_name=organization["name"],

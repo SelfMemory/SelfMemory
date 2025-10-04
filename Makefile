@@ -12,7 +12,7 @@ run:
 	uv run uvicorn server.main:app --host 0.0.0.0 --port 8081 --reload
 
 runmcp:
-	cd selfmemory-mcp && uv run uvicorn main:mcp --host 0.0.0.0 --port 8080 --reload
+	cd selfmemory-mcp && uv run python3 main.py
 
 all:
 	uv run uvicorn server.main:app --host 0.0.0.0 --port 8081 --reload
