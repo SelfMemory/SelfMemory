@@ -301,7 +301,7 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
     try:
         # Find all active API keys with matching prefix for efficiency
         key_prefix = api_key[:10] + "..."
-        logger.info(f"🔍 Looking up API key with prefix")
+        logger.info("🔍 Looking up API key with prefix")
 
         potential_keys_cursor = mongo_db.api_keys.find(
             {"keyPrefix": key_prefix, "isActive": True}
