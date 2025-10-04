@@ -165,7 +165,7 @@ def create_project_api_key(
     api_key, key_hash, key_prefix = generate_api_key()
 
     logger.info(
-        f"🔑 Generated API key: prefix={key_prefix}, user={auth.user_id}, project={project_id}"
+        f"🔑 Generated API key for user={auth.user_id}, project={project_id}, name={key_create.name}"
     )
 
     # Calculate expiration if specified
