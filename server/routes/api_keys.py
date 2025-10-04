@@ -189,9 +189,7 @@ def create_project_api_key(
         "lastUsed": None,
     }
 
-    logger.info(
-        "🔑 Storing API key document"
-    )
+    logger.info("🔑 Storing API key document")
 
     result = mongo_db.api_keys.insert_one(key_doc)
     key_id = str(result.inserted_id)
