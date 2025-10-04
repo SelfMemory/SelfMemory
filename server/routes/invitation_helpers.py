@@ -15,8 +15,8 @@ from fastapi import HTTPException
 
 from ..database import get_role_permissions
 from ..dependencies import mongo_db
+from ..utils.database_utils import safe_insert_member
 from ..utils.datetime_helpers import utc_now
-from ..utils.transaction_manager import safe_insert_member
 from ..utils.validators import validate_object_id
 
 logger = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ def validate_invitation_for_acceptance(invitation: dict, user_email: str) -> Non
 
 
 def add_user_to_organization(
-    user_id: ObjectId, invitation: dict, session=None
+    user_id: ObjectId, invitation: dict
 ) -> tuple[str | None, bool]:
     """
     Add user to organization from invitation.
@@ -80,7 +80,6 @@ def add_user_to_organization(
     Args:
         user_id: The user's ObjectId
         invitation: The invitation document
-        session: MongoDB session for transaction
 
     Returns:
         tuple: (member_id, already_existed)
@@ -98,7 +97,6 @@ def add_user_to_organization(
         mongo_db.organization_members,
         org_member_doc,
         "organization_member",
-        session=session,
     )
 
     if member_id:
@@ -119,7 +117,6 @@ def add_user_to_single_project(
     organization_id: ObjectId,
     role: str,
     invited_by: ObjectId,
-    session=None,
 ) -> tuple[str | None, bool]:
     """
     Add user to a single project.
@@ -132,13 +129,12 @@ def add_user_to_single_project(
         organization_id: The organization's ObjectId
         role: The role to assign
         invited_by: ObjectId of the inviter
-        session: MongoDB session for transaction
 
     Returns:
         tuple: (member_id, already_existed) or (None, True) if owner
     """
     # Check if user is the project owner
-    project = mongo_db.projects.find_one({"_id": project_id}, session=session)
+    project = mongo_db.projects.find_one({"_id": project_id})
     is_owner = project and str(project["ownerId"]) == str(user_id)
 
     if is_owner:
@@ -163,7 +159,7 @@ def add_user_to_single_project(
     }
 
     member_id, existed = safe_insert_member(
-        mongo_db.project_members, project_member_doc, "project_member", session=session
+        mongo_db.project_members, project_member_doc, "project_member"
     )
 
     if member_id:
@@ -175,7 +171,7 @@ def add_user_to_single_project(
 
 
 def add_user_to_projects_from_invitation(
-    user_id: ObjectId, invitation: dict, session=None
+    user_id: ObjectId, invitation: dict
 ) -> list[str]:
     """
     Add user to all projects specified in the invitation.
@@ -187,7 +183,6 @@ def add_user_to_projects_from_invitation(
     Args:
         user_id: The user's ObjectId
         invitation: The invitation document
-        session: MongoDB session for transaction
 
     Returns:
         list: Project IDs that were successfully added
@@ -202,7 +197,6 @@ def add_user_to_projects_from_invitation(
             organization_id=invitation["organizationId"],
             role=invitation["role"],
             invited_by=invitation["invitedBy"],
-            session=session,
         )
 
         if member_id:
@@ -220,7 +214,6 @@ def add_user_to_projects_from_invitation(
             organization_id=invitation["organizationId"],
             role=project_role,
             invited_by=invitation["invitedBy"],
-            session=session,
         )
 
         if member_id:
@@ -229,16 +222,15 @@ def add_user_to_projects_from_invitation(
     return projects_added
 
 
-def mark_invitation_accepted(invitation_id: ObjectId, session=None) -> None:
+def mark_invitation_accepted(invitation_id: ObjectId) -> None:
     """
     Mark an invitation as accepted.
 
     Args:
         invitation_id: The invitation's ObjectId
-        session: MongoDB session for transaction
     """
     mongo_db.invitations.update_one(
-        {"_id": invitation_id}, {"$set": {"status": "accepted"}}, session=session
+        {"_id": invitation_id}, {"$set": {"status": "accepted"}}
     )
 
 
