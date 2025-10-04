@@ -8,15 +8,20 @@ setup:
 	chmod +x run.sh
 	uv pip install -r requirements.txt
 
+activate:
+	source .venv/bin/activate
+
 run:
+	lsof -ti:8081 | xargs kill -9
 	uv run uvicorn server.main:app --host 0.0.0.0 --port 8081 --reload
 
 runmcp:
+	lsof -ti:8080 | xargs kill -9
 	cd selfmemory-mcp && uv run python3 main.py
 
-all:
+runall:
 	uv run uvicorn server.main:app --host 0.0.0.0 --port 8081 --reload
-	cd selfmemory-mcp && uv run uvicorn main:mcp --host 0.0.0.0 --port 8080 --reload
+	cd selfmemory-mcp && uv run python3 main.py
 	npm run start
 
 clean:

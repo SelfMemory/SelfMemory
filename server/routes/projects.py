@@ -18,6 +18,7 @@ from pydantic import BaseModel, EmailStr, Field
 from ..config import config
 from ..database import get_role_permissions
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
+from ..utils.database_utils import safe_insert_member
 from ..utils.datetime_helpers import utc_now
 from ..utils.permission_helpers import (
     count_project_admins,
@@ -27,7 +28,6 @@ from ..utils.permission_helpers import (
     is_project_admin,
 )
 from ..utils.rate_limiter import limiter
-from ..utils.transaction_manager import safe_insert_member
 from ..utils.validators import validate_object_id
 from .invitations import generate_invitation_token, send_invitation_email
 

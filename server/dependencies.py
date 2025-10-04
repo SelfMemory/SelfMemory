@@ -295,17 +295,23 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
 
     # Accept only format: sk_im_
     if not api_key.startswith("sk_im_"):
+        logger.warning("❌ Invalid API key format: does not start with 'sk_im_'")
         raise HTTPException(status_code=401, detail="Invalid API key format")
 
     try:
         # Find all active API keys with matching prefix for efficiency
         key_prefix = api_key[:10] + "..."
+        logger.info(f"🔍 Looking up API key with prefix: {key_prefix}")
+
         potential_keys_cursor = mongo_db.api_keys.find(
             {"keyPrefix": key_prefix, "isActive": True}
         ).limit(100)
 
         # Convert cursor to list and check count for monitoring
         potential_keys = list(potential_keys_cursor)
+        logger.info(
+            f"🔍 Found {len(potential_keys)} potential key(s) with matching prefix"
+        )
 
         # Security: Hash prefix before logging to avoid leaking sensitive info
         # Note: SHA256 is appropriate here as it's only for logging collision warnings,
@@ -321,15 +327,28 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
         stored_key = None
         for candidate in potential_keys[: config.auth.MAX_HASH_VERIFICATIONS]:
             checked_count += 1
+            logger.info(
+                f"🔍 Verifying candidate {checked_count}: userId={candidate.get('userId')}, projectId={candidate.get('projectId')}"
+            )
             if verify_api_key(api_key, candidate["keyHash"]):
                 stored_key = candidate
+                logger.info(
+                    f"✅ API key hash verification successful for candidate {checked_count}"
+                )
                 break
+            logger.info(
+                f"❌ API key hash verification failed for candidate {checked_count}"
+            )
 
         if not stored_key:
             if len(potential_keys) > config.auth.MAX_HASH_VERIFICATIONS:
                 logger.error(
                     f"❌ Auth failed after {checked_count} hash verifications. "
                     f"Total candidates: {len(potential_keys)}. Possible attack or system issue."
+                )
+            else:
+                logger.warning(
+                    f"❌ No matching API key found after checking {checked_count} candidate(s)"
                 )
             raise HTTPException(status_code=401, detail="Invalid API key")
 
@@ -342,6 +361,9 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
 
         # Get user to verify it's active
         user = mongo_db.users.find_one({"_id": stored_key["userId"]})
+        logger.info(
+            f"🔍 Looking up user: {stored_key['userId']}, found={user is not None}"
+        )
 
         if not user or not user.get("isActive", True):
             logger.warning(
@@ -357,14 +379,26 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
         # Get project context if API key has projectId (Phase 6 enhancement)
         permissions = None
         if stored_key.get("projectId"):
+            logger.info(f"🔍 API key has projectId: {stored_key['projectId']}")
             project = mongo_db.projects.find_one({"_id": stored_key["projectId"]})
+            logger.info(f"🔍 Project lookup result: found={project is not None}")
+
             if project:
                 project_id = str(project["_id"])
                 organization_id = str(project["organizationId"])
+                logger.info(
+                    f"🔍 Project context: project_id={project_id}, org_id={organization_id}, owner_id={project.get('ownerId')}"
+                )
 
                 # PHASE 6 ENHANCEMENT: Verify user still has project access
                 # Check project membership (not just ownership)
-                if not check_project_access(user_id, project_id):
+                logger.info(
+                    f"🔍 Checking project access for user {user_id} to project {project_id}"
+                )
+                has_access = check_project_access(user_id, project_id)
+                logger.info(f"🔍 Project access check result: {has_access}")
+
+                if not has_access:
                     logger.warning(
                         f"❌ User {user_id} no longer has access to project {project_id}"
                     )

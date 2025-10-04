@@ -121,11 +121,12 @@ def create_project_api_key(
     else:
         user_permissions = member.get("permissions", {})
 
-    # Check if user has permission to create API keys (must have write permission)
-    if not user_permissions.get("canWrite", False):
-        member_role = member.get("role") if member else "owner"
+    # Check if user has ANY permissions (even read-only viewers can create API keys)
+    # They can only create keys with permissions they have (no escalation)
+    if not user_permissions.get("canRead", False):
+        member_role = member.get("role") if member else "unknown"
         logger.warning(
-            f"❌ User {auth.user_id} (role: {member_role}) attempted to create API key without write permission"
+            f"❌ User {auth.user_id} (role: {member_role}) attempted to create API key without any permissions"
         )
         raise HTTPException(
             status_code=403,
@@ -163,6 +164,10 @@ def create_project_api_key(
     # Generate API key
     api_key, key_hash, key_prefix = generate_api_key()
 
+    logger.info(
+        f"🔑 Generated API key: prefix={key_prefix}, user={auth.user_id}, project={project_id}"
+    )
+
     # Calculate expiration if specified
     expires_at = None
     if key_create.expires_in_days:
@@ -184,11 +189,16 @@ def create_project_api_key(
         "lastUsed": None,
     }
 
+    logger.info(
+        f"🔑 Storing API key document: userId={user_obj_id}, projectId={project_obj_id}, "
+        f"organizationId={organization_id}, permissions={api_key_permissions}"
+    )
+
     result = mongo_db.api_keys.insert_one(key_doc)
     key_id = str(result.inserted_id)
 
     logger.info(
-        f"✅ Created API key '{key_create.name}' for user {auth.user_id} in project {project_id}"
+        f"✅ Created API key '{key_create.name}' (id={key_id}) for user {auth.user_id} in project {project_id}"
     )
 
     return {
