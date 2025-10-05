@@ -57,6 +57,11 @@ const config: Config = {
     colorMode: {
       respectPrefersColorScheme: true,
     },
+    algolia: {
+      appId: 'ISN5T6ON4H',
+      apiKey: '8e089affefcbf520e9c8c4e62f0778d6',
+      indexName: 'SelfMemory',
+    },
     navbar: {
       title: 'SelfMemory',
       logo: {
