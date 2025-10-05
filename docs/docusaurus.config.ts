@@ -7,7 +7,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'SelfMemory Docs',
   tagline: 'Store your memories forever',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/icon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -61,7 +61,7 @@ const config: Config = {
       title: 'SelfMemory',
       logo: {
         alt: 'SelfMemory Logo',
-        src: 'img/logo.svg',
+        src: 'img/icon.svg',
       },
       items: [
         {
