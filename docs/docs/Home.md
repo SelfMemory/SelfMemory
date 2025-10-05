@@ -77,6 +77,7 @@ Both modes support:
 - [GitHub Repository](https://github.com/selfmemory/selfmemory)
 - [Discord Community](https://discord.com/invite/YypBvdUpcc)
 - [X/Twitter](https://x.com/selfmemoryai)
+- [Brand Assets (Logos, Slides, etc.)](https://drive.google.com/drive/folders/1paB9DkpPGv58_MC3P5C1el_Bw7lzYh-3?usp=sharing)
 
 ## 🤝 Contributing
 
