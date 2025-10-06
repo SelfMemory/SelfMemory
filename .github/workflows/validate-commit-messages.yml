@@ -1,0 +1,74 @@
+name: Validate Commit Messages
+
+on:
+  push:
+    branches:
+      - '**'  # Run on all branches
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  validate-commits:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history to get all commits
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate commit messages
+        run: |
+          # Get the list of commits in this push
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PRs, check commits between base and head
+            COMMITS=$(git log --format=%H ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          else
+            # For pushes, check commits in the current push
+            if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+              # New branch, check only the last commit
+              COMMITS=$(git log --format=%H -n 1)
+            else
+              # Existing branch, check commits between before and after
+              COMMITS=$(git log --format=%H ${{ github.event.before }}..${{ github.event.after }})
+            fi
+          fi
+
+          echo "Validating commit messages..."
+          EXIT_CODE=0
+
+          for commit in $COMMITS; do
+            MESSAGE=$(git log --format=%B -n 1 $commit)
+            echo "----------------------------------------"
+            echo "Checking commit: $commit"
+            echo "Message: $MESSAGE"
+            echo "----------------------------------------"
+
+            # Create a temporary file with the commit message
+            TEMP_FILE=$(mktemp)
+            echo "$MESSAGE" > "$TEMP_FILE"
+
+            # Run the validator
+            if python .git-hooks/commit-msg-validator.py "$TEMP_FILE"; then
+              echo "✅ Valid commit message"
+            else
+              echo "❌ Invalid commit message"
+              EXIT_CODE=1
+            fi
+
+            rm "$TEMP_FILE"
+            echo ""
+          done
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ One or more commit messages are invalid"
+            exit 1
+          fi
+
+          echo "✅ All commit messages are valid"

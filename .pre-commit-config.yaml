@@ -2,7 +2,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -12,10 +12,20 @@ repos:
       - id: debug-statements
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.13.3
     hooks:
+      # Run the formatter.
+      - id: ruff-format
       # Run the linter.
       - id: ruff
         args: [--fix]
-      # Run the formatter.
-      - id: ruff-format
+
+  # Commit message format validation
+  - repo: local
+    hooks:
+      - id: commit-msg-validator
+        name: Validate commit message format
+        entry: python .git-hooks/commit-msg-validator.py
+        language: system
+        stages: [commit-msg]
+        always_run: true
