@@ -31,3 +31,25 @@ allclean:
 
 build:
 	uv build
+
+cleanauth:
+	cd ory-infrastructure && docker-compose down
+	rm -rf ory-infrastructure/volumes/postgres
+	docker compose up
+
+restartauth:
+	cd ory-infrastructure && docker-compose down
+	docker compose up
+
+# Code quality targets
+lint:
+	uv run ruff check .
+
+lint-fix:
+	uv run ruff check --fix .
+
+format:
+	uv run ruff format .
+
+quality: lint-fix format
+	@echo "✅ Code quality checks complete"

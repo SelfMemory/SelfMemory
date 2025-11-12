@@ -2,6 +2,8 @@
 
 **Long-term memory for AI Agents with zero-setup simplicity**
 
+It is a open-source universal memory engine where users can store and retrieve their AI conversations and context across different models. Users can add memories through MCP, SDK, or a website selfmemory.com Over time, this will evolve into a one-stop memory hub with note-taking and chatbot features. For B2B, it becomes a knowledge backbone, storing project context, organizational knowledge, documents, and data sources to power company-wide AI systems.
+
 ## 🚀 Quick Start
 
 ```bash

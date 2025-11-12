@@ -32,7 +32,11 @@ from ..dependencies import (
 )
 from ..utils.crypto import hash_api_key
 from ..utils.datetime_helpers import utc_now
-from ..utils.permission_helpers import get_project_member, is_project_admin
+from ..utils.permission_helpers import (
+    get_project_member,
+    get_user_object_id_from_kratos_id,
+    is_project_admin,
+)
 from ..utils.validators import validate_object_id
 
 router = APIRouter(prefix="/api/projects", tags=["API Keys"])
@@ -94,7 +98,9 @@ def create_project_api_key(
     - Key is returned only once (on creation)
     - User can create multiple keys for the same project
     """
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
+    # auth.user_id is Kratos identity_id (UUID string)
+    # Look up MongoDB user document to get ObjectId for internal references
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
     project_obj_id = validate_object_id(project_id, "project_id")
 
     # Get project to verify it exists and get organizationId
@@ -289,7 +295,9 @@ def delete_project_api_key(
     - Project admin can delete any key in the project
     - Key is deactivated (not physically deleted) for audit purposes
     """
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
+    # auth.user_id is Kratos identity_id (UUID string)
+    # Look up MongoDB user document to get ObjectId for internal references
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
     project_obj_id = validate_object_id(project_id, "project_id")
     key_obj_id = validate_object_id(key_id, "key_id")
 

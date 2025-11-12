@@ -175,3 +175,28 @@ def get_user_by_email(db: Database, email: str) -> dict | None:
         dict: User record or None if not found
     """
     return db.users.find_one({"email": email})
+
+
+def get_user_object_id_from_kratos_id(db: Database, kratos_id: str) -> ObjectId:
+    """
+    Resolve Kratos identity ID to MongoDB ObjectId.
+    
+    In the Kratos authentication system, user_id is a UUID string (Kratos identity ID).
+    This function looks up the corresponding MongoDB user document and returns its ObjectId.
+    
+    Args:
+        db: MongoDB database instance
+        kratos_id: Kratos identity ID (UUID string)
+        
+    Returns:
+        ObjectId: MongoDB ObjectId for the user
+        
+    Raises:
+        ValueError: If user not found for the given Kratos ID
+    """
+    user = db.users.find_one({"kratosId": kratos_id})
+    if not user:
+        logger.error(f"User not found for Kratos ID: {kratos_id}")
+        raise ValueError(f"User not found for Kratos ID: {kratos_id}")
+
+    return user["_id"]

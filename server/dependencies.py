@@ -11,10 +11,12 @@ from typing import NamedTuple
 
 from fastapi import Header, HTTPException
 
+from .auth import validate_session, validate_token
 from .config import config
 from .database import mongo_db
 from .utils.crypto import verify_api_key
 from .utils.datetime_helpers import is_expired, utc_now
+from .utils.permission_helpers import get_user_object_id_from_kratos_id
 from .utils.validators import validate_object_id
 
 logger = logging.getLogger(__name__)
@@ -62,6 +64,30 @@ class AuthContext(NamedTuple):
 # ============================================================================
 
 
+def get_user_object_id(user_id: str):
+    """
+    Get user identifier for database queries.
+    
+    With Kratos authentication, user_id IS the Kratos identity_id (UUID string)
+    which is stored directly as _id in the users collection.
+    
+    Args:
+        user_id: Kratos identity_id (UUID string)
+        
+    Returns:
+        str: User ID (Kratos identity_id as string)
+        
+    Raises:
+        ValueError: If user not found
+    """
+    # user_id is Kratos identity_id (string), stored directly as _id
+    user = mongo_db.users.find_one({"_id": user_id})
+    if not user:
+        raise ValueError(f"User not found with ID: {user_id}")
+
+    return user_id
+
+
 def check_project_access(user_id: str, project_id: str) -> bool:
     """
     Check if a user has access to a project.
@@ -72,14 +98,14 @@ def check_project_access(user_id: str, project_id: str) -> bool:
     - They are a member in project_members collection
 
     Args:
-        user_id: User ID string
-        project_id: Project ID string
+        user_id: User ID string (Kratos identity_id)
+        project_id: Project ID string (MongoDB ObjectId)
 
     Returns:
         bool: True if user has access, False otherwise
     """
     try:
-        user_obj_id = validate_object_id(user_id, "user_id")
+        # user_id is Kratos identity_id (string)
         project_obj_id = validate_object_id(project_id, "project_id")
 
         # Get project to check organization ownership
@@ -87,15 +113,27 @@ def check_project_access(user_id: str, project_id: str) -> bool:
         if not project:
             return False
 
+        # Get user's MongoDB ObjectId by looking up via kratosId
+        try:
+            user_obj_id = get_user_object_id_from_kratos_id(mongo_db, user_id)
+        except ValueError:
+            logger.warning(f"User not found: {user_id}")
+            return False
+
         # Check if user is the organization owner (implicit full access)
+        # Check BOTH ownerId formats (frontend uses string, backend uses ObjectId)
         organization = mongo_db.organizations.find_one(
             {"_id": project["organizationId"]}
         )
-        if organization and organization.get("ownerId") == user_obj_id:
-            return True
+        if organization:
+            org_owner_id = organization.get("ownerId")
+            # Compare as both string and ObjectId
+            if org_owner_id == user_id or org_owner_id == user_obj_id:
+                return True
 
-        # Check if user owns the project
-        if project.get("ownerId") == user_obj_id:
+        # Check if user owns the project (check BOTH ownerId formats)
+        project_owner_id = project.get("ownerId")
+        if project_owner_id == user_id or project_owner_id == user_obj_id:
             return True
 
         # Check if user is a member
@@ -122,14 +160,14 @@ def get_user_permissions(user_id: str, project_id: str) -> ProjectPermissions:
     or full permissions if user is the project owner.
 
     Args:
-        user_id: User ID string
-        project_id: Project ID string
+        user_id: User ID string (Kratos identity_id)
+        project_id: Project ID string (MongoDB ObjectId)
 
     Returns:
         ProjectPermissions: User's permissions (DENIED_PERMISSIONS if no access)
     """
     try:
-        user_obj_id = validate_object_id(user_id, "user_id")
+        # user_id is Kratos identity_id (string)
         project_obj_id = validate_object_id(project_id, "project_id")
 
         # Get project to check organization ownership
@@ -138,15 +176,26 @@ def get_user_permissions(user_id: str, project_id: str) -> ProjectPermissions:
             logger.warning(f"Project not found: {project_id}")
             return DENIED_PERMISSIONS
 
+        # Get user's MongoDB ObjectId by looking up via kratosId
+        try:
+            user_obj_id = get_user_object_id_from_kratos_id(mongo_db, user_id)
+        except ValueError:
+            logger.warning(f"User not found: {user_id}")
+            return DENIED_PERMISSIONS
+
         # Check if user is the organization owner (implicit full access)
+        # Check BOTH ownerId formats (frontend uses string, backend uses ObjectId)
         organization = mongo_db.organizations.find_one(
             {"_id": project["organizationId"]}
         )
-        if organization and organization.get("ownerId") == user_obj_id:
-            return FULL_PERMISSIONS
+        if organization:
+            org_owner_id = organization.get("ownerId")
+            if org_owner_id == user_id or org_owner_id == user_obj_id:
+                return FULL_PERMISSIONS
 
-        # Check if user owns the project (owner has all permissions)
-        if project.get("ownerId") == user_obj_id:
+        # Check if user owns the project (check BOTH ownerId formats)
+        project_owner_id = project.get("ownerId")
+        if project_owner_id == user_id or project_owner_id == user_obj_id:
             return FULL_PERMISSIONS
 
         # Get permissions from project_members
@@ -211,20 +260,29 @@ def is_project_admin(user_id: str, project_id: str) -> bool:
     - They have the "admin" role in project_members
 
     Args:
-        user_id: User ID string
-        project_id: Project ID string
+        user_id: User ID string (Kratos identity_id)
+        project_id: Project ID string (MongoDB ObjectId)
 
     Returns:
         bool: True if user is admin, False otherwise
     """
     try:
-        user_obj_id = validate_object_id(user_id, "user_id")
+        # user_id is Kratos identity_id (string)
         project_obj_id = validate_object_id(project_id, "project_id")
 
-        # Check if user owns the project
+        # Get user's MongoDB ObjectId by looking up via kratosId
+        try:
+            user_obj_id = get_user_object_id_from_kratos_id(mongo_db, user_id)
+        except ValueError:
+            logger.warning(f"User not found: {user_id}")
+            return False
+
+        # Check if user owns the project (check BOTH ownerId formats)
         project = mongo_db.projects.find_one({"_id": project_obj_id})
-        if project and project.get("ownerId") == user_obj_id:
-            return True
+        if project:
+            project_owner_id = project.get("ownerId")
+            if project_owner_id == user_id or project_owner_id == user_obj_id:
+                return True
 
         # Check if user has admin role in project_members
         member = mongo_db.project_members.find_one(
@@ -244,59 +302,107 @@ def is_project_admin(user_id: str, project_id: str) -> bool:
 
 
 def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
-    """Database-based authentication - supports both API key (Bearer) and Session auth.
-
-    - Bearer token: For SDK/API users with project-scoped API keys
-    - Session auth: For dashboard users authenticated via NextAuth
+    """
+    Ory-based authentication with legacy API key support.
+    
+    Authentication methods (in order):
+    1. Kratos session cookie (Session prefix) - Dashboard users
+    2. Hydra OAuth token (Bearer prefix) - MCP OAuth users
+    3. Legacy API keys (Bearer sk_im_ prefix) - Temporary backward compatibility
+    
+    Returns AuthContext with user_id (Kratos identity_id for Ory auth).
     """
     if not authorization:
         raise HTTPException(status_code=401, detail="Authorization header required")
 
-    # Handle Session authentication (dashboard users)
+    # ========================================================================
+    # 1. Kratos Session Authentication (Dashboard users)
+    # ========================================================================
     if authorization.startswith("Session "):
-        user_id = authorization.replace("Session ", "")
+        session_cookie = authorization.replace("Session ", "")
 
-        # Validate and convert user_id
-        user_obj_id = validate_object_id(user_id, "user_id")
+        try:
+            # Validate session with Kratos
+            kratos_session = validate_session(session_cookie)
 
-        # Validate user exists and is active
-        user = mongo_db.users.find_one({"_id": user_obj_id})
+            # user_id is now Kratos identity_id
+            user_id = kratos_session.user_id
+            organization_id = kratos_session.organization_id
 
-        if not user:
-            logger.warning(f"❌ Session auth: User not found: {user_id}")
-            raise HTTPException(
-                status_code=401, detail="Invalid session - user not found"
+            logger.info(
+                f"✅ Kratos session validated: user={kratos_session.email}, "
+                f"identity_id={user_id}, org={organization_id}"
             )
 
-        if not user.get("isActive", True):
-            logger.warning(
-                f"❌ Session auth: Inactive user attempted access: {user_id}"
+            # Project context comes from request parameters for dashboard users
+            return AuthContext(
+                user_id=user_id,
+                project_id=None,  # Set by endpoint from request params
+                organization_id=organization_id,
+                permissions=DENIED_PERMISSIONS,  # Set by endpoint after project validation
             )
-            raise HTTPException(status_code=401, detail="User account inactive")
 
-        logger.info(f"✅ Session auth validated for user: {user.get('email', user_id)}")
+        except ValueError as e:
+            logger.warning(f"❌ Kratos session validation failed: {e}")
+            raise HTTPException(status_code=401, detail=str(e))
+        except Exception as e:
+            logger.error(f"❌ Kratos session validation error: {e}")
+            raise HTTPException(status_code=500, detail="Session validation error")
 
-        # For session auth, project context comes from request parameters
-        # Return AuthContext without project context - will be extracted by endpoint
-        return AuthContext(
-            user_id=user_id,
-            project_id=None,  # Will be set by endpoint from request params
-            organization_id=None,  # Will be set by endpoint from request params
-        )
-
-    # Handle API Key authentication (SDK users)
+    # ========================================================================
+    # 2. Bearer Token Authentication (OAuth or Legacy API Key)
+    # ========================================================================
     if not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
             detail="Authorization header must start with 'Bearer ' or 'Session '",
         )
 
-    api_key = authorization.replace("Bearer ", "")
+    token = authorization.replace("Bearer ", "")
 
-    # Accept only format: sk_im_
+    # Try Hydra OAuth token first (MCP users)
+    if not token.startswith("sk_im_"):
+        try:
+            # Validate OAuth token with Hydra
+            hydra_token = validate_token(token)
+
+            # user_id is Kratos identity_id from token subject
+            user_id = hydra_token.subject
+            project_id = hydra_token.project_id
+            organization_id = hydra_token.organization_id
+
+            logger.info(
+                f"✅ Hydra token validated: subject={user_id}, "
+                f"project={project_id}, org={organization_id}"
+            )
+
+            # For OAuth tokens, project context comes from token claims
+            # Get permissions from MongoDB based on project access
+            permissions = DENIED_PERMISSIONS
+            if project_id:
+                permissions = get_user_permissions(user_id, project_id)
+
+            return AuthContext(
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id,
+                permissions=permissions,
+            )
+
+        except ValueError as e:
+            logger.warning(f"❌ Hydra token validation failed: {e}")
+            raise HTTPException(status_code=401, detail=str(e))
+        except Exception as e:
+            logger.error(f"❌ Hydra token validation error: {e}")
+            raise HTTPException(status_code=500, detail="Token validation error")
+
+    # ========================================================================
+    # 3. Legacy API Key Authentication (Temporary backward compatibility)
+    # ========================================================================
+    api_key = token
     if not api_key.startswith("sk_im_"):
-        logger.warning("❌ Invalid API key format: does not start with 'sk_im_'")
-        raise HTTPException(status_code=401, detail="Invalid API key format")
+        logger.warning("❌ Invalid token: not Hydra token or legacy API key")
+        raise HTTPException(status_code=401, detail="Invalid token format")
 
     try:
         # Find all active API keys with matching prefix for efficiency
