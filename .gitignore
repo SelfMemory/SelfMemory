@@ -276,3 +276,6 @@ qdrant_data/
 
 # Examples directory outputs
 examples/outputs/
+.git_disabled/
+migration/
+backup_20251004_171428/

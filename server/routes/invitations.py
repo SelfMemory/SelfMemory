@@ -24,7 +24,6 @@ from ..config import config
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import is_expired
 from ..utils.rate_limiter import limiter
-from ..utils.validators import validate_object_id
 from .invitation_helpers import (
     add_user_to_organization,
     add_user_to_projects_from_invitation,
@@ -368,11 +367,19 @@ def accept_invitation(
     if not invitation:
         raise HTTPException(status_code=404, detail="Invitation not found")
 
-    # Get authenticated user's email
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
-    user = mongo_db.users.find_one({"_id": user_obj_id})
+    # auth.user_id is Kratos identity_id (UUID string)
+    # Look up MongoDB user document to get ObjectId for internal references
+    user = mongo_db.users.find_one({
+        "$or": [
+            {"kratosId": auth.user_id},
+            {"_id": auth.user_id}
+        ]
+    })
     if not user:
+        logger.error(f"User not found: {auth.user_id}")
         raise HTTPException(status_code=404, detail="User not found")
+
+    user_obj_id = user["_id"]
 
     # Validate invitation (checks expiry, status, email match)
     validate_invitation_for_acceptance(invitation, user.get("email"))
@@ -409,10 +416,16 @@ def list_pending_invitations(auth: AuthContext = Depends(authenticate_api_key)):
     Returns all invitations sent to the user's email that haven't been
     accepted yet and haven't expired.
     """
-    # Get authenticated user's email
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
-    user = mongo_db.users.find_one({"_id": user_obj_id})
+    # auth.user_id is Kratos identity_id (UUID string)
+    # Look up MongoDB user document to get ObjectId for internal references
+    user = mongo_db.users.find_one({
+        "$or": [
+            {"kratosId": auth.user_id},
+            {"_id": auth.user_id}
+        ]
+    })
     if not user:
+        logger.error(f"User not found: {auth.user_id}")
         raise HTTPException(status_code=404, detail="User not found")
 
     user_email = user.get("email")

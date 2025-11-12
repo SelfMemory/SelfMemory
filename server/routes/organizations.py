@@ -67,16 +67,20 @@ def get_organization_member(
 
 
 def is_organization_admin(
-    db: Database, organization_id: ObjectId, user_id: ObjectId
+    db: Database, organization_id: ObjectId, user_obj_id: ObjectId, kratos_user_id: str
 ) -> bool:
     """Check if user is an admin or owner of the organization."""
     # Check if user is the organization owner
+    # Check BOTH ownerId formats (frontend uses string, backend uses ObjectId)
     organization = db.organizations.find_one({"_id": organization_id})
-    if organization and str(organization["ownerId"]) == str(user_id):
-        return True
+    if organization:
+        org_owner_id = organization.get("ownerId")
+        # Compare as both Kratos ID string and MongoDB ObjectId
+        if org_owner_id == kratos_user_id or org_owner_id == user_obj_id:
+            return True
 
-    # Check if user is an admin member
-    member = get_organization_member(db, organization_id, user_id)
+    # Check if user is an admin member (using MongoDB ObjectId)
+    member = get_organization_member(db, organization_id, user_obj_id)
     return member and member["role"] in ["owner", "admin"]
 
 
@@ -113,7 +117,21 @@ def invite_user_to_organization(
     Creates an invitation record that can be accepted by the invited user.
     """
     org_obj_id = validate_object_id(org_id, "org_id")
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
+
+    # auth.user_id is Kratos identity_id (UUID string)
+    # Look up MongoDB user document to get ObjectId for internal references
+    user = mongo_db.users.find_one({
+        "$or": [
+            {"kratosId": auth.user_id},
+            {"_id": auth.user_id}
+        ]
+    })
+
+    if not user:
+        logger.error(f"User not found: {auth.user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_obj_id = user["_id"]
 
     # Verify organization exists
     organization = mongo_db.organizations.find_one({"_id": org_obj_id})
@@ -121,7 +139,7 @@ def invite_user_to_organization(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Verify inviter is admin or owner
-    if not is_organization_admin(mongo_db, org_obj_id, user_obj_id):
+    if not is_organization_admin(mongo_db, org_obj_id, user_obj_id, auth.user_id):
         raise HTTPException(
             status_code=403,
             detail="Only organization admins can invite users",
@@ -295,7 +313,21 @@ def list_organization_members(
     Any organization member can view the member list.
     """
     org_obj_id = validate_object_id(org_id, "org_id")
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
+
+    # auth.user_id is Kratos identity_id (UUID string)
+    # Look up MongoDB user document to get ObjectId for internal references
+    user = mongo_db.users.find_one({
+        "$or": [
+            {"kratosId": auth.user_id},
+            {"_id": auth.user_id}
+        ]
+    })
+
+    if not user:
+        logger.error(f"User not found: {auth.user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_obj_id = user["_id"]
 
     # Verify organization exists
     organization = mongo_db.organizations.find_one({"_id": org_obj_id})
@@ -442,7 +474,18 @@ def update_organization_member_role(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Verify requester is admin or owner
-    if not is_organization_admin(mongo_db, org_obj_id, requester_obj_id):
+    # Need to look up MongoDB user for requester_obj_id
+    requester_user = mongo_db.users.find_one({
+        "$or": [
+            {"kratosId": auth.user_id},
+            {"_id": auth.user_id}
+        ]
+    })
+    if not requester_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    requester_obj_id = requester_user["_id"]
+
+    if not is_organization_admin(mongo_db, org_obj_id, requester_obj_id, auth.user_id):
         raise HTTPException(
             status_code=403,
             detail="Only organization admins can update member roles",
@@ -517,7 +560,18 @@ def remove_user_from_organization(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Verify requester is admin
-    if not is_organization_admin(mongo_db, org_obj_id, requester_obj_id):
+    # Need to look up MongoDB user for requester_obj_id
+    requester_user = mongo_db.users.find_one({
+        "$or": [
+            {"kratosId": auth.user_id},
+            {"_id": auth.user_id}
+        ]
+    })
+    if not requester_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    requester_obj_id = requester_user["_id"]
+
+    if not is_organization_admin(mongo_db, org_obj_id, requester_obj_id, auth.user_id):
         raise HTTPException(
             status_code=403,
             detail="Only organization admins can remove members",
@@ -615,7 +669,18 @@ def cancel_organization_invitation(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Verify requester is admin
-    if not is_organization_admin(mongo_db, org_obj_id, user_obj_id):
+    # Need to look up MongoDB user for user_obj_id
+    user = mongo_db.users.find_one({
+        "$or": [
+            {"kratosId": auth.user_id},
+            {"_id": auth.user_id}
+        ]
+    })
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_obj_id = user["_id"]
+
+    if not is_organization_admin(mongo_db, org_obj_id, user_obj_id, auth.user_id):
         raise HTTPException(
             status_code=403,
             detail="Only organization admins can cancel invitations",

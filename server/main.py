@@ -17,14 +17,15 @@ from selfmemory import SelfMemory
 from .config import config
 from .dependencies import AuthContext, authenticate_api_key, mongo_db
 from .health import is_alive, is_ready, perform_health_checks
+from .mcp_auth import get_protected_resource_metadata
 from .routes.api_keys import router as api_keys_router
 from .routes.invitations import router as invitations_router
 from .routes.organizations import router as organizations_router
 from .routes.projects import router as projects_router
 from .routes.users import router as users_router
-from .utils.crypto import hash_api_key
 from .utils.datetime_helpers import utc_now
 from .utils.error_handlers import ErrorCode, create_error_response, get_request_id
+from .utils.permission_helpers import get_user_object_id_from_kratos_id
 from .utils.rate_limiter import get_rate_limit_key, limiter
 
 logging.basicConfig(
@@ -519,7 +520,8 @@ def add_memory(
             )
 
         # PHASE 7: Get user email for creator attribution
-        user = mongo_db.users.find_one({"_id": ObjectId(auth.user_id)})
+        # Note: auth.user_id is Kratos identity_id (string), not ObjectId
+        user = mongo_db.users.find_one({"_id": auth.user_id})
         user_email = user.get("email", "unknown") if user else "unknown"
 
         # Extract memory content from messages (selfmemory style)
@@ -887,27 +889,40 @@ def delete_all_memories(auth: AuthContext = Depends(authenticate_api_key)):
 
 # Helper function for ensuring default organization and project
 def ensure_default_org_and_project(user_id: str) -> tuple[str, str]:
-    """Ensure user has default organization and project, creating them if needed."""
+    """
+    Ensure user has default organization and project, creating them if needed.
+    
+    Note: user_id is Kratos identity_id (UUID string). We look up the MongoDB user
+    document and use its _id (ObjectId) as ownerId for consistency with dashboard.
+    """
     try:
-        user_obj_id = ObjectId(user_id)
+        # Look up MongoDB user document using Kratos identity_id
+        mongo_user_id = get_user_object_id_from_kratos_id(mongo_db, user_id)
+
+        logging.info(f"Ensuring default org/project: kratos_id={user_id}, mongo_id={mongo_user_id}")
 
         # Check if user already has a personal organization
-        personal_org = mongo_db.organizations.find_one(
-            {"ownerId": user_obj_id, "type": "personal"}
-        )
+        # CRITICAL: Check BOTH ownerId formats (frontend uses string, backend uses ObjectId)
+        personal_org = mongo_db.organizations.find_one({
+            "$or": [
+                {"ownerId": mongo_user_id},  # Backend-created (ObjectId)
+                {"ownerId": user_id}         # Frontend-created (Kratos ID string)
+            ],
+            "type": "personal"
+        })
 
         if not personal_org:
-            # Create personal organization
+            # Create personal organization using MongoDB ObjectId
             org_doc = {
                 "name": "Personal Organization",
-                "ownerId": user_obj_id,
+                "ownerId": mongo_user_id,  # MongoDB ObjectId for consistency
                 "type": "personal",
                 "createdAt": utc_now(),
                 "updatedAt": utc_now(),
             }
             org_result = mongo_db.organizations.insert_one(org_doc)
             org_id = org_result.inserted_id
-            logging.info(f"Created personal organization for user {user_id}")
+            logging.info(f"Created personal organization for user {user_id} (mongo_id: {mongo_user_id})")
         else:
             org_id = personal_org["_id"]
 
@@ -915,28 +930,30 @@ def ensure_default_org_and_project(user_id: str) -> tuple[str, str]:
         default_project = mongo_db.projects.find_one(
             {
                 "organizationId": org_id,
-                "ownerId": user_obj_id,
+                "ownerId": mongo_user_id,  # MongoDB ObjectId for consistency
                 "name": "Default Project",
             }
         )
 
         if not default_project:
-            # Create default project
+            # Create default project using MongoDB ObjectId
             project_doc = {
                 "name": "Default Project",
                 "organizationId": org_id,
-                "ownerId": user_obj_id,
+                "ownerId": mongo_user_id,  # MongoDB ObjectId for consistency
                 "createdAt": utc_now(),
                 "updatedAt": utc_now(),
             }
             project_result = mongo_db.projects.insert_one(project_doc)
             project_id = project_result.inserted_id
-            logging.info(f"Created default project for user {user_id}")
+            logging.info(f"Created default project for user {user_id} (mongo_id: {mongo_user_id})")
         else:
             project_id = default_project["_id"]
 
         return str(org_id), str(project_id)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Error ensuring default org/project for user {user_id}: {e}")
         raise HTTPException(
@@ -949,14 +966,20 @@ def ensure_default_org_and_project(user_id: str) -> tuple[str, str]:
 def list_organizations(auth: AuthContext = Depends(authenticate_api_key)):
     """List all organizations the user has access to (owned + member)."""
     try:
-        user_obj_id = ObjectId(auth.user_id)
+        # Look up MongoDB user document for consistency
+        mongo_user_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
 
-        # Get organizations where user is owner
-        owned_orgs = list(mongo_db.organizations.find({"ownerId": user_obj_id}))
+        # Get organizations where user is owner (check BOTH ownerId formats)
+        owned_orgs = list(mongo_db.organizations.find({
+            "$or": [
+                {"ownerId": mongo_user_id},  # Backend-created (ObjectId)
+                {"ownerId": auth.user_id}    # Frontend-created (Kratos ID string)
+            ]
+        }))
 
-        # Get organizations where user is a member
+        # Get organizations where user is a member (using MongoDB ObjectId)
         member_records = list(
-            mongo_db.organization_members.find({"userId": user_obj_id})
+            mongo_db.organization_members.find({"userId": mongo_user_id})
         )
         member_org_ids = [record["organizationId"] for record in member_records]
 
@@ -1015,11 +1038,13 @@ def create_organization(
 ):
     """Create a new organization."""
     try:
-        user_obj_id = ObjectId(auth.user_id)
+        # Note: auth.user_id is Kratos identity_id (string), not ObjectId
+        # Look up MongoDB user document for consistency
+        mongo_user_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
 
         # Check if organization name already exists for this user
         existing_org = mongo_db.organizations.find_one(
-            {"name": org_create.name, "ownerId": user_obj_id}
+            {"name": org_create.name, "ownerId": mongo_user_id}
         )
 
         if existing_org:
@@ -1027,10 +1052,10 @@ def create_organization(
                 status_code=400, detail="Organization name already exists"
             )
 
-        # Create organization
+        # Create organization using MongoDB ObjectId
         org_doc = {
             "name": org_create.name,
-            "ownerId": user_obj_id,
+            "ownerId": mongo_user_id,  # MongoDB ObjectId for consistency
             "type": "custom",  # User-created organizations are "custom"
             "createdAt": utc_now(),
             "updatedAt": utc_now(),
@@ -1042,7 +1067,7 @@ def create_organization(
         # IMPORTANT: Add owner to organization_members collection
         org_member_doc = {
             "organizationId": org_id,
-            "userId": user_obj_id,
+            "userId": mongo_user_id,  # MongoDB ObjectId for consistency
             "role": "owner",
             "joinedAt": utc_now(),
             "status": "active",
@@ -1051,7 +1076,7 @@ def create_organization(
         mongo_db.organization_members.insert_one(org_member_doc)
 
         logging.info(
-            f"Created organization '{org_create.name}' for user {auth.user_id} and added owner to organization_members"
+            f"Created organization '{org_create.name}' for user {auth.user_id} (mongo_id: {mongo_user_id}) and added owner to organization_members"
         )
 
         return {
@@ -1072,12 +1097,13 @@ def create_organization(
 def get_organization(org_id: str, auth: AuthContext = Depends(authenticate_api_key)):
     """Get details of a specific organization."""
     try:
-        user_obj_id = ObjectId(auth.user_id)
+        # Note: auth.user_id is Kratos identity_id (string), not ObjectId
+        user_id = auth.user_id
         org_obj_id = ObjectId(org_id)
 
         # Get organization and verify ownership
         organization = mongo_db.organizations.find_one(
-            {"_id": org_obj_id, "ownerId": user_obj_id}
+            {"_id": org_obj_id, "ownerId": user_id}
         )
 
         if not organization:
@@ -1101,13 +1127,19 @@ def get_organization(org_id: str, auth: AuthContext = Depends(authenticate_api_k
 def list_projects(auth: AuthContext = Depends(authenticate_api_key)):
     """List all projects the user has access to (owned + member)."""
     try:
-        user_obj_id = ObjectId(auth.user_id)
+        # Look up MongoDB user document for consistency
+        mongo_user_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
 
-        # Get projects where user is owner
-        owned_projects = list(mongo_db.projects.find({"ownerId": user_obj_id}))
+        # Get projects where user is owner (check BOTH ownerId formats)
+        owned_projects = list(mongo_db.projects.find({
+            "$or": [
+                {"ownerId": mongo_user_id},  # Backend-created (ObjectId)
+                {"ownerId": auth.user_id}    # Frontend-created (Kratos ID string)
+            ]
+        }))
 
-        # Get projects where user is a member
-        member_records = list(mongo_db.project_members.find({"userId": user_obj_id}))
+        # Get projects where user is a member (using MongoDB ObjectId)
+        member_records = list(mongo_db.project_members.find({"userId": mongo_user_id}))
         member_project_ids = [record["projectId"] for record in member_records]
 
         # Get project details for member projects
@@ -1177,7 +1209,8 @@ def create_project(
 ):
     """Create a new project. Organization owners and admins can create projects."""
     try:
-        user_obj_id = ObjectId(auth.user_id)
+        # Look up MongoDB user document for consistency
+        mongo_user_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
         org_obj_id = ObjectId(project_create.organization_id)
 
         # Verify organization exists
@@ -1186,8 +1219,8 @@ def create_project(
         if not organization:
             raise HTTPException(status_code=404, detail="Organization not found")
 
-        # Check if user is organization owner
-        is_owner = str(organization["ownerId"]) == auth.user_id
+        # Check if user is organization owner (compare MongoDB ObjectIds)
+        is_owner = organization["ownerId"] == mongo_user_id
 
         # Check if user is organization admin
         is_admin = False
@@ -1195,7 +1228,7 @@ def create_project(
             admin_member = mongo_db.organization_members.find_one(
                 {
                     "organizationId": org_obj_id,
-                    "userId": user_obj_id,
+                    "userId": mongo_user_id,  # MongoDB ObjectId for consistency
                     "role": "admin",
                     "status": "active",
                 }
@@ -1220,11 +1253,11 @@ def create_project(
                 detail="Project name already exists in this organization",
             )
 
-        # Create project
+        # Create project using MongoDB ObjectId
         project_doc = {
             "name": project_create.name,
             "organizationId": org_obj_id,
-            "ownerId": user_obj_id,
+            "ownerId": mongo_user_id,  # MongoDB ObjectId for consistency
             "createdAt": utc_now(),
             "updatedAt": utc_now(),
         }
@@ -1232,7 +1265,7 @@ def create_project(
         result = mongo_db.projects.insert_one(project_doc)
         project_id = str(result.inserted_id)
 
-        logging.info(f"Created project '{project_create.name}' for user {auth.user_id}")
+        logging.info(f"Created project '{project_create.name}' for user {auth.user_id} (mongo_id: {mongo_user_id})")
 
         return {
             "project_id": project_id,
@@ -1253,12 +1286,13 @@ def create_project(
 def get_project(project_id: str, auth: AuthContext = Depends(authenticate_api_key)):
     """Get details of a specific project."""
     try:
-        user_obj_id = ObjectId(auth.user_id)
+        # Note: auth.user_id is Kratos identity_id (string), not ObjectId
+        user_id = auth.user_id
         project_obj_id = ObjectId(project_id)
 
         # Get project and verify ownership
         project = mongo_db.projects.find_one(
-            {"_id": project_obj_id, "ownerId": user_obj_id}
+            {"_id": project_obj_id, "ownerId": user_id}
         )
 
         if not project:
@@ -1286,12 +1320,13 @@ def list_organization_projects(
 ):
     """List all projects in a specific organization."""
     try:
-        user_obj_id = ObjectId(auth.user_id)
+        # Note: auth.user_id is Kratos identity_id (string), not ObjectId
+        user_id = auth.user_id
         org_obj_id = ObjectId(org_id)
 
         # Verify user owns the organization
         organization = mongo_db.organizations.find_one(
-            {"_id": org_obj_id, "ownerId": user_obj_id}
+            {"_id": org_obj_id, "ownerId": user_id}
         )
 
         if not organization:
@@ -1302,7 +1337,7 @@ def list_organization_projects(
         # Get projects in this organization
         projects = list(
             mongo_db.projects.find(
-                {"organizationId": org_obj_id, "ownerId": user_obj_id}
+                {"organizationId": org_obj_id, "ownerId": user_id}
             )
         )
 
@@ -1322,72 +1357,109 @@ def list_organization_projects(
 
 
 # User Initialization Endpoint
-@app.post("/api/initialize", summary="Initialize new user with default org and project")
+@app.post("/api/initialize", summary="Initialize new user with Kratos identity sync")
 def initialize_user(auth: AuthContext = Depends(authenticate_api_key)):
-    """Initialize a new user with default organization, project, and API key."""
+    """
+    Initialize a new user with Kratos identity sync.
+    
+    This endpoint:
+    1. Syncs Kratos identity to MongoDB (auth.user_id is Kratos identity_id)
+    2. Creates default personal organization and project
+    
+    Note: auth.user_id is now Kratos identity_id, not MongoDB ObjectId
+    """
     try:
+        from .auth import get_identity_by_id
+
+        # Get Kratos identity details (auth.user_id is Kratos identity_id)
+        kratos_identity_id = auth.user_id
+
+        # Fetch full identity from Kratos
+        try:
+            kratos_session = get_identity_by_id(kratos_identity_id)
+            email = kratos_session.email
+            organization_id_trait = kratos_session.organization_id
+            project_ids_trait = kratos_session.project_ids
+            name = kratos_session.name
+        except Exception as e:
+            logging.error(f"Failed to fetch Kratos identity: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to sync user identity from Kratos"
+            ) from e
+
+        # Check if user already exists in MongoDB
+        # User may exist with either:
+        # 1. _id = Kratos identity_id (new format)
+        # 2. kratosId = Kratos identity_id (from ensureUserExists)
+        existing_user = mongo_db.users.find_one({
+            "$or": [
+                {"_id": kratos_identity_id},
+                {"kratosId": kratos_identity_id}
+            ]
+        })
+
+        if existing_user:
+            logging.info(f"User already exists in MongoDB: {kratos_identity_id}")
+            # Just update traits, don't create duplicate
+            update_filter = {"_id": existing_user["_id"]}
+            mongo_db.users.update_one(
+                update_filter,
+                {
+                    "$set": {
+                        "email": email,
+                        "name": name,
+                        "organization_id": organization_id_trait,
+                        "project_ids": project_ids_trait,
+                        "updatedAt": utc_now(),
+                    }
+                }
+            )
+            logging.info(f"✅ Updated existing user record: {existing_user['_id']}")
+        else:
+            # This shouldn't happen as ensureUserExists should have created user
+            # But handle it just in case
+            logging.warning(f"No existing user found for {kratos_identity_id}, this is unexpected")
+
         # Ensure default organization and project exist
-        org_id, project_id = ensure_default_org_and_project(auth.user_id)
+        # Note: user_id is Kratos identity_id (string), not ObjectId
+        org_id, project_id = ensure_default_org_and_project(kratos_identity_id)
 
-        # Check if user already has an API key for the default project
-        existing_key = mongo_db.api_keys.find_one(
-            {
-                "userId": ObjectId(auth.user_id),
-                "projectId": ObjectId(project_id),
-                "autoGenerated": True,
-            }
+        logging.info(
+            f"✅ Initialized user {kratos_identity_id} ({email}) with default org/project"
         )
-
-        if existing_key:
-            # User already initialized
-            return {
-                "organization_id": org_id,
-                "project_id": project_id,
-                "api_key_id": str(existing_key["_id"]),
-                "key_prefix": existing_key.get("keyPrefix", "sk_im_..."),
-                "message": "User already initialized",
-            }
-
-        # Create default API key
-        import secrets
-        import string
-
-        alphabet = string.ascii_letters + string.digits
-        api_key = "sk_im_" + "".join(secrets.choice(alphabet) for _ in range(40))
-        key_hash = hash_api_key(api_key)
-        key_prefix = api_key[:10] + "..."
-
-        key_doc = {
-            "name": "Default API Key",
-            "userId": ObjectId(auth.user_id),
-            "projectId": ObjectId(project_id),
-            "keyHash": key_hash,
-            "keyPrefix": key_prefix,
-            "permissions": ["read", "write"],
-            "isActive": True,
-            "autoGenerated": True,
-            "expiresAt": None,
-            "createdAt": utc_now(),
-            "lastUsed": None,
-        }
-
-        result = mongo_db.api_keys.insert_one(key_doc)
-        key_id = str(result.inserted_id)
-
-        logging.info(f"Initialized user {auth.user_id} with default org/project/key")
 
         return {
             "organization_id": org_id,
             "project_id": project_id,
-            "api_key_id": key_id,
-            "api_key": api_key,  # Only returned on creation
-            "key_prefix": key_prefix,
-            "message": "User initialized successfully with default organization, project, and API key",
+            "message": "User initialized successfully",
+            "kratos_identity_id": kratos_identity_id,
+            "email": email,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logging.exception("Error in initialize_user:")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# MCP (Model Context Protocol) Endpoints
+@app.get("/.well-known/oauth-protected-resource", summary="Protected Resource Metadata for MCP")
+def mcp_protected_resource_metadata():
+    """
+    RFC 9728 Protected Resource Metadata endpoint for MCP clients.
+    
+    This endpoint tells MCP clients:
+    - What authorization servers to use (Ory Hydra)
+    - What scopes are supported
+    - Where to find documentation
+    """
+    if not config.mcp.ENABLED:
+        raise HTTPException(status_code=404, detail="MCP is not enabled")
+    
+    logging.info("📋 [MCP] Serving Protected Resource Metadata")
+    return get_protected_resource_metadata()
 
 
 @app.get("/health", summary="Comprehensive health check")

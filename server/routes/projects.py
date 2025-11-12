@@ -20,12 +20,13 @@ from ..database import get_role_permissions
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.database_utils import safe_insert_member
 from ..utils.datetime_helpers import utc_now
+from ..auth.permissions import require_project_admin
 from ..utils.permission_helpers import (
     count_project_admins,
     get_project_member,
     get_user_by_email,
+    get_user_object_id_from_kratos_id,
     is_organization_member,
-    is_project_admin,
 )
 from ..utils.rate_limiter import limiter
 from ..utils.validators import validate_object_id
@@ -98,15 +99,16 @@ def get_project_details(
     User must be owner or member of the project.
     """
     project_obj_id = validate_object_id(project_id, "project_id")
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
 
     # Get project
     project = mongo_db.projects.find_one({"_id": project_obj_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Check if user is owner
-    is_owner = str(project["ownerId"]) == auth.user_id
+    # Check if user is owner (check BOTH ownerId formats)
+    project_owner_id = project.get("ownerId")
+    is_owner = project_owner_id == auth.user_id or project_owner_id == user_obj_id
 
     if is_owner:
         # Owner has full access
@@ -176,13 +178,18 @@ def list_user_projects(
     - For member projects: userRole and userPermissions included
     - For org owner access: isOrgOwner=True
     """
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
 
     all_projects = []
     project_ids_seen = set()
 
-    # 1. Get organizations where user is the owner
-    owned_orgs = list(mongo_db.organizations.find({"ownerId": user_obj_id}))
+    # 1. Get organizations where user is the owner (check BOTH ownerId formats)
+    owned_orgs = list(mongo_db.organizations.find({
+        "$or": [
+            {"ownerId": user_obj_id},  # Backend-created (ObjectId)
+            {"ownerId": auth.user_id}  # Frontend-created (Kratos ID string)
+        ]
+    }))
     owned_org_ids = [org["_id"] for org in owned_orgs]
 
     # 2. Get ALL projects in organizations where user is owner
@@ -196,6 +203,10 @@ def list_user_projects(
             if project_id in project_ids_seen:
                 continue
 
+            # Check if user owns this specific project (check BOTH formats)
+            project_owner_id = project.get("ownerId")
+            is_project_owner = project_owner_id == auth.user_id or project_owner_id == user_obj_id
+
             project_ids_seen.add(project_id)
             all_projects.append(
                 {
@@ -205,7 +216,7 @@ def list_user_projects(
                     "ownerId": str(project["ownerId"]),
                     "createdAt": project["createdAt"].isoformat(),
                     "updatedAt": project["updatedAt"].isoformat(),
-                    "isOwner": str(project["ownerId"]) == auth.user_id,
+                    "isOwner": is_project_owner,
                     "isOrgOwner": True,
                     "role": "admin",
                     "userPermissions": {
@@ -218,8 +229,14 @@ def list_user_projects(
             )
 
     # 3. Get all projects owned by the user (that aren't in orgs they own)
+    # Check BOTH ownerId formats
     owned_projects = list(
-        mongo_db.projects.find({"ownerId": user_obj_id}).sort("createdAt", -1)
+        mongo_db.projects.find({
+            "$or": [
+                {"ownerId": user_obj_id},  # Backend-created (ObjectId)
+                {"ownerId": auth.user_id}  # Frontend-created (Kratos ID string)
+            ]
+        }).sort("createdAt", -1)
     )
 
     for project in owned_projects:
@@ -304,23 +321,17 @@ def add_user_to_project(
     - User must already be a member of the organization
     - Automatically assigns permissions based on role
     """
-    project_obj_id = validate_object_id(project_id, "project_id")
-    requester_obj_id = validate_object_id(auth.user_id, "user_id")
+    # Verify project exists and requester is admin (combined check)
+    project_obj_id = require_project_admin(project_id, auth)
+    requester_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
     target_user_obj_id = validate_object_id(member.user_id, "user_id")
 
-    # Verify project exists
+    # Get project details
     project = mongo_db.projects.find_one({"_id": project_obj_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     organization_id = project["organizationId"]
-
-    # Verify requester is project admin
-    if not is_project_admin(mongo_db, project_obj_id, requester_obj_id):
-        raise HTTPException(
-            status_code=403,
-            detail="Only project admins can add members",
-        )
 
     # Verify target user exists
     target_user = mongo_db.users.find_one({"_id": target_user_obj_id})
@@ -391,22 +402,16 @@ def invite_user_to_project(
     - If user is not in organization, they will be invited to org first
     - Creates invitation that can be accepted
     """
-    project_obj_id = validate_object_id(project_id, "project_id")
-    requester_obj_id = validate_object_id(auth.user_id, "user_id")
+    # Verify project exists and requester is admin (combined check)
+    project_obj_id = require_project_admin(project_id, auth)
+    requester_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
 
-    # Verify project exists
+    # Get project details
     project = mongo_db.projects.find_one({"_id": project_obj_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     organization_id = project["organizationId"]
-
-    # Verify requester is project admin
-    if not is_project_admin(mongo_db, project_obj_id, requester_obj_id):
-        raise HTTPException(
-            status_code=403,
-            detail="Only project admins can invite users",
-        )
 
     # Get inviter's email to prevent self-invitation
     inviter = mongo_db.users.find_one({"_id": requester_obj_id})
@@ -603,7 +608,7 @@ def list_project_members(
     Any project member can view the member list.
     """
     project_obj_id = validate_object_id(project_id, "project_id")
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
 
     # Verify project exists
     project = mongo_db.projects.find_one({"_id": project_obj_id})
@@ -611,7 +616,9 @@ def list_project_members(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Verify requester has project access (owner OR member)
-    is_owner = str(project["ownerId"]) == auth.user_id
+    # Check BOTH ownerId formats
+    project_owner_id = project.get("ownerId")
+    is_owner = project_owner_id == auth.user_id or project_owner_id == user_obj_id
     requester_member = get_project_member(mongo_db, project_obj_id, user_obj_id)
 
     if not is_owner and not requester_member:
@@ -674,21 +681,14 @@ def update_project_member_role(
     - Cannot demote the last admin
     - Automatically updates permissions based on new role
     """
-    project_obj_id = validate_object_id(project_id, "project_id")
-    requester_obj_id = validate_object_id(auth.user_id, "user_id")
+    # Verify project exists and requester is admin (combined check)
+    project_obj_id = require_project_admin(project_id, auth)
     target_user_obj_id = validate_object_id(user_id, "user_id")
 
     # Verify project exists
     project = mongo_db.projects.find_one({"_id": project_obj_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
-    # Verify requester is project admin
-    if not is_project_admin(mongo_db, project_obj_id, requester_obj_id):
-        raise HTTPException(
-            status_code=403,
-            detail="Only project admins can update member roles",
-        )
 
     # Verify target user is a project member
     target_member = get_project_member(mongo_db, project_obj_id, target_user_obj_id)
@@ -751,7 +751,7 @@ def remove_user_from_project(
     - Cascades: deactivates project-scoped API keys for the user
     """
     project_obj_id = validate_object_id(project_id, "project_id")
-    requester_obj_id = validate_object_id(auth.user_id, "user_id")
+    requester_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
     target_user_obj_id = validate_object_id(user_id, "user_id")
 
     # Verify project exists
@@ -760,6 +760,8 @@ def remove_user_from_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Verify requester is admin OR removing themselves
+    from ..utils.permission_helpers import is_project_admin
+
     is_admin = is_project_admin(mongo_db, project_obj_id, requester_obj_id)
     is_self_removal = str(requester_obj_id) == user_id
 
@@ -835,15 +837,18 @@ def delete_project(
     - Requires confirmation (this is destructive)
     """
     project_obj_id = validate_object_id(project_id, "project_id")
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
 
     # Verify project exists
     project = mongo_db.projects.find_one({"_id": project_obj_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Verify requester is project owner
-    if str(project["ownerId"]) != auth.user_id:
+    # Verify requester is project owner (check BOTH ownerId formats)
+    project_owner_id = project.get("ownerId")
+    is_owner = project_owner_id == auth.user_id or project_owner_id == user_obj_id
+    
+    if not is_owner:
         raise HTTPException(
             status_code=403,
             detail="Only the project owner can delete the project",
