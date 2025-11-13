@@ -97,10 +97,13 @@ def create_project_api_key(
     - Permissions are inherited from user's project role if not specified
     - Key is returned only once (on creation)
     - User can create multiple keys for the same project
+    
+    Note: API key stores Kratos ID (not MongoDB ObjectId) for consistency
+    with other auth tokens (sessions, OAuth). This maintains a clear separation:
+    - External auth layer → Kratos IDs
+    - Internal database relationships → MongoDB ObjectIds
     """
     # auth.user_id is Kratos identity_id (UUID string)
-    # Look up MongoDB user document to get ObjectId for internal references
-    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
     project_obj_id = validate_object_id(project_id, "project_id")
 
     # Get project to verify it exists and get organizationId
@@ -119,6 +122,9 @@ def create_project_api_key(
             status_code=403, detail="You do not have access to this project"
         )
 
+    # Get user's MongoDB ObjectId for permission checks (project_members uses ObjectId)
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
+    
     # Get user's project membership to check permissions
     member = get_project_member(mongo_db, project_obj_id, user_obj_id)
     if not member:
@@ -180,9 +186,10 @@ def create_project_api_key(
         expires_at = utc_now() + timedelta(days=key_create.expires_in_days)
 
     # Create API key document with project and organization context
+    # IMPORTANT: Store Kratos ID (not MongoDB ObjectId) for consistency with other auth tokens
     key_doc = {
         "name": key_create.name,
-        "userId": user_obj_id,
+        "userId": auth.user_id,  # Store Kratos ID directly
         "projectId": project_obj_id,
         "organizationId": organization_id,
         "keyHash": key_hash,
@@ -251,8 +258,8 @@ def list_project_api_keys(
     # Enrich with user information and remove sensitive data
     result_keys = []
     for key in api_keys:
-        # Get user info for owner email
-        user = mongo_db.users.find_one({"_id": key["userId"]})
+        # Get user info for owner email - userId is now Kratos ID
+        user = mongo_db.users.find_one({"kratosId": key["userId"]})
         owner_email = user.get("email", "Unknown") if user else "Unknown"
 
         result_keys.append(
@@ -260,7 +267,7 @@ def list_project_api_keys(
                 "id": str(key["_id"]),
                 "name": key.get("name", "Unnamed Key"),
                 "key_prefix": key.get("keyPrefix", "sk_im_..."),
-                "owner_id": str(key["userId"]),
+                "owner_id": key["userId"],  # Kratos ID (string)
                 "owner_email": owner_email,
                 "permissions": key.get("permissions", []),
                 "is_active": key.get("isActive", True),
@@ -296,8 +303,6 @@ def delete_project_api_key(
     - Key is deactivated (not physically deleted) for audit purposes
     """
     # auth.user_id is Kratos identity_id (UUID string)
-    # Look up MongoDB user document to get ObjectId for internal references
-    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
     project_obj_id = validate_object_id(project_id, "project_id")
     key_obj_id = validate_object_id(key_id, "key_id")
 
@@ -324,7 +329,11 @@ def delete_project_api_key(
         raise HTTPException(status_code=404, detail="API key not found in this project")
 
     # Check permission: user must be key owner OR project admin
-    is_owner = api_key["userId"] == user_obj_id
+    # Compare Kratos IDs directly (userId in API key is now Kratos ID)
+    is_owner = api_key["userId"] == auth.user_id
+    
+    # For admin check, need MongoDB ObjectId (project_members uses ObjectId)
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
     is_admin = is_project_admin(mongo_db, project_obj_id, user_obj_id)
 
     if not (is_owner or is_admin):

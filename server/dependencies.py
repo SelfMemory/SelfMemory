@@ -466,7 +466,8 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
             raise HTTPException(status_code=401, detail="API key expired")
 
         # Get user to verify it's active
-        user = mongo_db.users.find_one({"_id": stored_key["userId"]})
+        # Note: API key now stores Kratos ID directly (not MongoDB ObjectId)
+        user = mongo_db.users.find_one({"kratosId": stored_key["userId"]})
         logger.info(
             f"🔍 Looking up user: {stored_key['userId']}, found={user is not None}"
         )
@@ -478,7 +479,9 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
             raise HTTPException(status_code=401, detail="User account inactive")
 
         # Extract multi-tenant context from API key
-        user_id = str(stored_key["userId"])
+        # userId is now Kratos ID (already a string)
+        user_id = stored_key["userId"]
+
         project_id = None
         organization_id = None
 
