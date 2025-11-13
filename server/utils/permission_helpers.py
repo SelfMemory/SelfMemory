@@ -200,3 +200,62 @@ def get_user_object_id_from_kratos_id(db: Database, kratos_id: str) -> ObjectId:
         raise ValueError(f"User not found for Kratos ID: {kratos_id}")
 
     return user["_id"]
+
+
+def get_user_by_kratos_id(db: Database, kratos_id: str) -> dict:
+    """
+    Get user document by Kratos ID (handles both new and legacy formats).
+    
+    During migration period, this checks both kratosId and _id fields to support
+    users created before and after the Kratos migration.
+    
+    Args:
+        db: MongoDB database instance
+        kratos_id: Kratos identity ID (UUID string)
+        
+    Returns:
+        dict: User document
+        
+    Raises:
+        ValueError: If user not found
+    """
+    # TODO [MIGRATION]: After production migration complete, simplify to:
+    # user = db.users.find_one({"kratosId": kratos_id})
+    # This dual-format lookup is temporary for migration compatibility.
+    user = db.users.find_one({
+        "$or": [
+            {"kratosId": kratos_id},
+            {"_id": kratos_id}
+        ]
+    })
+    
+    if not user:
+        logger.error(f"User not found for Kratos ID: {kratos_id}")
+        raise ValueError(f"User not found for Kratos ID: {kratos_id}")
+    
+    return user
+
+
+def is_owner(resource: dict, kratos_id: str, mongo_user_id: ObjectId) -> bool:
+    """
+    Check if user owns a resource (handles both ID formats during migration).
+    
+    During the Kratos migration period, ownerId can be either:
+    - Kratos UUID string (new format)
+    - MongoDB ObjectId (legacy format)
+    
+    This helper ensures consistent ownership checks across the codebase.
+    
+    Args:
+        resource: Resource document (organization, project, etc.) with ownerId field
+        kratos_id: User's Kratos identity ID (UUID string)
+        mongo_user_id: User's MongoDB ObjectId
+        
+    Returns:
+        bool: True if user owns the resource, False otherwise
+    """
+    # TODO [MIGRATION]: After production migration complete, simplify to:
+    # return resource.get("ownerId") == kratos_id
+    # This dual-format check is temporary for migration compatibility.
+    owner_id = resource.get("ownerId")
+    return owner_id == kratos_id or owner_id == mongo_user_id

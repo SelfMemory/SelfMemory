@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from ..config import config
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import is_expired
+from ..utils.permission_helpers import get_user_by_kratos_id
 from ..utils.rate_limiter import limiter
 from .invitation_helpers import (
     add_user_to_organization,
@@ -367,17 +368,11 @@ def accept_invitation(
     if not invitation:
         raise HTTPException(status_code=404, detail="Invitation not found")
 
-    # auth.user_id is Kratos identity_id (UUID string)
-    # Look up MongoDB user document to get ObjectId for internal references
-    user = mongo_db.users.find_one({
-        "$or": [
-            {"kratosId": auth.user_id},
-            {"_id": auth.user_id}
-        ]
-    })
-    if not user:
-        logger.error(f"User not found: {auth.user_id}")
-        raise HTTPException(status_code=404, detail="User not found")
+    # Get user document using helper (handles migration dual-format)
+    try:
+        user = get_user_by_kratos_id(mongo_db, auth.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
     user_obj_id = user["_id"]
 
@@ -416,17 +411,11 @@ def list_pending_invitations(auth: AuthContext = Depends(authenticate_api_key)):
     Returns all invitations sent to the user's email that haven't been
     accepted yet and haven't expired.
     """
-    # auth.user_id is Kratos identity_id (UUID string)
-    # Look up MongoDB user document to get ObjectId for internal references
-    user = mongo_db.users.find_one({
-        "$or": [
-            {"kratosId": auth.user_id},
-            {"_id": auth.user_id}
-        ]
-    })
-    if not user:
-        logger.error(f"User not found: {auth.user_id}")
-        raise HTTPException(status_code=404, detail="User not found")
+    # Get user document using helper (handles migration dual-format)
+    try:
+        user = get_user_by_kratos_id(mongo_db, auth.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
     user_email = user.get("email")
 

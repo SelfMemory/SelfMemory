@@ -19,6 +19,7 @@ from pymongo.database import Database
 from ..config import config
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import utc_now
+from ..utils.permission_helpers import get_user_by_kratos_id, is_owner
 from ..utils.rate_limiter import limiter
 from ..utils.validators import validate_object_id
 from .invitations import generate_invitation_token, send_invitation_email
@@ -118,18 +119,11 @@ def invite_user_to_organization(
     """
     org_obj_id = validate_object_id(org_id, "org_id")
 
-    # auth.user_id is Kratos identity_id (UUID string)
-    # Look up MongoDB user document to get ObjectId for internal references
-    user = mongo_db.users.find_one({
-        "$or": [
-            {"kratosId": auth.user_id},
-            {"_id": auth.user_id}
-        ]
-    })
-
-    if not user:
-        logger.error(f"User not found: {auth.user_id}")
-        raise HTTPException(status_code=404, detail="User not found")
+    # Get user document using helper (handles migration dual-format)
+    try:
+        user = get_user_by_kratos_id(mongo_db, auth.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
     user_obj_id = user["_id"]
 
@@ -314,18 +308,11 @@ def list_organization_members(
     """
     org_obj_id = validate_object_id(org_id, "org_id")
 
-    # auth.user_id is Kratos identity_id (UUID string)
-    # Look up MongoDB user document to get ObjectId for internal references
-    user = mongo_db.users.find_one({
-        "$or": [
-            {"kratosId": auth.user_id},
-            {"_id": auth.user_id}
-        ]
-    })
-
-    if not user:
-        logger.error(f"User not found: {auth.user_id}")
-        raise HTTPException(status_code=404, detail="User not found")
+    # Get user document using helper (handles migration dual-format)
+    try:
+        user = get_user_by_kratos_id(mongo_db, auth.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
     user_obj_id = user["_id"]
 
@@ -474,15 +461,11 @@ def update_organization_member_role(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Verify requester is admin or owner
-    # Need to look up MongoDB user for requester_obj_id
-    requester_user = mongo_db.users.find_one({
-        "$or": [
-            {"kratosId": auth.user_id},
-            {"_id": auth.user_id}
-        ]
-    })
-    if not requester_user:
-        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        requester_user = get_user_by_kratos_id(mongo_db, auth.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
     requester_obj_id = requester_user["_id"]
 
     if not is_organization_admin(mongo_db, org_obj_id, requester_obj_id, auth.user_id):
@@ -560,15 +543,11 @@ def remove_user_from_organization(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Verify requester is admin
-    # Need to look up MongoDB user for requester_obj_id
-    requester_user = mongo_db.users.find_one({
-        "$or": [
-            {"kratosId": auth.user_id},
-            {"_id": auth.user_id}
-        ]
-    })
-    if not requester_user:
-        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        requester_user = get_user_by_kratos_id(mongo_db, auth.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
     requester_obj_id = requester_user["_id"]
 
     if not is_organization_admin(mongo_db, org_obj_id, requester_obj_id, auth.user_id):
@@ -669,15 +648,11 @@ def cancel_organization_invitation(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Verify requester is admin
-    # Need to look up MongoDB user for user_obj_id
-    user = mongo_db.users.find_one({
-        "$or": [
-            {"kratosId": auth.user_id},
-            {"_id": auth.user_id}
-        ]
-    })
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        user = get_user_by_kratos_id(mongo_db, auth.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
     user_obj_id = user["_id"]
 
     if not is_organization_admin(mongo_db, org_obj_id, user_obj_id, auth.user_id):

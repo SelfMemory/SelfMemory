@@ -16,7 +16,7 @@ from .config import config
 from .database import mongo_db
 from .utils.crypto import verify_api_key
 from .utils.datetime_helpers import is_expired, utc_now
-from .utils.permission_helpers import get_user_object_id_from_kratos_id
+from .utils.permission_helpers import get_user_object_id_from_kratos_id, is_owner
 from .utils.validators import validate_object_id
 
 logger = logging.getLogger(__name__)
@@ -121,19 +121,14 @@ def check_project_access(user_id: str, project_id: str) -> bool:
             return False
 
         # Check if user is the organization owner (implicit full access)
-        # Check BOTH ownerId formats (frontend uses string, backend uses ObjectId)
         organization = mongo_db.organizations.find_one(
             {"_id": project["organizationId"]}
         )
-        if organization:
-            org_owner_id = organization.get("ownerId")
-            # Compare as both string and ObjectId
-            if org_owner_id == user_id or org_owner_id == user_obj_id:
-                return True
+        if organization and is_owner(organization, user_id, user_obj_id):
+            return True
 
-        # Check if user owns the project (check BOTH ownerId formats)
-        project_owner_id = project.get("ownerId")
-        if project_owner_id == user_id or project_owner_id == user_obj_id:
+        # Check if user owns the project
+        if is_owner(project, user_id, user_obj_id):
             return True
 
         # Check if user is a member
@@ -184,18 +179,14 @@ def get_user_permissions(user_id: str, project_id: str) -> ProjectPermissions:
             return DENIED_PERMISSIONS
 
         # Check if user is the organization owner (implicit full access)
-        # Check BOTH ownerId formats (frontend uses string, backend uses ObjectId)
         organization = mongo_db.organizations.find_one(
             {"_id": project["organizationId"]}
         )
-        if organization:
-            org_owner_id = organization.get("ownerId")
-            if org_owner_id == user_id or org_owner_id == user_obj_id:
-                return FULL_PERMISSIONS
+        if organization and is_owner(organization, user_id, user_obj_id):
+            return FULL_PERMISSIONS
 
-        # Check if user owns the project (check BOTH ownerId formats)
-        project_owner_id = project.get("ownerId")
-        if project_owner_id == user_id or project_owner_id == user_obj_id:
+        # Check if user owns the project
+        if is_owner(project, user_id, user_obj_id):
             return FULL_PERMISSIONS
 
         # Get permissions from project_members
@@ -277,12 +268,10 @@ def is_project_admin(user_id: str, project_id: str) -> bool:
             logger.warning(f"User not found: {user_id}")
             return False
 
-        # Check if user owns the project (check BOTH ownerId formats)
+        # Check if user owns the project
         project = mongo_db.projects.find_one({"_id": project_obj_id})
-        if project:
-            project_owner_id = project.get("ownerId")
-            if project_owner_id == user_id or project_owner_id == user_obj_id:
-                return True
+        if project and is_owner(project, user_id, user_obj_id):
+            return True
 
         # Check if user has admin role in project_members
         member = mongo_db.project_members.find_one(
