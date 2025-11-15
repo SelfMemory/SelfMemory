@@ -361,7 +361,7 @@ async def openid_configuration(request: Request):
     except httpx.HTTPError as e:
         logger.error(f"❌ Failed to fetch OpenID configuration from Hydra: {e}")
         return Response(
-            content=f"Failed to fetch OpenID configuration: {str(e)}",
+            content="Failed to fetch OpenID configuration from identity provider.",
             status_code=502,
             media_type="text/plain"
         )
