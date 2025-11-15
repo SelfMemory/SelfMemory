@@ -23,8 +23,8 @@ from pydantic import BaseModel
 from ..config import config
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import is_expired
+from ..utils.permission_helpers import get_user_by_kratos_id
 from ..utils.rate_limiter import limiter
-from ..utils.validators import validate_object_id
 from .invitation_helpers import (
     add_user_to_organization,
     add_user_to_projects_from_invitation,
@@ -368,11 +368,13 @@ def accept_invitation(
     if not invitation:
         raise HTTPException(status_code=404, detail="Invitation not found")
 
-    # Get authenticated user's email
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
-    user = mongo_db.users.find_one({"_id": user_obj_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Get user document using helper (handles migration dual-format)
+    try:
+        user = get_user_by_kratos_id(mongo_db, auth.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    user_obj_id = user["_id"]
 
     # Validate invitation (checks expiry, status, email match)
     validate_invitation_for_acceptance(invitation, user.get("email"))
@@ -409,11 +411,11 @@ def list_pending_invitations(auth: AuthContext = Depends(authenticate_api_key)):
     Returns all invitations sent to the user's email that haven't been
     accepted yet and haven't expired.
     """
-    # Get authenticated user's email
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
-    user = mongo_db.users.find_one({"_id": user_obj_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Get user document using helper (handles migration dual-format)
+    try:
+        user = get_user_by_kratos_id(mongo_db, auth.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
 
     user_email = user.get("email")
 
