@@ -163,7 +163,7 @@ async def oauth_authorization_server(request: Request):
     except httpx.HTTPError as e:
         logger.error(f"❌ Failed to fetch authorization server metadata: {e}")
         return Response(
-            content=f"Failed to fetch authorization server metadata: {str(e)}",
+            content="Failed to fetch authorization server metadata.",
             status_code=502,
             media_type="text/plain",
         )
