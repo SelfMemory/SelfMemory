@@ -372,7 +372,7 @@ def accept_invitation(
     try:
         user = get_user_by_kratos_id(mongo_db, auth.user_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
     user_obj_id = user["_id"]
 
@@ -415,7 +415,7 @@ def list_pending_invitations(auth: AuthContext = Depends(authenticate_api_key)):
     try:
         user = get_user_by_kratos_id(mongo_db, auth.user_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from None
 
     user_email = user.get("email")
 

@@ -13,23 +13,25 @@ load_dotenv()
 
 class ConfigError(Exception):
     """Configuration error - raised when required config is missing or invalid."""
+
     pass
 
 
 class ConfigValidationError(Exception):
     """Configuration validation error - raised when config values are invalid."""
+
     pass
 
 
 def get_required_env(key: str) -> str:
     """Get required environment variable.
-    
+
     Args:
         key: Environment variable name
-        
+
     Returns:
         Environment variable value
-        
+
     Raises:
         ConfigError: If environment variable is not set
     """
@@ -41,11 +43,11 @@ def get_required_env(key: str) -> str:
 
 def get_optional_env(key: str, default: str | None = None) -> str | None:
     """Get optional environment variable.
-    
+
     Args:
         key: Environment variable name
         default: Default value if not set
-        
+
     Returns:
         Environment variable value or default
     """
@@ -60,20 +62,20 @@ class HydraConfig:
         self.admin_url = get_required_env("HYDRA_ADMIN_URL")
         self.public_url = get_required_env("HYDRA_PUBLIC_URL")
         self.mcp_server_url = get_required_env("MCP_SERVER_URL")
-        
+
         # RFC 8707: Canonical resource URL (no trailing slash)
         # Used as the `resource` parameter in OAuth flows and token audience validation
-        self.resource_url = self.mcp_server_url.rstrip('/')
+        self.resource_url = self.mcp_server_url.rstrip("/")
 
         # Scopes supported by MCP server
         # Include both custom MCP scopes and standard OAuth/OIDC scopes
         # that clients like VS Code and ChatGPT expect
         self.scopes_supported = [
-            "memories:read",      # Custom: Read memories
-            "memories:write",     # Custom: Create/modify memories
-            "offline",            # OAuth: Refresh token support (legacy)
-            "offline_access",     # OAuth: Refresh token support (standard)
-            "openid",             # OIDC: User authentication
+            "memories:read",  # Custom: Read memories
+            "memories:write",  # Custom: Create/modify memories
+            "offline",  # OAuth: Refresh token support (legacy)
+            "offline_access",  # OAuth: Refresh token support (standard)
+            "openid",  # OIDC: User authentication
         ]
 
         # Bearer methods supported (RFC 9728)
@@ -98,22 +100,22 @@ class Config:
 
     def validate(self) -> None:
         """Validate configuration on startup.
-        
+
         Raises:
             ConfigValidationError: If configuration is invalid
         """
         errors = []
 
         # Validate Hydra admin URL format
-        if not self.hydra.admin_url.startswith(('http://', 'https://')):
+        if not self.hydra.admin_url.startswith(("http://", "https://")):
             errors.append("HYDRA_ADMIN_URL must start with http:// or https://")
 
         # Validate Hydra public URL format
-        if not self.hydra.public_url.startswith(('http://', 'https://')):
+        if not self.hydra.public_url.startswith(("http://", "https://")):
             errors.append("HYDRA_PUBLIC_URL must start with http:// or https://")
 
         # Validate MCP server URL format
-        if not self.hydra.mcp_server_url.startswith(('http://', 'https://')):
+        if not self.hydra.mcp_server_url.startswith(("http://", "https://")):
             errors.append("MCP_SERVER_URL must start with http:// or https://")
 
         # Validate server port is in valid range
@@ -121,21 +123,23 @@ class Config:
             errors.append("MCP_SERVER_PORT must be between 1 and 65535")
 
         # Validate SelfMemory API host format
-        if not self.server.selfmemory_api_host.startswith(('http://', 'https://')):
+        if not self.server.selfmemory_api_host.startswith(("http://", "https://")):
             errors.append("SELFMEMORY_API_HOST must start with http:// or https://")
 
         # Raise all errors together
         if errors:
-            error_message = "Configuration validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+            error_message = "Configuration validation failed:\n" + "\n".join(
+                f"  - {e}" for e in errors
+            )
             raise ConfigValidationError(error_message)
 
 
 def validate_config() -> Config:
     """Load and validate configuration.
-    
+
     Returns:
         Validated Config instance
-        
+
     Raises:
         ConfigError: If required environment variables are missing
         ConfigValidationError: If configuration values are invalid
@@ -146,7 +150,9 @@ def validate_config() -> Config:
         return cfg
     except ConfigError as e:
         print(f"\n❌ Configuration Error: {e}")
-        print("\nPlease ensure all required environment variables are set in your .env file.")
+        print(
+            "\nPlease ensure all required environment variables are set in your .env file."
+        )
         print("See .env.example for reference.\n")
         raise
     except ConfigValidationError as e:

@@ -6,8 +6,6 @@ code duplication across routes. Uses FastAPI's Depends() system.
 """
 
 import logging
-from functools import wraps
-from typing import Callable
 
 from bson import ObjectId
 from fastapi import Depends, HTTPException
@@ -32,7 +30,7 @@ logger = logging.getLogger(__name__)
 class ProjectAdminRequired:
     """
     Dependency to verify user is a project admin.
-    
+
     Usage:
         @router.post("/{project_id}/members")
         def add_member(
@@ -47,7 +45,7 @@ class ProjectAdminRequired:
     def __init__(self, project_id_param: str = "project_id"):
         """
         Initialize the dependency.
-        
+
         Args:
             project_id_param: Name of the path parameter containing project_id
         """
@@ -60,11 +58,11 @@ class ProjectAdminRequired:
     ) -> None:
         """
         Verify user is a project admin.
-        
+
         Args:
             project_id: Project ID from path parameter
             auth: Authentication context
-            
+
         Raises:
             HTTPException: If user is not a project admin
         """
@@ -88,7 +86,7 @@ class ProjectAdminRequired:
 class OrganizationMemberRequired:
     """
     Dependency to verify user is an organization member.
-    
+
     Usage:
         @router.get("/organizations/{org_id}/projects")
         def list_projects(
@@ -103,7 +101,7 @@ class OrganizationMemberRequired:
     def __init__(self, org_id_param: str = "organization_id"):
         """
         Initialize the dependency.
-        
+
         Args:
             org_id_param: Name of the path parameter containing organization_id
         """
@@ -116,11 +114,11 @@ class OrganizationMemberRequired:
     ) -> None:
         """
         Verify user is an organization member.
-        
+
         Args:
             organization_id: Organization ID from path parameter
             auth: Authentication context
-            
+
         Raises:
             HTTPException: If user is not an organization member
         """
@@ -144,7 +142,7 @@ class OrganizationMemberRequired:
 class PreventLastAdminRemoval:
     """
     Dependency to prevent removing/demoting the last project admin.
-    
+
     Usage:
         @router.put("/{project_id}/members/{user_id}")
         def update_member_role(
@@ -165,7 +163,7 @@ class PreventLastAdminRemoval:
     ):
         """
         Initialize the dependency.
-        
+
         Args:
             project_id_param: Name of the path parameter containing project_id
             user_id_param: Name of the path parameter containing user_id
@@ -181,12 +179,12 @@ class PreventLastAdminRemoval:
     ) -> None:
         """
         Verify this action won't remove the last admin.
-        
+
         Args:
             project_id: Project ID from path parameter
             user_id: User ID being removed/demoted
             auth: Authentication context
-            
+
         Raises:
             HTTPException: If this would remove the last admin
         """
@@ -209,7 +207,9 @@ class PreventLastAdminRemoval:
                     detail="Cannot remove or demote the last admin. Promote another member first.",
                 )
 
-        logger.debug(f"Permission granted: Action won't remove last admin from project {project_id}")
+        logger.debug(
+            f"Permission granted: Action won't remove last admin from project {project_id}"
+        )
 
 
 # ============================================================================
@@ -220,17 +220,17 @@ class PreventLastAdminRemoval:
 def require_project_admin(project_id: str, auth: AuthContext) -> ObjectId:
     """
     Helper function to verify project admin permission and return project ObjectId.
-    
+
     Use this in route handlers when you need the ObjectId for database queries.
     For simple permission checks, use ProjectAdminRequired dependency instead.
-    
+
     Args:
         project_id: Project ID string
         auth: Authentication context
-        
+
     Returns:
         ObjectId: Validated project ObjectId
-        
+
     Raises:
         HTTPException: If user is not a project admin
     """
@@ -246,24 +246,26 @@ def require_project_admin(project_id: str, auth: AuthContext) -> ObjectId:
             detail="Only project admins can perform this action",
         )
 
-    logger.debug(f"Permission granted: User {auth.user_id} is admin of project {project_id}")
+    logger.debug(
+        f"Permission granted: User {auth.user_id} is admin of project {project_id}"
+    )
     return project_obj_id
 
 
 def require_organization_member(organization_id: str, auth: AuthContext) -> ObjectId:
     """
     Helper function to verify organization membership and return org ObjectId.
-    
+
     Use this in route handlers when you need the ObjectId for database queries.
     For simple permission checks, use OrganizationMemberRequired dependency instead.
-    
+
     Args:
         organization_id: Organization ID string
         auth: Authentication context
-        
+
     Returns:
         ObjectId: Validated organization ObjectId
-        
+
     Raises:
         HTTPException: If user is not an organization member
     """
@@ -279,5 +281,7 @@ def require_organization_member(organization_id: str, auth: AuthContext) -> Obje
             detail="Only organization members can perform this action",
         )
 
-    logger.debug(f"Permission granted: User {auth.user_id} is member of org {organization_id}")
+    logger.debug(
+        f"Permission granted: User {auth.user_id} is member of org {organization_id}"
+    )
     return org_obj_id

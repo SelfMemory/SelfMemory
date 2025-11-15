@@ -7,10 +7,10 @@ from config import config
 
 def format_search_results(results: list[dict]) -> dict:
     """Format search results for ChatGPT.
-    
+
     Args:
         results: List of memory search results
-        
+
     Returns:
         Dict with content array and structuredContent
     """
@@ -18,7 +18,7 @@ def format_search_results(results: list[dict]) -> dict:
         {
             "id": memory.get("id", ""),
             "title": memory.get("content", "")[:100],
-            "url": f"{config.hydra.mcp_server_url}/memories/{memory.get('id', '')}"
+            "url": f"{config.hydra.mcp_server_url}/memories/{memory.get('id', '')}",
         }
         for memory in results
     ]
@@ -27,7 +27,7 @@ def format_search_results(results: list[dict]) -> dict:
 
     return {
         "content": [{"type": "text", "text": json.dumps(response_obj)}],
-        "structuredContent": response_obj
+        "structuredContent": response_obj,
     }
 
 
@@ -42,11 +42,11 @@ SEARCH_OUTPUT_SCHEMA = {
                 "properties": {
                     "id": {"type": "string", "description": "Memory ID"},
                     "title": {"type": "string", "description": "Memory title"},
-                    "url": {"type": "string", "description": "Memory URL"}
+                    "url": {"type": "string", "description": "Memory URL"},
                 },
-                "required": ["id", "title", "url"]
-            }
+                "required": ["id", "title", "url"],
+            },
         }
     },
-    "required": ["results"]
+    "required": ["results"],
 }

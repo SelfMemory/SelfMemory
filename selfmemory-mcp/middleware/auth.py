@@ -7,7 +7,6 @@ Per MCP 2025-06-18 spec:
 - HTTP transport: Validate MCP-Protocol-Version header
 """
 
-
 from fastapi import Request
 from oauth import errors
 from oauth.token_manager import TokenManager
@@ -16,7 +15,7 @@ from oauth.token_manager import TokenManager
 async def validate_request(
     request: Request,
     token_manager: TokenManager,
-    required_scopes: list[str] | None = None
+    required_scopes: list[str] | None = None,
 ) -> dict:
     """Validate inbound request with OAuth token.
 
@@ -43,8 +42,7 @@ async def validate_request(
     # Validate token
     try:
         token_data = await token_manager.validate_access_token(
-            token=token,
-            required_scopes=required_scopes
+            token=token, required_scopes=required_scopes
         )
         return token_data
 
@@ -53,8 +51,8 @@ async def validate_request(
 
         # Check if it's a scope issue
         if "scope" in error_msg.lower():
-            raise errors.insufficient_scope(required_scopes or [])
+            raise errors.insufficient_scope(required_scopes or []) from e
 
         # Otherwise it's an invalid token
         scope = " ".join(required_scopes) if required_scopes else None
-        raise errors.invalid_token(error_msg, scope)
+        raise errors.invalid_token(error_msg, scope) from e

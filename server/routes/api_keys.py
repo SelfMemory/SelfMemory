@@ -97,7 +97,7 @@ def create_project_api_key(
     - Permissions are inherited from user's project role if not specified
     - Key is returned only once (on creation)
     - User can create multiple keys for the same project
-    
+
     Note: API key stores Kratos ID (not MongoDB ObjectId) for consistency
     with other auth tokens (sessions, OAuth). This maintains a clear separation:
     - External auth layer → Kratos IDs
@@ -124,7 +124,7 @@ def create_project_api_key(
 
     # Get user's MongoDB ObjectId for permission checks (project_members uses ObjectId)
     user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
-    
+
     # Get user's project membership to check permissions
     member = get_project_member(mongo_db, project_obj_id, user_obj_id)
     if not member:
@@ -331,7 +331,7 @@ def delete_project_api_key(
     # Check permission: user must be key owner OR project admin
     # Compare Kratos IDs directly (userId in API key is now Kratos ID)
     is_owner = api_key["userId"] == auth.user_id
-    
+
     # For admin check, need MongoDB ObjectId (project_members uses ObjectId)
     user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
     is_admin = is_project_admin(mongo_db, project_obj_id, user_obj_id)

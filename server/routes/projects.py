@@ -15,12 +15,12 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 
+from ..auth.permissions import require_project_admin
 from ..config import config
 from ..database import get_role_permissions
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.database_utils import safe_insert_member
 from ..utils.datetime_helpers import utc_now
-from ..auth.permissions import require_project_admin
 from ..utils.permission_helpers import (
     count_project_admins,
     get_project_member,
@@ -184,12 +184,16 @@ def list_user_projects(
     project_ids_seen = set()
 
     # 1. Get organizations where user is the owner (check BOTH ownerId formats)
-    owned_orgs = list(mongo_db.organizations.find({
-        "$or": [
-            {"ownerId": user_obj_id},  # Backend-created (ObjectId)
-            {"ownerId": auth.user_id}  # Frontend-created (Kratos ID string)
-        ]
-    }))
+    owned_orgs = list(
+        mongo_db.organizations.find(
+            {
+                "$or": [
+                    {"ownerId": user_obj_id},  # Backend-created (ObjectId)
+                    {"ownerId": auth.user_id},  # Frontend-created (Kratos ID string)
+                ]
+            }
+        )
+    )
     owned_org_ids = [org["_id"] for org in owned_orgs]
 
     # 2. Get ALL projects in organizations where user is owner
@@ -205,7 +209,9 @@ def list_user_projects(
 
             # Check if user owns this specific project (check BOTH formats)
             project_owner_id = project.get("ownerId")
-            is_project_owner = project_owner_id == auth.user_id or project_owner_id == user_obj_id
+            is_project_owner = (
+                project_owner_id == auth.user_id or project_owner_id == user_obj_id
+            )
 
             project_ids_seen.add(project_id)
             all_projects.append(
@@ -231,12 +237,14 @@ def list_user_projects(
     # 3. Get all projects owned by the user (that aren't in orgs they own)
     # Check BOTH ownerId formats
     owned_projects = list(
-        mongo_db.projects.find({
-            "$or": [
-                {"ownerId": user_obj_id},  # Backend-created (ObjectId)
-                {"ownerId": auth.user_id}  # Frontend-created (Kratos ID string)
-            ]
-        }).sort("createdAt", -1)
+        mongo_db.projects.find(
+            {
+                "$or": [
+                    {"ownerId": user_obj_id},  # Backend-created (ObjectId)
+                    {"ownerId": auth.user_id},  # Frontend-created (Kratos ID string)
+                ]
+            }
+        ).sort("createdAt", -1)
     )
 
     for project in owned_projects:
@@ -847,7 +855,7 @@ def delete_project(
     # Verify requester is project owner (check BOTH ownerId formats)
     project_owner_id = project.get("ownerId")
     is_owner = project_owner_id == auth.user_id or project_owner_id == user_obj_id
-    
+
     if not is_owner:
         raise HTTPException(
             status_code=403,
