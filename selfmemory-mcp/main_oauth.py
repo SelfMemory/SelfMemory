@@ -585,7 +585,7 @@ async def dynamic_client_registration(request: Request):
     except json.JSONDecodeError as e:
         logger.error(f"❌ Failed to parse registration request body: {e}")
         return Response(
-            content=f"Invalid registration request: {str(e)}",
+            content="Invalid registration request: Malformed JSON.",
             status_code=400,
             media_type="text/plain",
         )
