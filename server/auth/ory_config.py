@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ============================================================================
 
+
 class OryConfig:
     """Ory service endpoints configuration."""
 
@@ -46,15 +47,15 @@ class OryConfig:
     def _get_required_env(key: str) -> str:
         """
         Get required environment variable.
-        
+
         Fails fast if missing - no fallbacks.
-        
+
         Args:
             key: Environment variable name
-            
+
         Returns:
             str: Environment variable value
-            
+
         Raises:
             ValueError: If environment variable is not set
         """
@@ -74,13 +75,14 @@ ory_config = OryConfig()
 # Kratos API Clients
 # ============================================================================
 
+
 class KratosClients:
     """Kratos API client instances."""
 
     def __init__(self, config: OryConfig):
         """
         Initialize Kratos API clients.
-        
+
         Args:
             config: Ory configuration instance
         """
@@ -105,13 +107,14 @@ kratos_clients = KratosClients(ory_config)
 # Hydra API Clients
 # ============================================================================
 
+
 class HydraClients:
     """Hydra API client instances."""
 
     def __init__(self, config: OryConfig):
         """
         Initialize Hydra API clients.
-        
+
         Args:
             config: Ory configuration instance
         """
@@ -134,6 +137,7 @@ hydra_clients = HydraClients(ory_config)
 # ============================================================================
 # Public API
 # ============================================================================
+
 
 def get_kratos_frontend_api() -> KratosFrontendApi:
     """Get Kratos Frontend API for session validation."""

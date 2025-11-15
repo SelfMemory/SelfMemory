@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Data Models
 # ============================================================================
 
+
 class HydraToken:
     """Hydra token data with OAuth claims."""
 
@@ -30,11 +31,11 @@ class HydraToken:
         project_id: str | None = None,
         organization_id: str | None = None,
         expires_at: int | None = None,
-        issued_at: int | None = None
+        issued_at: int | None = None,
     ):
         """
         Initialize Hydra token data.
-        
+
         Args:
             active: Whether token is active
             subject: Token subject (user ID)
@@ -67,22 +68,23 @@ class HydraToken:
 # Token Validation
 # ============================================================================
 
+
 def validate_token(access_token: str) -> HydraToken:
     """
     Validate OAuth token via Hydra introspection.
-    
+
     This function introspects an access token with Hydra and extracts
     OAuth claims including multi-tenant context (project_id, organization_id).
-    
+
     SECURITY: Validates token audience per MCP spec and RFC 8707 to prevent
     token passthrough attacks and confused deputy vulnerabilities.
-    
+
     Args:
         access_token: OAuth 2.1 access token (Bearer token)
-        
+
     Returns:
         HydraToken: Validated token with claims and multi-tenant context
-        
+
     Raises:
         ValueError: If token is invalid, expired, or missing required claims
         ApiException: If Hydra API call fails
@@ -98,9 +100,7 @@ def validate_token(access_token: str) -> HydraToken:
         logger.info(f"Introspecting Hydra token (length: {len(access_token)})")
 
         # Introspect token with Hydra
-        introspection = oauth2_api.introspect_o_auth2_token(
-            token=access_token
-        )
+        introspection = oauth2_api.introspect_o_auth2_token(token=access_token)
 
         # Check if token is active
         if not introspection.active:
@@ -128,34 +128,29 @@ def validate_token(access_token: str) -> HydraToken:
             error_msg = "Token missing required claim: aud (audience)"
             logger.error(f"{error_msg}, subject={subject}, client={client_id}")
             raise ValueError(error_msg)
-        
+
         # Audience can be string or list per JWT spec (RFC 7519)
         audiences = aud if isinstance(aud, list) else [aud]
-        
+
         # Get our MCP server's expected resource URL
         from ..config import config
-        expected_resource = config.mcp.SERVER_URL.rstrip('/')
-        
+
+        expected_resource = config.mcp.SERVER_URL.rstrip("/")
+
         # Validate token was issued for THIS MCP server
         is_valid_audience = any(
-            audience.rstrip('/') == expected_resource 
-            for audience in audiences
+            audience.rstrip("/") == expected_resource for audience in audiences
         )
-        
+
         if not is_valid_audience:
             error_msg = (
                 f"Token audience mismatch: expected '{expected_resource}', "
                 f"got {audiences}"
             )
-            logger.error(
-                f"{error_msg}, subject={subject}, client={client_id}"
-            )
+            logger.error(f"{error_msg}, subject={subject}, client={client_id}")
             raise ValueError(error_msg)
-        
-        logger.info(
-            f"✅ Token audience validated: {audiences}, "
-            f"subject={subject}"
-        )
+
+        logger.info(f"✅ Token audience validated: {audiences}, subject={subject}")
 
         # Extract scopes
         scopes = introspection.scope.split() if introspection.scope else []
@@ -178,7 +173,7 @@ def validate_token(access_token: str) -> HydraToken:
             project_id=project_id,
             organization_id=organization_id,
             expires_at=expires_at,
-            issued_at=issued_at
+            issued_at=issued_at,
         )
 
         logger.info(f"✅ Hydra token validated: {hydra_token}")
@@ -200,20 +195,22 @@ def validate_token(access_token: str) -> HydraToken:
         raise ValueError(error_msg) from e
 
 
-def validate_token_with_project(access_token: str, required_project_id: str) -> HydraToken:
+def validate_token_with_project(
+    access_token: str, required_project_id: str
+) -> HydraToken:
     """
     Validate token and ensure it has access to a specific project.
-    
+
     This validates the token and checks that the token's project_id claim
     matches the required project ID for project-scoped operations.
-    
+
     Args:
         access_token: OAuth 2.1 access token
         required_project_id: Required project ID for access
-        
+
     Returns:
         HydraToken: Validated token with matching project context
-        
+
     Raises:
         ValueError: If token invalid or doesn't have access to project
     """
@@ -249,17 +246,17 @@ def validate_token_with_project(access_token: str, required_project_id: str) -> 
 def validate_token_scope(access_token: str, required_scope: str) -> HydraToken:
     """
     Validate token and ensure it has a specific scope.
-    
+
     This validates the token and checks that it has the required scope
     for performing specific operations.
-    
+
     Args:
         access_token: OAuth 2.1 access token
         required_scope: Required scope (e.g., "memories:read", "memories:write")
-        
+
     Returns:
         HydraToken: Validated token with required scope
-        
+
     Raises:
         ValueError: If token invalid or doesn't have required scope
     """

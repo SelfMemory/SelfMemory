@@ -1,7 +1,54 @@
+import logging
+
 from mcp.server.fastmcp import Context, FastMCP
+
+logger = logging.getLogger(__name__)
+
+
+def validate_and_get_client(ctx: Context):
+    """Validate token and get authenticated client from context."""
+    # This function should extract the client from the context
+    # Implementation depends on your auth system
+    raise NotImplementedError(
+        "validate_and_get_client must be implemented by the parent module"
+    )
+
+
+def _generate_memory_confirmation(content: str) -> str:
+    """Generate personalized confirmation message for added memory."""
+    messages = [
+        "I've learned more about you with this!",
+        "Got it! I'll remember this.",
+        "Noted! This helps me understand you better.",
+        "Added to my knowledge about you!",
+        "Thanks for sharing! I'll keep this in mind.",
+    ]
+    # Return a simple message from the list
+    import random
+
+    return random.choice(messages)
+
+
+def _extract_memory_contents(result: dict) -> list[str]:
+    """Extract only content strings from search results for LLM consumption."""
+    memories = []
+    for item in result.get("results", []):
+        if isinstance(item, dict):
+            # Try to extract content from various possible fields
+            content = (
+                item.get("content")
+                or item.get("text")
+                or item.get("message")
+                or str(item)
+            )
+            if content:
+                memories.append(content)
+    return memories
+
 
 # Create an MCP server
 mcp = FastMCP("selfmemory")
+
 
 @mcp.tool()
 async def add_memory(

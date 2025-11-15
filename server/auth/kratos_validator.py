@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # Data Models
 # ============================================================================
 
+
 class KratosSession:
     """Kratos session data with user identity and traits."""
 
@@ -32,11 +33,11 @@ class KratosSession:
         organization_id: str,
         project_ids: list[str] | None = None,
         name: str | None = None,
-        is_active: bool = True
+        is_active: bool = True,
     ):
         """
         Initialize Kratos session data.
-        
+
         Args:
             user_id: Kratos identity ID
             email: User email
@@ -64,19 +65,20 @@ class KratosSession:
 # Session Validation
 # ============================================================================
 
+
 def validate_session(session_cookie: str) -> KratosSession:
     """
     Validate Kratos session and extract user identity.
-    
+
     This function validates a session cookie with Kratos and extracts
     the user's identity and multi-tenant traits (organization_id, project_ids).
-    
+
     Args:
         session_cookie: Kratos session cookie value (ory_kratos_session)
-        
+
     Returns:
         KratosSession: Validated session with user identity and traits
-        
+
     Raises:
         ValueError: If session is invalid, expired, or user is inactive
         ApiException: If Kratos API call fails
@@ -97,7 +99,6 @@ def validate_session(session_cookie: str) -> KratosSession:
         # This matches how the dashboard validates sessions successfully
         from ory_kratos_client.api_client import ApiClient
 
-
         logger.info(f"Validating Kratos session (cookie length: {len(session_cookie)})")
 
         # Create a custom API client with the Cookie header
@@ -106,13 +107,11 @@ def validate_session(session_cookie: str) -> KratosSession:
         )
 
         # Set the Cookie header with the session token
-        api_client.set_default_header(
-            'Cookie',
-            f'ory_kratos_session={session_cookie}'
-        )
+        api_client.set_default_header("Cookie", f"ory_kratos_session={session_cookie}")
 
         # Create frontend API with our custom client
         from ory_kratos_client import FrontendApi
+
         frontend_api = FrontendApi(api_client=api_client)
 
         # Call Kratos to validate session with retry logic for transient failures
@@ -168,7 +167,7 @@ def validate_session(session_cookie: str) -> KratosSession:
             organization_id=organization_id,
             project_ids=project_ids,
             name=name,
-            is_active=True
+            is_active=True,
         )
 
         logger.info(f"✅ Kratos session validated: {kratos_session}")
@@ -184,26 +183,26 @@ def validate_session(session_cookie: str) -> KratosSession:
         else:
             error_msg = f"Kratos API error: {e.reason}"
             logger.error(f"{error_msg}, status={e.status}")
-        raise ValueError(error_msg)
+        raise ValueError(error_msg) from None
     except Exception as e:
         error_msg = f"Session validation error: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ValueError(error_msg)
+        raise ValueError(error_msg) from e
 
 
 def get_identity_by_id(identity_id: str) -> KratosSession:
     """
     Get identity from Kratos by ID.
-    
+
     This uses the Admin API to fetch identity details.
     Useful for syncing user data or verifying identity state.
-    
+
     Args:
         identity_id: Kratos identity ID
-        
+
     Returns:
         KratosSession: Identity data with traits
-        
+
     Raises:
         ValueError: If identity not found or invalid
         ApiException: If Kratos API call fails
@@ -255,7 +254,7 @@ def get_identity_by_id(identity_id: str) -> KratosSession:
             organization_id=organization_id,
             project_ids=project_ids,
             name=name,
-            is_active=True
+            is_active=True,
         )
 
         logger.info(f"✅ Identity fetched: {kratos_session}")
@@ -269,8 +268,8 @@ def get_identity_by_id(identity_id: str) -> KratosSession:
         else:
             error_msg = f"Kratos API error: {e.reason}"
             logger.error(f"{error_msg}, status={e.status}")
-        raise ValueError(error_msg)
+        raise ValueError(error_msg) from None
     except Exception as e:
         error_msg = f"Error fetching identity: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ValueError(error_msg)
+        raise ValueError(error_msg) from e

@@ -67,16 +67,16 @@ class AuthContext(NamedTuple):
 def get_user_object_id(user_id: str):
     """
     Get user identifier for database queries.
-    
+
     With Kratos authentication, user_id IS the Kratos identity_id (UUID string)
     which is stored directly as _id in the users collection.
-    
+
     Args:
         user_id: Kratos identity_id (UUID string)
-        
+
     Returns:
         str: User ID (Kratos identity_id as string)
-        
+
     Raises:
         ValueError: If user not found
     """
@@ -293,12 +293,12 @@ def is_project_admin(user_id: str, project_id: str) -> bool:
 def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
     """
     Ory-based authentication with legacy API key support.
-    
+
     Authentication methods (in order):
     1. Kratos session cookie (Session prefix) - Dashboard users
     2. Hydra OAuth token (Bearer prefix) - MCP OAuth users
     3. Legacy API keys (Bearer sk_im_ prefix) - Temporary backward compatibility
-    
+
     Returns AuthContext with user_id (Kratos identity_id for Ory auth).
     """
     if not authorization:
@@ -333,10 +333,12 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
 
         except ValueError as e:
             logger.warning(f"❌ Kratos session validation failed: {e}")
-            raise HTTPException(status_code=401, detail=str(e))
+            raise HTTPException(status_code=401, detail=str(e)) from e
         except Exception as e:
             logger.error(f"❌ Kratos session validation error: {e}")
-            raise HTTPException(status_code=500, detail="Session validation error")
+            raise HTTPException(
+                status_code=500, detail="Session validation error"
+            ) from e
 
     # ========================================================================
     # 2. Bearer Token Authentication (OAuth or Legacy API Key)
@@ -380,10 +382,10 @@ def authenticate_api_key(authorization: str = Header(None)) -> AuthContext:
 
         except ValueError as e:
             logger.warning(f"❌ Hydra token validation failed: {e}")
-            raise HTTPException(status_code=401, detail=str(e))
+            raise HTTPException(status_code=401, detail=str(e)) from None
         except Exception as e:
             logger.error(f"❌ Hydra token validation error: {e}")
-            raise HTTPException(status_code=500, detail="Token validation error")
+            raise HTTPException(status_code=500, detail="Token validation error") from e
 
     # ========================================================================
     # 3. Legacy API Key Authentication (Temporary backward compatibility)

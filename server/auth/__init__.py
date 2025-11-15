@@ -24,13 +24,11 @@ __all__ = [
     "KratosSession",
     "validate_session",
     "get_identity_by_id",
-
     # Hydra token validation
     "HydraToken",
     "validate_token",
     "validate_token_with_project",
     "validate_token_scope",
-
     # Configuration and API clients
     "ory_config",
     "get_kratos_frontend_api",

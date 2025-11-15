@@ -6,7 +6,6 @@ Eliminates code duplication in user lookup patterns across routes.
 """
 
 import logging
-from typing import Optional
 
 from bson import ObjectId
 from fastapi import HTTPException
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def get_user_by_id(
     db: Database, user_id: ObjectId | str, error_if_missing: bool = True
-) -> Optional[dict]:
+) -> dict | None:
     """
     Get user by MongoDB ObjectId with optional error handling.
 
@@ -48,7 +47,7 @@ def get_user_by_id(
     except Exception as e:
         if error_if_missing:
             logger.error(f"Error fetching user: {e}")
-            raise HTTPException(status_code=500, detail="Error fetching user")
+            raise HTTPException(status_code=500, detail="Error fetching user") from e
         return None
 
 

@@ -6,8 +6,6 @@ similar to how  provides MemoryClient for their hosted solution.
 """
 
 import logging
-import os
-from contextlib import suppress
 from typing import Any
 
 import httpx
@@ -49,7 +47,7 @@ class SelfMemoryClient:
         """
         # Get authentication token (prefer OAuth token over legacy API key)
         auth_token = oauth_token or api_key
-        
+
         if not auth_token:
             raise ValueError(
                 "Authentication required. Provide either oauth_token or api_key parameter."
