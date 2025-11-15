@@ -236,7 +236,7 @@ class OAuthMiddleware(BaseHTTPMiddleware):
             
             error_response = create_401_response(
                 error="invalid_token",
-                error_description=str(e)
+                error_description="Token validation failed"
             )
             
             www_auth = error_response["www_authenticate"]
