@@ -177,24 +177,33 @@ def get_user_by_email(db: Database, email: str) -> dict | None:
     return db.users.find_one({"email": email})
 
 
-def get_user_object_id_from_kratos_id(db: Database, kratos_id: str) -> ObjectId:
+def get_user_object_id_from_kratos_id(db: Database, kratos_id: str) -> ObjectId | str:
     """
-    Resolve Kratos identity ID to MongoDB ObjectId.
+    Resolve Kratos identity ID to user's MongoDB document ID.
     
-    In the Kratos authentication system, user_id is a UUID string (Kratos identity ID).
-    This function looks up the corresponding MongoDB user document and returns its ObjectId.
+    After migration, user_id IS the Kratos UUID (stored in _id field).
+    During migration transition, this supports both formats:
+    - New: _id = Kratos UUID (post-migration)
+    - Legacy: kratosId field with separate ObjectId _id (pre-migration)
     
     Args:
         db: MongoDB database instance
         kratos_id: Kratos identity ID (UUID string)
         
     Returns:
-        ObjectId: MongoDB ObjectId for the user
+        ObjectId or str: User's _id (ObjectId for legacy, UUID string for migrated)
         
     Raises:
         ValueError: If user not found for the given Kratos ID
     """
-    user = db.users.find_one({"kratosId": kratos_id})
+    # Check both legacy and new formats
+    user = db.users.find_one({
+        "$or": [
+            {"_id": kratos_id},        # Post-migration: _id is Kratos UUID
+            {"kratosId": kratos_id}    # Pre-migration: separate kratosId field
+        ]
+    })
+    
     if not user:
         logger.error(f"User not found for Kratos ID: {kratos_id}")
         raise ValueError(f"User not found for Kratos ID: {kratos_id}")
