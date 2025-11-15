@@ -150,8 +150,9 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
         except ValueError as e:
             # Authentication failed
             logger.warning(f"❌ Authentication failed: {e}")
+            # Never return detailed error info to the client
             return self._create_error_response(
-                error="invalid_token", error_description=str(e)
+                error="invalid_token", error_description="Invalid authentication token."
             )
 
         # Authentication successful - proceed with request
