@@ -578,7 +578,7 @@ async def dynamic_client_registration(request: Request):
     except httpx.HTTPError as e:
         logger.error(f"❌ Failed to register client with Hydra: {e}")
         return Response(
-            content=f"Failed to register client: {str(e)}",
+            content="Failed to register client due to an internal network/server error.",
             status_code=502,
             media_type="text/plain",
         )
