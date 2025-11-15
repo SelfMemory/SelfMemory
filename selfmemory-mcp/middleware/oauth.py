@@ -213,7 +213,9 @@ class OAuthMiddleware(BaseHTTPMiddleware):
         except ValueError as e:
             # Invalid token
             logger.warning(f"❌ Token validation failed: {e}")
-            return self._create_error_response("invalid_token", "Invalid or malformed token")
+            return self._create_error_response(
+                "invalid_token", "Invalid or malformed token"
+            )
 
     def _create_error_response(self, error: str, description: str) -> Response:
         """Create error response with proper OAuth error format.
