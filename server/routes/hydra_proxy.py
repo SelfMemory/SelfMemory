@@ -12,7 +12,7 @@ import logging
 import os
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..dependencies import AuthContext, authenticate_api_key
@@ -98,12 +98,12 @@ async def get_consent_request(
 
     except httpx.TimeoutException:
         logger.error("Hydra admin API timeout")
-        raise HTTPException(status_code=504, detail="Hydra admin API timeout")
+        raise HTTPException(status_code=504, detail="Hydra admin API timeout") from None
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error fetching consent request: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from None
 
 
 @router.put("/consent/accept", summary="Accept consent request")
@@ -167,12 +167,12 @@ async def accept_consent_request(
 
     except httpx.TimeoutException:
         logger.error("Hydra admin API timeout")
-        raise HTTPException(status_code=504, detail="Hydra admin API timeout")
+        raise HTTPException(status_code=504, detail="Hydra admin API timeout") from None
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error accepting consent: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from None
 
 
 @router.put("/consent/reject", summary="Reject consent request")
@@ -232,9 +232,9 @@ async def reject_consent_request(
 
     except httpx.TimeoutException:
         logger.error("Hydra admin API timeout")
-        raise HTTPException(status_code=504, detail="Hydra admin API timeout")
+        raise HTTPException(status_code=504, detail="Hydra admin API timeout") from None
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error rejecting consent: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from None
