@@ -19,6 +19,11 @@ const sidebars: SidebarsConfig = {
         'Platform/API Key page',
       ],
     },
+    {
+      type: 'doc',
+      id: 'CHANGELOG',
+      label: '📋 Changelog',
+    },
   ],
 };
 
