@@ -11,6 +11,9 @@ setup:
 run:
 	uv run uvicorn server.main:app --host 0.0.0.0 --port 8081 --reload
 
+make run prod:
+	uv run uvicorn server.main:app --host 0.0.0.0 --port 8081
+
 runmcp:
 	cd selfmemory-mcp && uv run python3 main.py
 
