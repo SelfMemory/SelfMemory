@@ -19,6 +19,7 @@ from .dependencies import AuthContext, authenticate_api_key, mongo_db
 from .health import is_alive, is_ready, perform_health_checks
 from .mcp_auth import get_protected_resource_metadata
 from .routes.api_keys import router as api_keys_router
+from .routes.hydra_proxy import router as hydra_proxy_router
 from .routes.invitations import router as invitations_router
 from .routes.organizations import router as organizations_router
 from .routes.projects import router as projects_router
@@ -186,6 +187,7 @@ async def get_csrf_token(
 
 # Include routers
 app.include_router(api_keys_router)
+app.include_router(hydra_proxy_router)
 app.include_router(invitations_router)
 app.include_router(organizations_router)
 app.include_router(projects_router)
