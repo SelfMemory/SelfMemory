@@ -28,10 +28,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
+
+# Load environment variables FIRST, before any imports that depend on them
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import Context, FastMCP
+
+load_dotenv()
 
 # Add project root to path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -45,8 +49,6 @@ from oauth.metadata import get_protected_resource_metadata  # noqa: E402
 from tools.fetch import format_fetch_result  # noqa: E402
 from tools.search import format_search_results  # noqa: E402
 from utils import create_tool_success, handle_tool_errors  # noqa: E402
-
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(

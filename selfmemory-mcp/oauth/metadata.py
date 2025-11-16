@@ -29,7 +29,7 @@ def get_protected_resource_metadata() -> dict:
         "resource": config.hydra.resource_url,  # RFC 8707: Use canonical URL (no trailing slash)
         "authorization_servers": [
             config.hydra.resource_url
-        ],  # Point to MCP server proxy, not Hydra!
+        ],  # Point to MCP server proxy (injects registration_endpoint)
         "scopes_supported": config.hydra.scopes_supported,
         "bearer_methods_supported": config.hydra.bearer_methods_supported,
     }
