@@ -240,9 +240,8 @@ members = [
 # Branch configuration
 branch = "master"
 
-# Changelog configuration
-changelog_file = "CHANGELOG.md"
-changelog_sections = "feature,fix,breaking,documentation,performance,refactor"
+# Commit parser - use 'angular' for conventional commits
+commit_parser = "angular"
 
 # Build and publishing
 build_command = "pip install build && python -m build"
@@ -258,9 +257,6 @@ tag_format = "v{version}"
 # GitHub configuration
 major_on_zero = false
 allow_zero_version = true
-
-# Commit parser
-commit_parser = "conventional_commits"
 
 [tool.semantic_release.commit_parser_options]
 allowed_tags = [
@@ -278,8 +274,7 @@ allowed_tags = [
 minor_tags = ["feat"]
 patch_tags = ["fix", "perf"]
 
-[tool.semantic_release.changelog]
-template_dir = "templates"
+[tool.semantic_release.changelog.default_template]
 changelog_file = "CHANGELOG.md"
 exclude_commit_patterns = []
 
