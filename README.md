@@ -26,6 +26,7 @@ print(results)
 ## 📚 Full Documentation
 
 **Visit [docs.selfmemory.com](https://docs.selfmemory.com) for complete documentation, guides, and examples.**
+**Changelog**: See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes and updates.
 
 ## 🔗 Links
 
