@@ -20,7 +20,7 @@ google-auth>=2.15.0
 
 # Ory authentication
 ory-kratos-client==1.3.8
-ory-hydra-client==2.2.0
+ory-hydra-client==25.4.0
 
 # Embedding providers
 ollama>=0.1.0
