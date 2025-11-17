@@ -267,6 +267,9 @@ test_outputs/
 # =============================================================================
 # PROJECT SPECIFIC - CORE PACKAGE
 # =============================================================================
+# Auto-generated version file from setuptools-scm
+selfmemory/_version.py
+
 # Memory data files (if any local testing)
 memories.json
 *.memory
