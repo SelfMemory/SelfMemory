@@ -19,7 +19,7 @@ authlib>=1.2.0
 google-auth>=2.15.0
 
 # Ory authentication
-ory-kratos-client==1.3.8
+ory-kratos-client==25.4.0
 ory-hydra-client==2.2.0
 
 # Embedding providers
