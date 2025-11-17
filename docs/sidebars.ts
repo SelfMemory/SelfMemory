@@ -20,9 +20,9 @@ const sidebars: SidebarsConfig = {
       ],
     },
     {
-      type: 'doc',
-      id: 'CHANGELOG',
+      type: 'link',
       label: '📋 Changelog',
+      href: 'https://github.com/SelfMemory/SelfMemory/blob/master/CHANGELOG.md',
     },
   ],
 };
