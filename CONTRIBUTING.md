@@ -91,43 +91,47 @@ git checkout -b fix/issue-description
 
 ### 3. Commit Guidelines
 
-We follow [Conventional Commits](https://www.conventionalcommits.org/):
+We use **Conventional Commits** to enable automated versioning and changelog generation. Please read our comprehensive [Commit Guidelines](COMMIT_GUIDELINES.md) for detailed information.
 
+**Quick Format:**
+```
+<type>(<scope>): <description> | #<issue> | [@username]
+```
+
+**Examples:**
 ```bash
-# Features
-git commit -m "feat: add temporal search functionality"
+# Feature with issue tracking
+git commit -m "feat(search): add semantic search support | #62 | [@shrijayan]"
 
-# Bug fixes
-git commit -m "fix: resolve memory deletion race condition"
+# Bug fix
+git commit -m "fix(storage): resolve connection timeout | #45 | [@shrijayan]"
 
 # Documentation
-git commit -m "docs: update API reference examples"
+git commit -m "docs(api): update authentication guide | #78 | [@shrijayan]"
 
-# Tests
-git commit -m "test: add integration tests for file storage"
-
-# Breaking changes
-git commit -m "feat!: redesign configuration API"
+# Breaking change
+git commit -m "feat(api)!: redesign search API | #89 | [@shrijayan]"
 ```
 
-**Commit Message Format:**
-```
-<type>[optional scope]: <description>
+**Commit Types & Version Bumps:**
 
-[optional body]
+| Type | Description | Version Bump |
+|------|-------------|--------------|
+| `feat` | New feature | MINOR (0.3.0 → 0.4.0) |
+| `fix` | Bug fix | PATCH (0.3.0 → 0.3.1) |
+| `perf` | Performance | PATCH (0.3.0 → 0.3.1) |
+| `feat!` | Breaking change | MAJOR (0.3.0 → 1.0.0) |
+| `docs` | Documentation | No release |
+| `test` | Tests | No release |
+| `chore` | Maintenance | No release |
 
-[optional footer(s)]
-```
+**Important Notes:**
+- Every push to `master` with `feat:` or `fix:` commits triggers an **automated release**
+- Version is automatically determined from commit messages
+- CHANGELOG.md is automatically updated
+- Package is automatically published to PyPI
 
-**Types:**
-- `feat`: New features
-- `fix`: Bug fixes
-- `docs`: Documentation changes
-- `test`: Test additions/modifications
-- `refactor`: Code refactoring
-- `perf`: Performance improvements
-- `ci`: CI/CD changes
-- `build`: Build system changes
+📖 **For detailed guidelines, examples, and best practices, see [COMMIT_GUIDELINES.md](COMMIT_GUIDELINES.md)**
 
 ### 4. Pull Request Process
 

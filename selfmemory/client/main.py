@@ -6,8 +6,6 @@ similar to how  provides MemoryClient for their hosted solution.
 """
 
 import logging
-import os
-from contextlib import suppress
 from typing import Any
 
 import httpx
@@ -32,43 +30,42 @@ class SelfMemoryClient:
     def __init__(
         self,
         api_key: str | None = None,
+        oauth_token: str | None = None,
         host: str | None = None,
         client: httpx.Client | None = None,
     ):
         """Initialize the SelfMemory client.
 
         Args:
-            api_key: The API key for authenticating with the SelfMemory API. If not
-                     provided, it will attempt to use the INMEM_API_KEY
-                     environment variable.
-            host: The base URL for the SelfMemory API. If not provided, will
-                  auto-discover the correct host by trying multiple endpoints.
-            client: A custom httpx.Client instance. If provided, it will be
-                    used instead of creating a new one.
+            api_key: Legacy API key for authentication (deprecated, use oauth_token)
+            oauth_token: OAuth 2.1 token for authentication
+            host: The base URL for the SelfMemory API (required)
+            client: A custom httpx.Client instance (optional)
 
         Raises:
-            ValueError: If no API key is provided or found in the environment.
+            ValueError: If no authentication token provided or host not specified
         """
-        self.api_key = api_key or os.getenv("INMEM_API_KEY")
+        # Get authentication token (prefer OAuth token over legacy API key)
+        auth_token = oauth_token or api_key
 
-        if not self.api_key:
+        if not auth_token:
             raise ValueError(
-                "SelfMemory API Key not provided. Please set INMEM_API_KEY environment variable or provide api_key parameter."
+                "Authentication required. Provide either oauth_token or api_key parameter."
             )
 
-        # Auto-discover host if not provided
-        if host:
-            self.host = host
-        else:
-            self.host = self._discover_host()
+        if not host:
+            raise ValueError(
+                "Host is required. Provide the host parameter with the API base URL."
+            )
+
+        self.host = host
 
         if client is not None:
             self.client = client
-            # Ensure the client has the correct base_url and headers
             self.client.base_url = httpx.URL(self.host)
             self.client.headers.update(
                 {
-                    "Authorization": f"Bearer {self.api_key}",
+                    "Authorization": f"Bearer {auth_token}",
                     "Content-Type": "application/json",
                 }
             )
@@ -76,91 +73,13 @@ class SelfMemoryClient:
             self.client = httpx.Client(
                 base_url=self.host,
                 headers={
-                    "Authorization": f"Bearer {self.api_key}",
+                    "Authorization": f"Bearer {auth_token}",
                     "Content-Type": "application/json",
                 },
                 timeout=APIConstants.DEFAULT_TIMEOUT,
             )
 
-        # Validate API key on the discovered/provided host
-        self.user_info = self._validate_api_key()
         logger.info(f"SelfMemory client initialized with host: {self.host}")
-
-    def _discover_host(self) -> str:
-        """Auto-discover the correct host for the API key by trying multiple endpoints."""
-        # Priority order for host discovery
-        candidate_hosts = [
-            # Environment variable override
-            os.getenv("SELFMEMORY_API_HOST"),
-            # Production host
-            APIConstants.DEFAULT_API_HOST,
-            # Common local development hosts
-            "http://localhost:8081",  # Default server port
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:3002",
-            "http://127.0.0.1:8080",
-            "http://127.0.0.1:3000",
-        ]
-
-        # Filter out None values
-        candidate_hosts = [host for host in candidate_hosts if host]
-
-        logger.info("Auto-discovering host for API key...")
-
-        for host in candidate_hosts:
-            try:
-                temp_client = httpx.Client(
-                    base_url=host,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    timeout=5.0,
-                )
-                response = temp_client.get("/api/v1/ping")
-                response.raise_for_status()
-                data = response.json()
-                if data.get("status") == "ok":
-                    temp_client.close()
-                    logger.info(f"✅ Discovered host: {host}")
-                    return host
-            except (httpx.RequestError, httpx.TimeoutException, ConnectionError) as e:
-                logger.debug(f"Host {host} failed: {e}")
-            finally:
-                with suppress(BaseException):
-                    temp_client.close()
-
-        # If no host worked, fall back to default
-        logger.warning("Could not auto-discover host, using default")
-        return APIConstants.DEFAULT_API_HOST
-
-    def _validate_api_key(self) -> dict[str, Any]:
-        """Validate the API key by making a test request (following selfmemory's pattern)."""
-        try:
-            response = self.client.get("/api/v1/ping")
-            response.raise_for_status()
-            data = response.json()
-
-            # The ping endpoint returns user info on success
-            if data.get("status") == "ok":
-                return {
-                    "user_id": data.get("user_id"),
-                    "key_id": data.get("key_id"),
-                    "permissions": data.get("permissions", []),
-                    "name": data.get("name"),
-                }
-            raise ValueError("API key validation failed: Invalid response")
-
-        except httpx.HTTPStatusError as e:
-            try:
-                error_data = e.response.json()
-                error_message = error_data.get("detail", str(e))
-            except Exception:
-                error_message = str(e)
-            raise ValueError(f"API key validation failed: {error_message}") from None
-        except Exception as e:
-            raise ValueError(f"Failed to connect to SelfMemory API: {str(e)}") from e
 
     def add(
         self,

@@ -1,0 +1,121 @@
+name: Release & Publish to PyPI
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:  # Allow manual triggers
+
+permissions:
+  contents: write      # Required for creating releases and pushing changes
+  id-token: write      # Required for PyPI OIDC authentication
+
+jobs:
+  release:
+    name: Semantic Release & PyPI Publish
+    runs-on: ubuntu-latest
+    # environment: release  # Optional: uncomment and create 'release' environment in GitHub for additional protection
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # Full history required for semantic-release
+          token: ${{ secrets.PAT_TOKEN }}  # Use PAT to bypass branch protection
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install Python Semantic Release
+        run: |
+          pip install python-semantic-release
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Check if release is needed
+        id: check_release
+        run: |
+          # Run semantic-release in dry-run mode to check if a release is needed
+          if semantic-release version --print 2>&1 | grep -q "No release will be made"; then
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "::notice::No release-worthy commits found. Skipping release."
+          else
+            NEW_VERSION=$(semantic-release version --print 2>&1 | tail -n 1)
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+            echo "::notice::New version will be: ${NEW_VERSION}"
+          fi
+      
+      - name: Create release with Python Semantic Release
+        if: steps.check_release.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}  # Use PAT for creating releases
+        run: |
+          echo "Creating release for version ${{ steps.check_release.outputs.new_version }}"
+          
+          # Run semantic-release to:
+          # 1. Update version in pyproject.toml
+          # 2. Generate/update CHANGELOG.md
+          # 3. Create git tag
+          # 4. Create GitHub release
+          semantic-release version
+          semantic-release changelog
+          semantic-release publish
+      
+      - name: Build Python package
+        if: steps.check_release.outputs.should_release == 'true'
+        run: |
+          pip install build
+          python -m build
+          
+          # List built packages
+          echo "::group::Built packages"
+          ls -lh dist/
+          echo "::endgroup::"
+      
+      - name: Publish to PyPI
+        if: steps.check_release.outputs.should_release == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+          print-hash: true
+      
+      - name: Upload build artifacts
+        if: steps.check_release.outputs.should_release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-packages-${{ steps.check_release.outputs.new_version }}
+          path: dist/
+          retention-days: 90
+      
+      - name: Summary
+        if: steps.check_release.outputs.should_release == 'true'
+        run: |
+          echo "## Release Summary 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Version**: ${{ steps.check_release.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **GitHub Release**: Created" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **PyPI Package**: Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "pip install selfmemory==${{ steps.check_release.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+      
+      - name: No release summary
+        if: steps.check_release.outputs.should_release == 'false'
+        run: |
+          echo "## No Release Created ℹ️" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No release-worthy commits found since the last release." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Commits must use conventional format to trigger releases:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`feat:\` for new features (minor version bump)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`fix:\` for bug fixes (patch version bump)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`feat!:\` or \`BREAKING CHANGE:\` for breaking changes (major version bump)" >> $GITHUB_STEP_SUMMARY

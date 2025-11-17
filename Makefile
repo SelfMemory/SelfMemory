@@ -11,6 +11,9 @@ setup:
 run:
 	uv run uvicorn server.main:app --host 0.0.0.0 --port 8081 --reload
 
+make run prod:
+	uv run uvicorn server.main:app --host 0.0.0.0 --port 8081
+
 runmcp:
 	cd selfmemory-mcp && uv run python3 main.py
 
@@ -31,3 +34,25 @@ allclean:
 
 build:
 	uv build
+
+cleanauth:
+	cd ory-infrastructure && docker-compose down
+	rm -rf ory-infrastructure/volumes/postgres
+	docker compose up
+
+restartauth:
+	cd ory-infrastructure && docker-compose down
+	docker compose up
+
+# Code quality targets
+lint:
+	uv run ruff check .
+
+lint-fix:
+	uv run ruff check --fix .
+
+format:
+	uv run ruff format .
+
+quality: lint-fix format
+	@echo "✅ Code quality checks complete"
