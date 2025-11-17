@@ -216,6 +216,33 @@ class LoggingConfig:
     SAMPLE_RATE: float = float(os.getenv("LOGGING_SAMPLE_RATE", "1.0"))
 
 
+class MCPConfig:
+    """Configuration for Model Context Protocol (MCP) support."""
+
+    # Whether MCP is enabled
+    ENABLED: bool = os.getenv("MCP_ENABLED", "true").lower() == "true"
+
+    # MCP server URL (this backend's public URL)
+    SERVER_URL: str = os.getenv("MCP_SERVER_URL", "http://localhost:8081")
+
+    # Ory Hydra configuration for OAuth
+    HYDRA_PUBLIC_URL: str = os.getenv("HYDRA_PUBLIC_URL", "http://127.0.0.1:4444")
+    HYDRA_ADMIN_URL: str = os.getenv("HYDRA_ADMIN_URL", "http://127.0.0.1:4445")
+
+    # MCP scopes - supports both MCP standard scopes and memory-specific scopes
+    SCOPES_SUPPORTED: list[str] = [
+        "memories:read",
+        "memories:write",
+        "mcp:tools",
+        "mcp:resources",
+    ]
+
+    # Resource documentation
+    RESOURCE_DOCUMENTATION_URL: str = os.getenv(
+        "MCP_RESOURCE_DOCUMENTATION_URL", "https://github.com/yourusername/selfmemory"
+    )
+
+
 # Main configuration object
 class Config:
     """Main configuration class that aggregates all config sections."""
@@ -235,6 +262,7 @@ class Config:
     health = HealthConfig()
     metrics = MetricsConfig()
     logging = LoggingConfig()
+    mcp = MCPConfig()
 
     @classmethod
     def validate(cls) -> list[str]:
