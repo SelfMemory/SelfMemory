@@ -25,6 +25,7 @@ from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import is_expired
 from ..utils.permission_helpers import get_user_by_kratos_id
 from ..utils.rate_limiter import limiter
+from ..utils.user_helpers import ensure_user_exists
 from .invitation_helpers import (
     add_user_to_organization,
     add_user_to_projects_from_invitation,
@@ -258,149 +259,8 @@ The SelfMemory Team
 
 
 # ============================================================================
-# Public Endpoints (No Authentication Required)
+# Authenticated Endpoints (Must come BEFORE parameterized routes)
 # ============================================================================
-
-
-@router.get("/{token}", response_model=InvitationResponse)
-def get_invitation_details(token: str):
-    """
-    Get invitation details by token (PUBLIC endpoint - no auth required).
-
-    This endpoint allows anyone with the invitation link to view the details
-    before deciding whether to accept.
-
-    Scenarios:
-    - Valid token, pending invitation → Return invitation details
-    - Expired invitation → Return 410 Gone
-    - Already accepted invitation → Return 410 Gone
-    - Invalid token → Return 404 Not Found
-    """
-    # Look up invitation by token
-    invitation = get_invitation_by_token(token)
-
-    if not invitation:
-        raise HTTPException(status_code=404, detail="Invitation not found")
-
-    # Check if already accepted
-    if invitation["status"] == "accepted":
-        raise HTTPException(
-            status_code=410,
-            detail="This invitation has already been accepted",
-        )
-
-    # Check if expired
-    if is_invitation_expired(invitation):
-        # Mark as expired
-        mongo_db.invitations.update_one(
-            {"_id": invitation["_id"]},
-            {"$set": {"status": "expired"}},
-        )
-        raise HTTPException(
-            status_code=410,
-            detail="This invitation has expired",
-        )
-
-    # Get organization details
-    organization = mongo_db.organizations.find_one(
-        {"_id": invitation["organizationId"]}
-    )
-    if not organization:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    # Get project details if project-specific invitation
-    project_name = None
-    if invitation.get("projectId"):
-        project = mongo_db.projects.find_one({"_id": invitation["projectId"]})
-        if project:
-            project_name = project["name"]
-
-    # Get inviter details
-    inviter = mongo_db.users.find_one({"_id": invitation["invitedBy"]})
-    inviter_email = inviter["email"] if inviter else "Unknown"
-
-    logger.info(f"✅ Retrieved invitation details for token: {token[:10]}...")
-
-    return InvitationResponse(
-        invitation_id=str(invitation["_id"]),
-        token=invitation["token"],
-        email=invitation["email"],
-        organization_id=str(invitation["organizationId"]),
-        organization_name=organization["name"],
-        project_id=str(invitation["projectId"])
-        if invitation.get("projectId")
-        else None,
-        project_name=project_name,
-        role=invitation["role"],
-        invited_by_email=inviter_email,
-        status=invitation["status"],
-        expires_at=invitation["expiresAt"].isoformat(),
-        created_at=invitation["createdAt"].isoformat(),
-    )
-
-
-# ============================================================================
-# Authenticated Endpoints
-# ============================================================================
-
-
-@router.post("/{token}/accept")
-@limiter.limit(config.rate_limit.INVITATION_ACCEPT)
-def accept_invitation(
-    request: Request,
-    token: str,
-    auth: AuthContext = Depends(authenticate_api_key),
-):
-    """
-    Accept an invitation (authenticated endpoint).
-
-    Rate limited to prevent abuse (3 requests per minute).
-
-    Scenarios:
-    - User accepts pending invitation → Add to org/project, mark as accepted
-    - User's email doesn't match invitation → Return 403 Forbidden
-    - Invitation expired → Return 410 Gone
-    - Invitation already accepted → Return 410 Gone
-    - Invalid token → Return 404 Not Found
-    """
-    # Look up invitation by token
-    invitation = get_invitation_by_token(token)
-    if not invitation:
-        raise HTTPException(status_code=404, detail="Invitation not found")
-
-    # Get user document using helper (handles migration dual-format)
-    try:
-        user = get_user_by_kratos_id(mongo_db, auth.user_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-    user_obj_id = user["_id"]
-
-    # Validate invitation (checks expiry, status, email match)
-    validate_invitation_for_acceptance(invitation, user.get("email"))
-
-    # Add user to organization
-    add_user_to_organization(user_obj_id, invitation)
-
-    # Add user to projects (handles both single project and multi-project invitations)
-    projects_added = add_user_to_projects_from_invitation(user_obj_id, invitation)
-
-    # Mark invitation as accepted
-    mark_invitation_accepted(invitation["_id"])
-
-    # Get response details
-    response_details = get_invitation_response_details(invitation)
-
-    logger.info(
-        f"✅ Invitation accepted by user {auth.user_id}, "
-        f"added to {len(projects_added)} projects"
-    )
-
-    return {
-        "message": "Invitation accepted successfully",
-        **response_details,
-        "projects_added": len(projects_added),
-    }
 
 
 @router.get("/pending", response_model=list[InvitationResponse])
@@ -485,3 +345,178 @@ def list_pending_invitations(auth: AuthContext = Depends(authenticate_api_key)):
     )
 
     return valid_invitations
+
+
+@router.post("/{token}/accept")
+@limiter.limit(config.rate_limit.INVITATION_ACCEPT)
+def accept_invitation(
+    request: Request,
+    token: str,
+    auth: AuthContext = Depends(authenticate_api_key),
+):
+    """
+    Accept an invitation (authenticated endpoint).
+
+    Rate limited to prevent abuse (3 requests per minute).
+
+    Scenarios:
+    - User accepts pending invitation → Add to org/project, mark as accepted
+    - User's email doesn't match invitation → Return 403 Forbidden
+    - Invitation expired → Return 410 Gone
+    - Invitation already accepted → Return 410 Gone
+    - Invalid token → Return 404 Not Found
+    """
+    # Look up invitation by token
+    invitation = get_invitation_by_token(token)
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    # Ensure user record exists (critical for OAuth flows)
+    # This creates the user if they don't exist yet
+    user = ensure_user_exists(mongo_db, auth.user_id, invitation["email"])
+    user_obj_id = user["_id"]
+
+    # Validate invitation (checks expiry, status, email match)
+    validate_invitation_for_acceptance(invitation, user.get("email"))
+
+    # Add user to organization
+    add_user_to_organization(user_obj_id, invitation)
+
+    # Add user to projects (handles both single project and multi-project invitations)
+    projects_added = add_user_to_projects_from_invitation(user_obj_id, invitation)
+
+    # Mark invitation as accepted
+    mark_invitation_accepted(invitation["_id"])
+
+    # Get response details
+    response_details = get_invitation_response_details(invitation)
+
+    # CREATE NOTIFICATION for inviter
+    from datetime import timedelta
+
+    from ..utils.datetime_helpers import utc_now
+
+    notification_doc = {
+        "type": "invitation_accepted",
+        "userId": invitation["invitedBy"],  # Inviter receives notification
+        "relatedUserId": user_obj_id,  # Accepter
+        "organizationId": invitation["organizationId"],
+        "projectId": invitation.get("projectId"),
+        "invitationId": invitation["_id"],
+        "title": f"{user.get('email', 'A user')} accepted your invitation",
+        "message": f"{user.get('email')} joined {response_details.get('organization_name', 'organization')}"
+        + (
+            f" - {response_details.get('project_name')}"
+            if response_details.get("project_name")
+            else ""
+        )
+        + f" as {invitation['role']}",
+        "metadata": {
+            "email": user.get("email"),
+            "organizationName": response_details.get("organization_name"),
+            "projectName": response_details.get("project_name"),
+            "role": invitation["role"],
+        },
+        "read": False,
+        "readAt": None,
+        "createdAt": utc_now(),
+        "expiresAt": utc_now() + timedelta(days=30),  # Auto-delete after 30 days
+    }
+
+    mongo_db.notifications.insert_one(notification_doc)
+    logger.info(
+        f"Created acceptance notification for inviter {str(invitation['invitedBy'])}"
+    )
+
+    logger.info(
+        f"✅ Invitation accepted by user {auth.user_id}, "
+        f"added to {len(projects_added)} projects"
+    )
+
+    return {
+        "message": "Invitation accepted successfully",
+        **response_details,
+        "projects_added": len(projects_added),
+    }
+
+
+# ============================================================================
+# Public Endpoints (No Authentication Required)
+# ============================================================================
+
+
+@router.get("/{token}", response_model=InvitationResponse)
+def get_invitation_details(token: str):
+    """
+    Get invitation details by token (PUBLIC endpoint - no auth required).
+
+    This endpoint allows anyone with the invitation link to view the details
+    before deciding whether to accept.
+
+    Scenarios:
+    - Valid token, pending invitation → Return invitation details
+    - Expired invitation → Return 410 Gone
+    - Already accepted invitation → Return 410 Gone
+    - Invalid token → Return 404 Not Found
+    """
+    # Look up invitation by token
+    invitation = get_invitation_by_token(token)
+
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    # Check if already accepted
+    if invitation["status"] == "accepted":
+        raise HTTPException(
+            status_code=410,
+            detail="This invitation has already been accepted",
+        )
+
+    # Check if expired
+    if is_invitation_expired(invitation):
+        # Mark as expired
+        mongo_db.invitations.update_one(
+            {"_id": invitation["_id"]},
+            {"$set": {"status": "expired"}},
+        )
+        raise HTTPException(
+            status_code=410,
+            detail="This invitation has expired",
+        )
+
+    # Get organization details
+    organization = mongo_db.organizations.find_one(
+        {"_id": invitation["organizationId"]}
+    )
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Get project details if project-specific invitation
+    project_name = None
+    if invitation.get("projectId"):
+        project = mongo_db.projects.find_one({"_id": invitation["projectId"]})
+        if project:
+            project_name = project["name"]
+
+    # Get inviter details
+    inviter = mongo_db.users.find_one({"_id": invitation["invitedBy"]})
+    inviter_email = inviter["email"] if inviter else "Unknown"
+
+    logger.info(f"✅ Retrieved invitation details for token: {token[:10]}...")
+
+    return InvitationResponse(
+        invitation_id=str(invitation["_id"]),
+        token=invitation["token"],
+        email=invitation["email"],
+        organization_id=str(invitation["organizationId"]),
+        organization_name=organization["name"],
+        project_id=str(invitation["projectId"])
+        if invitation.get("projectId")
+        else None,
+        project_name=project_name,
+        role=invitation["role"],
+        invited_by_email=inviter_email,
+        status=invitation["status"],
+        expires_at=invitation["expiresAt"].isoformat(),
+        created_at=invitation["createdAt"].isoformat(),
+    )

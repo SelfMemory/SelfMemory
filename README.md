@@ -34,7 +34,3 @@ print(results)
 - **GitHub**: [github.com/selfmemory/selfmemory](https://github.com/selfmemory/selfmemory)
 - **Discord**: [discord.com/invite/YypBvdUpcc](https://discord.com/invite/YypBvdUpcc)
 - **Brand Assets** (Logos, Slides, etc.): [Google Drive](https://drive.google.com/drive/folders/1paB9DkpPGv58_MC3P5C1el_Bw7lzYh-3?usp=sharing)
-
-## 📄 License
-
-Apache 2.0 License - see [LICENSE](LICENSE.txt)

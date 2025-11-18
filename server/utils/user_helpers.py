@@ -1,93 +1,70 @@
 """
-User Helper Functions
-
-Utility functions for user lookups and operations following DRY principles.
-Eliminates code duplication in user lookup patterns across routes.
+User management helper functions
 """
 
 import logging
 
-from bson import ObjectId
-from fastapi import HTTPException
 from pymongo.database import Database
+
+from ..utils.datetime_helpers import utc_now
 
 logger = logging.getLogger(__name__)
 
 
-def get_user_by_id(
-    db: Database, user_id: ObjectId | str, error_if_missing: bool = True
-) -> dict | None:
+def ensure_user_exists(db: Database, kratos_id: str, email: str | None = None) -> dict:
     """
-    Get user by MongoDB ObjectId with optional error handling.
+    Ensure user record exists in database, create if missing.
+
+    This is critical for OAuth flows where users may not have a
+    database record created yet, but need to accept invitations
+    or access organizations.
 
     Args:
         db: MongoDB database instance
-        user_id: MongoDB ObjectId or string representation
-        error_if_missing: If True, raise HTTPException when user not found
+        kratos_id: Ory Kratos user UUID
+        email: User's email address (optional, but recommended)
 
     Returns:
-        User document or None if not found (when error_if_missing=False)
+        dict: User document
 
     Raises:
-        HTTPException: If user not found and error_if_missing=True
+        ValueError: If user cannot be found or created
     """
-    try:
-        # Convert string to ObjectId if needed
-        if isinstance(user_id, str):
-            user_id = ObjectId(user_id)
+    # Try to find existing user by Kratos ID
+    user = db.users.find_one({"kratosId": kratos_id})
 
-        user = db.users.find_one({"_id": user_id})
-
-        if not user and error_if_missing:
-            logger.error(f"User not found: {user_id}")
-            raise HTTPException(status_code=404, detail="User not found")
-
+    if user:
+        # Update last seen
+        db.users.update_one({"_id": user["_id"]}, {"$set": {"lastLogin": utc_now()}})
+        logger.debug(f"Found existing user: kratosId={kratos_id}")
         return user
 
-    except Exception as e:
-        if error_if_missing:
-            logger.error(f"Error fetching user: {e}")
-            raise HTTPException(status_code=500, detail="Error fetching user") from e
-        return None
+    # User doesn't exist - create new record
+    now = utc_now()
+    user_doc = {
+        "kratosId": kratos_id,
+        "createdAt": now,
+        "lastLogin": now,
+    }
 
+    # Add email if provided
+    if email:
+        user_doc["email"] = email.lower().strip()
 
-def require_user_by_id(db: Database, user_id: ObjectId | str) -> dict:
-    """
-    Get user by MongoDB ObjectId, raise HTTPException if not found.
+    result = db.users.insert_one(user_doc)
+    logger.info(f"✅ Created user record: kratosId={kratos_id}, email={email or 'N/A'}")
 
-    This is a convenience function that always raises on missing user.
-
-    Args:
-        db: MongoDB database instance
-        user_id: MongoDB ObjectId or string representation
-
-    Returns:
-        User document
-
-    Raises:
-        HTTPException: If user not found
-    """
-    return get_user_by_id(db, user_id, error_if_missing=True)
-
-
-def verify_user_active(db: Database, user_id: ObjectId | str) -> dict:
-    """
-    Get user and verify they are active.
-
-    Args:
-        db: MongoDB database instance
-        user_id: MongoDB ObjectId or string representation
-
-    Returns:
-        User document
-
-    Raises:
-        HTTPException: If user not found or inactive
-    """
-    user = require_user_by_id(db, user_id)
-
-    if not user.get("isActive", True):
-        logger.warning(f"Inactive user attempted access: {user_id}")
-        raise HTTPException(status_code=401, detail="User account inactive")
+    # Return the newly created user
+    user = db.users.find_one({"_id": result.inserted_id})
+    if not user:
+        raise ValueError(f"Failed to create user record for kratosId={kratos_id}")
 
     return user
+
+
+def get_or_create_user(db: Database, kratos_id: str, email: str | None = None) -> dict:
+    """
+    Alias for ensure_user_exists() for better semantic clarity.
+    Use when you expect the user might not exist.
+    """
+    return ensure_user_exists(db, kratos_id, email)
