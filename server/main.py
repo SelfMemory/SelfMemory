@@ -21,6 +21,7 @@ from .mcp_auth import get_protected_resource_metadata
 from .routes.api_keys import router as api_keys_router
 from .routes.hydra_proxy import router as hydra_proxy_router
 from .routes.invitations import router as invitations_router
+from .routes.notifications import router as notifications_router
 from .routes.organizations import router as organizations_router
 from .routes.projects import router as projects_router
 from .routes.users import router as users_router
@@ -189,6 +190,7 @@ async def get_csrf_token(
 app.include_router(api_keys_router)
 app.include_router(hydra_proxy_router)
 app.include_router(invitations_router)
+app.include_router(notifications_router)
 app.include_router(organizations_router)
 app.include_router(projects_router)
 app.include_router(users_router)
@@ -212,7 +214,8 @@ def list_api_keys_query(
         f"🔍 DEBUG /api/api-keys: user={auth.user_id}, project_id={project_id}"
     )
 
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
+    # Get MongoDB ObjectId from Kratos ID
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
     project_obj_id = validate_object_id(project_id, "project_id")
 
     # Verify project exists
@@ -928,8 +931,20 @@ def ensure_default_org_and_project(user_id: str) -> tuple[str, str]:
             }
             org_result = mongo_db.organizations.insert_one(org_doc)
             org_id = org_result.inserted_id
+
+            # IMPORTANT: Add owner to organization_members collection
+            org_member_doc = {
+                "organizationId": org_id,
+                "userId": mongo_user_id,  # MongoDB ObjectId for consistency
+                "role": "owner",
+                "joinedAt": utc_now(),
+                "status": "active",
+                "invitedBy": None,  # Self-created
+            }
+            mongo_db.organization_members.insert_one(org_member_doc)
+
             logging.info(
-                f"Created personal organization for user {user_id} (mongo_id: {mongo_user_id})"
+                f"Created personal organization for user {user_id} (mongo_id: {mongo_user_id}) and added owner to organization_members"
             )
         else:
             org_id = personal_org["_id"]

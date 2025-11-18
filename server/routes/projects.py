@@ -12,7 +12,7 @@ This module implements Phase 3 of the Memory Sharing Implementation Plan:
 import logging
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 
 from ..auth.permissions import require_project_admin
@@ -400,6 +400,7 @@ def invite_user_to_project(
     request: Request,
     project_id: str,
     invite: ProjectInvite,
+    background_tasks: BackgroundTasks,
     auth: AuthContext = Depends(authenticate_api_key),
 ):
     """
@@ -508,8 +509,9 @@ def invite_user_to_project(
         result = mongo_db.invitations.insert_one(invitation_doc)
         invitation_id = str(result.inserted_id)
 
-        # Send invitation email
-        send_invitation_email(
+        # Send invitation email in background (non-blocking)
+        background_tasks.add_task(
+            send_invitation_email,
             email=invite.email,
             organization_name=organization_name,
             project_name=None,  # Org-level invitation
@@ -518,6 +520,9 @@ def invite_user_to_project(
             invitation_token=invitation_token,
         )
 
+        logger.info(
+            f"✅ Invitation email queued for {invite.email} (will send in background)"
+        )
         logger.info(
             f"Created org invitation with project assignment: org={str(organization_id)}, "
             f"project={project_id}, email={invite.email}, inviter={auth.user_id}, "
@@ -577,8 +582,9 @@ def invite_user_to_project(
     result = mongo_db.invitations.insert_one(invitation_doc)
     invitation_id = str(result.inserted_id)
 
-    # Send invitation email
-    send_invitation_email(
+    # Send invitation email in background (non-blocking)
+    background_tasks.add_task(
+        send_invitation_email,
         email=invite.email,
         organization_name=organization_name,
         project_name=project["name"],
@@ -587,6 +593,9 @@ def invite_user_to_project(
         invitation_token=invitation_token,
     )
 
+    logger.info(
+        f"✅ Invitation email queued for {invite.email} (will send in background)"
+    )
     logger.info(
         f"Created project invitation: project={project_id}, email={invite.email}, "
         f"inviter={auth.user_id}, role={invite.role}"

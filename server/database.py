@@ -243,6 +243,77 @@ def create_invitations_collection(db) -> bool:
         raise
 
 
+def create_notifications_collection(db) -> bool:
+    """
+    Create notifications collection with proper indexes.
+
+    Purpose: Store user notifications (invitation acceptances, etc.)
+
+    Fields:
+    - type: String (notification type identifier)
+    - userId: ObjectId (recipient)
+    - relatedUserId: ObjectId (actor)
+    - organizationId: ObjectId
+    - projectId: ObjectId | null
+    - invitationId: ObjectId | null
+    - title: String
+    - message: String
+    - metadata: Object
+    - read: Boolean
+    - readAt: Date | null
+    - createdAt: Date
+    - expiresAt: Date | null
+
+    Indexes:
+    - Compound: {userId: 1, read: 1, createdAt: -1}
+    - TTL: {expiresAt: 1}
+    - Reference: {invitationId: 1}
+
+    Args:
+        db: MongoDB database instance
+
+    Returns:
+        bool: True if collection created successfully
+
+    Raises:
+        OperationFailure: If index creation fails
+    """
+    collection_name = "notifications"
+
+    try:
+        if collection_name not in db.list_collection_names():
+            db.create_collection(collection_name)
+            logger.info(f"✅ Created collection: {collection_name}")
+        else:
+            logger.info(f"ℹ️  Collection already exists: {collection_name}")
+
+        indexes = [
+            IndexModel(
+                [("userId", ASCENDING), ("read", ASCENDING), ("createdAt", ASCENDING)],
+                name="user_read_created_idx",
+            ),
+            IndexModel(
+                [("expiresAt", ASCENDING)],
+                name="expiration_idx",
+                expireAfterSeconds=0,  # TTL index
+            ),
+            IndexModel([("invitationId", ASCENDING)], name="invitation_idx"),
+        ]
+
+        collection = db[collection_name]
+        collection.create_indexes(indexes)
+        logger.info(f"✅ Created indexes for {collection_name}")
+
+        return True
+
+    except CollectionInvalid as e:
+        logger.error(f"❌ Failed to create collection {collection_name}: {e}")
+        raise
+    except OperationFailure as e:
+        logger.error(f"❌ Failed to create indexes for {collection_name}: {e}")
+        raise
+
+
 def create_api_keys_indexes(db) -> bool:
     """
     Create indexes for api_keys collection to optimize authentication queries.
@@ -372,6 +443,10 @@ def initialize_database_schema(db) -> dict:
         # Create invitations collection
         create_invitations_collection(db)
         results["collections_created"].append("invitations")
+
+        # Create notifications collection
+        create_notifications_collection(db)
+        results["collections_created"].append("notifications")
 
         # Create indexes for api_keys collection
         create_api_keys_indexes(db)

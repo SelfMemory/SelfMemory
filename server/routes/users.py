@@ -13,6 +13,7 @@ from pymongo.database import Database
 
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import utc_now
+from ..utils.permission_helpers import get_user_object_id_from_kratos_id
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +68,8 @@ def delete_user_account(
     - User must NOT be the owner of any organization (must transfer first)
     - User must NOT be the sole admin of any project (must promote another)
     """
-    try:
-        user_obj_id = ObjectId(auth.user_id)
-    except Exception as err:
-        raise HTTPException(status_code=400, detail="Invalid user ID") from err
+    # Get MongoDB ObjectId from Kratos ID
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
 
     # Verify user exists
     user = mongo_db.users.find_one({"_id": user_obj_id})
@@ -183,10 +182,8 @@ def get_current_user(
     auth: AuthContext = Depends(authenticate_api_key),
 ):
     """Get details of the currently authenticated user."""
-    try:
-        user_obj_id = ObjectId(auth.user_id)
-    except Exception as err:
-        raise HTTPException(status_code=400, detail="Invalid user ID") from err
+    # Get MongoDB ObjectId from Kratos ID
+    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
 
     user = mongo_db.users.find_one({"_id": user_obj_id})
     if not user:
