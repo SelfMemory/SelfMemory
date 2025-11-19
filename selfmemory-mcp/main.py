@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 CORE_SERVER_HOST = os.getenv("SELFMEMORY_API_HOST", "http://localhost:8081")
-MCP_SERVER_PORT = int(os.getenv("MCP_SERVER_PORT", "8080"))
+MCP_SERVER_PORT = int(os.getenv("MCP_SERVER_PORT", "5055"))
 MCP_SERVER_HOST = os.getenv("MCP_SERVER_HOST", "0.0.0.0")
 
 # Initialize MCP server without OAuth (simple Bearer token approach)
