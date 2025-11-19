@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -34,8 +35,17 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import Context, FastMCP
+from opentelemetry import trace
+from telemetry import init_telemetry
 
 load_dotenv()
+
+
+init_telemetry(service_name="selfmemory-mcp")
+
+# Get tracer for tool instrumentation
+tracer = trace.get_tracer(__name__)
+
 
 # Add project root to path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -346,32 +356,57 @@ async def search(query: str, ctx: Context) -> dict:
     Returns:
         Search results with memory IDs, titles, and URLs
     """
-    logger.info(f"🔍 Search: '{query}'")
+    with tracer.start_as_current_span("mcp_tool.search") as span:
+        span.set_attribute("tool.name", "search")
+        span.set_attribute("query.length", len(query))
 
-    # Get token context from ContextVar (set by middleware)
-    token_context = current_token_context.get()
+        tool_start = time.time()
+        logger.info(f"🔍 Search: '{query}'")
 
-    if not token_context:
-        logger.error("❌ No token context available")
-        raise ValueError("No authentication context available")
+        # Get token context from ContextVar (set by middleware)
+        with tracer.start_as_current_span("get_token_context"):
+            token_context = current_token_context.get()
 
-    logger.info(
-        f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
-    )
+            if not token_context:
+                logger.error("❌ No token context available")
+                raise ValueError("No authentication context available")
 
-    # Verify required scopes
-    if "memories:read" not in token_context["scopes"]:
-        raise ValueError("Token missing required scope: memories:read")
+            logger.info(
+                f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
+            )
 
-    project_id = token_context["project_id"]
-    oauth_token = token_context["raw_token"]
+            span.set_attribute("auth.type", token_context.get("auth_type"))
+            span.set_attribute("user.id", token_context.get("user_id"))
+            span.set_attribute("project.id", token_context.get("project_id", ""))
 
-    # Create client (works with both OAuth tokens and API keys)
-    client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
-    result = client.search(query=query, limit=10)
-    client.close()
+        # Verify required scopes
+        with tracer.start_as_current_span("verify_scopes"):
+            if "memories:read" not in token_context["scopes"]:
+                raise ValueError("Token missing required scope: memories:read")
 
-    return format_search_results(result.get("results", []))
+        project_id = token_context["project_id"]
+        oauth_token = token_context["raw_token"]
+
+        # Create client and execute search (works with both OAuth tokens and API keys)
+        with tracer.start_as_current_span("execute_search") as search_span:
+            search_start = time.time()
+            client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
+            result = client.search(query=query, limit=10)
+            client.close()
+
+            search_duration = time.time() - search_start
+            search_span.set_attribute("search.duration_ms", search_duration * 1000)
+            search_span.set_attribute("results.count", len(result.get("results", [])))
+
+            if search_duration > 5.0:
+                logger.warning(f"⚠️  Slow search execution: {search_duration:.2f}s")
+                search_span.add_event("slow_search_warning", {"threshold_ms": 5000})
+
+        tool_duration = time.time() - tool_start
+        span.set_attribute("tool.duration_ms", tool_duration * 1000)
+        logger.info(f"✅ Search completed in {tool_duration:.3f}s")
+
+        return format_search_results(result.get("results", []))
 
 
 @mcp.tool(
@@ -396,42 +431,72 @@ async def add(content: str, ctx: Context) -> dict:
     Returns:
         Confirmation with memory ID and status
     """
-    logger.info(f"➕ Add: {content[:50]}...")
+    with tracer.start_as_current_span("mcp_tool.add") as span:
+        span.set_attribute("tool.name", "add")
+        span.set_attribute("content.length", len(content))
 
-    # Get token context from ContextVar
-    token_context = current_token_context.get()
+        tool_start = time.time()
+        logger.info(f"➕ Add: {content[:50]}...")
 
-    if not token_context:
-        logger.error("❌ No token context available")
-        raise ValueError("No authentication context available")
+        # Get token context from ContextVar
+        with tracer.start_as_current_span("get_token_context"):
+            token_context = current_token_context.get()
 
-    logger.info(
-        f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
-    )
+            if not token_context:
+                logger.error("❌ No token context available")
+                raise ValueError("No authentication context available")
 
-    # Verify required scopes
-    if "memories:write" not in token_context["scopes"]:
-        raise ValueError("Token missing required scope: memories:write")
+            logger.info(
+                f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
+            )
 
-    project_id = token_context["project_id"]
-    oauth_token = token_context["raw_token"]
+            span.set_attribute("auth.type", token_context.get("auth_type"))
+            span.set_attribute("user.id", token_context.get("user_id"))
+            span.set_attribute("project.id", token_context.get("project_id", ""))
 
-    client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
+        # Verify required scopes
+        with tracer.start_as_current_span("verify_scopes"):
+            if "memories:write" not in token_context["scopes"]:
+                raise ValueError("Token missing required scope: memories:write")
 
-    memory_data = {
-        "messages": [{"role": "user", "content": content}],
-        "metadata": {"source": "mcp_unified", "project_id": project_id},
-    }
+        project_id = token_context["project_id"]
+        oauth_token = token_context["raw_token"]
 
-    response = client.client.post("/api/memories", json=memory_data)
-    response.raise_for_status()
-    result = response.json()
-    client.close()
+        # Create client and store memory
+        with tracer.start_as_current_span("store_memory") as store_span:
+            store_start = time.time()
+            client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
 
-    memory_id = result.get("id")
-    return create_tool_success(
-        {"status": "success", "id": memory_id, "message": "Memory stored successfully"}
-    )
+            memory_data = {
+                "messages": [{"role": "user", "content": content}],
+                "metadata": {"source": "mcp_unified", "project_id": project_id},
+            }
+
+            response = client.client.post("/api/memories", json=memory_data)
+            response.raise_for_status()
+            result = response.json()
+            client.close()
+
+            store_duration = time.time() - store_start
+            store_span.set_attribute("store.duration_ms", store_duration * 1000)
+            store_span.set_attribute("memory.id", result.get("id", ""))
+
+            if store_duration > 3.0:
+                logger.warning(f"⚠️  Slow memory storage: {store_duration:.2f}s")
+                store_span.add_event("slow_store_warning", {"threshold_ms": 3000})
+
+        tool_duration = time.time() - tool_start
+        span.set_attribute("tool.duration_ms", tool_duration * 1000)
+        logger.info(f"✅ Add completed in {tool_duration:.3f}s")
+
+        memory_id = result.get("id")
+        return create_tool_success(
+            {
+                "status": "success",
+                "id": memory_id,
+                "message": "Memory stored successfully",
+            }
+        )
 
 
 @mcp.tool(
@@ -456,35 +521,62 @@ async def fetch(id: str, ctx: Context) -> dict:
     Returns:
         Complete memory document with content and metadata
     """
-    logger.info(f"📥 Fetch: id={id}")
+    with tracer.start_as_current_span("mcp_tool.fetch") as span:
+        span.set_attribute("tool.name", "fetch")
+        span.set_attribute("memory.id", id)
 
-    # Get token context from ContextVar
-    token_context = current_token_context.get()
+        tool_start = time.time()
+        logger.info(f"📥 Fetch: id={id}")
 
-    if not token_context:
-        logger.error("❌ No token context available")
-        raise ValueError("No authentication context available")
+        # Get token context from ContextVar
+        with tracer.start_as_current_span("get_token_context"):
+            token_context = current_token_context.get()
 
-    logger.info(
-        f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
-    )
+            if not token_context:
+                logger.error("❌ No token context available")
+                raise ValueError("No authentication context available")
 
-    # Verify required scopes
-    if "memories:read" not in token_context["scopes"]:
-        raise ValueError("Token missing required scope: memories:read")
+            logger.info(
+                f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
+            )
 
-    project_id = token_context["project_id"]
-    oauth_token = token_context["raw_token"]
+            span.set_attribute("auth.type", token_context.get("auth_type"))
+            span.set_attribute("user.id", token_context.get("user_id"))
+            span.set_attribute("project.id", token_context.get("project_id", ""))
 
-    client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
-    result = client.search(query=id, limit=1)
-    client.close()
+        # Verify required scopes
+        with tracer.start_as_current_span("verify_scopes"):
+            if "memories:read" not in token_context["scopes"]:
+                raise ValueError("Token missing required scope: memories:read")
 
-    results = result.get("results", [])
-    if not results:
-        raise ValueError(f"Memory not found: {id}")
+        project_id = token_context["project_id"]
+        oauth_token = token_context["raw_token"]
 
-    return format_fetch_result(results[0])
+        # Fetch memory
+        with tracer.start_as_current_span("fetch_memory") as fetch_span:
+            fetch_start = time.time()
+            client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
+            result = client.search(query=id, limit=1)
+            client.close()
+
+            fetch_duration = time.time() - fetch_start
+            fetch_span.set_attribute("fetch.duration_ms", fetch_duration * 1000)
+
+            if fetch_duration > 3.0:
+                logger.warning(f"⚠️  Slow memory fetch: {fetch_duration:.2f}s")
+                fetch_span.add_event("slow_fetch_warning", {"threshold_ms": 3000})
+
+        results = result.get("results", [])
+        if not results:
+            span.set_attribute("fetch.status", "not_found")
+            raise ValueError(f"Memory not found: {id}")
+
+        span.set_attribute("fetch.status", "found")
+        tool_duration = time.time() - tool_start
+        span.set_attribute("tool.duration_ms", tool_duration * 1000)
+        logger.info(f"✅ Fetch completed in {tool_duration:.3f}s")
+
+        return format_fetch_result(results[0])
 
 
 # ============================================================================
