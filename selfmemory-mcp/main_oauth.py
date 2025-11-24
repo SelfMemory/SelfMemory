@@ -46,14 +46,17 @@ from tools.search import format_search_results  # noqa: E402
 from utils import create_tool_success, handle_tool_errors  # noqa: E402
 
 from server.auth.hydra_validator import validate_token  # noqa: E402
+from telemetry import init_logging, init_telemetry  # noqa: E402
 
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# Initialize logging based on environment (console for dev, file for prod)
+init_logging()
+
 logger = logging.getLogger(__name__)
+
+# Initialize OpenTelemetry if enabled (optional)
+init_telemetry()
 
 # Configuration
 CORE_SERVER_HOST = config.server.selfmemory_api_host

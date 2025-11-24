@@ -27,13 +27,21 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
+# Add selfmemory-mcp to path for telemetry imports
+sys.path.insert(0, str(Path(__file__).parent))
+
 load_dotenv()  # Load environment variables from .env
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# Import telemetry after adding to path
+from telemetry import init_logging, init_telemetry  # noqa: E402
+
+# Initialize logging based on environment (console for dev, file for prod)
+init_logging()
+
 logger = logging.getLogger(__name__)
+
+# Initialize OpenTelemetry if enabled (optional)
+init_telemetry()
 
 # Configuration
 CORE_SERVER_HOST = os.getenv("SELFMEMORY_API_HOST", "http://localhost:8081")
