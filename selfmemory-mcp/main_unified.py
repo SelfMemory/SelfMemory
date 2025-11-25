@@ -73,7 +73,7 @@ CORE_SERVER_HOST = config.server.selfmemory_api_host
 mcp = FastMCP(
     name="SelfMemory",
     instructions="Memory management server with unified authentication (OAuth 2.1 + API key)",
-    stateless_http=True,
+    stateless_http=False,
     json_response=True,
 )
 
