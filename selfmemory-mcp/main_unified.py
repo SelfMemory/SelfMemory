@@ -327,33 +327,33 @@ async def dynamic_client_registration(request: Request):
 # Helper function to get auth context
 def get_auth_from_context(ctx: Context) -> dict:
     """Extract authentication context from FastMCP Context.
-    
+
     Uses two methods in order of preference:
     1. request.scope['auth_context'] - Standard ASGI scope (set by UnifiedAuthMiddleware)
     2. ContextVar - Thread-safe context variable (set by UnifiedAuthMiddleware)
-    
+
     MCP requests are sequential per session, making this approach safe.
     """
     # Priority 1: Access request.scope['auth_context'] via request_context
     # This is where UnifiedAuthMiddleware injects the auth context (propagates to mounted apps)
-    if hasattr(ctx, 'request_context') and ctx.request_context:
+    if hasattr(ctx, "request_context") and ctx.request_context:
         logger.debug("🔍 Accessing request_context from FastMCP Context")
         try:
             request = ctx.request_context.request
-            if hasattr(request, 'scope'):
-                auth_context = request.scope.get('auth_context')
+            if hasattr(request, "scope"):
+                auth_context = request.scope.get("auth_context")
                 if auth_context:
                     logger.debug("✅ Got auth from request.scope['auth_context']")
                     return auth_context
         except Exception as e:
             logger.warning(f"⚠️  Error accessing request_context: {e}")
-    
+
     # Priority 2: Try ContextVar (set by UnifiedAuthMiddleware)
     token_context = current_token_context.get()
     if token_context:
         logger.debug("✅ Got auth from ContextVar")
         return token_context
-    
+
     # No auth context found - this should not happen if middleware is working
     logger.error("❌ No auth context available from any source")
     raise ValueError("Authentication context not available")

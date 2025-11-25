@@ -9,6 +9,8 @@ import logging
 import sys
 from pathlib import Path
 
+from auth.client_cache import get_or_create_client
+
 from server.auth.hydra_validator import HydraToken, validate_token
 
 # Add project root to path to enable importing from server package
@@ -17,7 +19,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 # Import client cache for performance optimization
-from auth.client_cache import get_or_create_client
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,7 @@ async def extract_token_context(
 
 def create_project_client(project_id: str, oauth_token: str, host: str):
     """Create SelfMemory client configured for specific project using OAuth token.
-    
+
     Uses client caching to avoid creating new connections on every request,
     significantly improving performance by reusing TCP/TLS connections.
 
@@ -134,5 +135,5 @@ def create_project_client(project_id: str, oauth_token: str, host: str):
         client.project_id = project_id
         logger.info(f"✅ Created new SelfMemoryClient for project {project_id}")
         return client
-    
+
     return get_or_create_client(oauth_token, create_client)
