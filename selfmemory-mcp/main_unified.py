@@ -427,7 +427,7 @@ async def search(query: str, ctx: Context) -> dict:
             search_start = time.time()
             client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
             result = client.search(query=query, limit=10)
-            client.close()
+            # Don't close cached clients - let cache manage lifecycle
 
             search_duration = time.time() - search_start
             search_span.set_attribute("search.duration_ms", search_duration * 1000)
@@ -510,7 +510,7 @@ async def add(content: str, ctx: Context) -> dict:
             response = client.client.post("/api/memories", json=memory_data)
             response.raise_for_status()
             result = response.json()
-            client.close()
+            # Don't close cached clients - let cache manage lifecycle
 
             store_duration = time.time() - store_start
             store_span.set_attribute("store.duration_ms", store_duration * 1000)
@@ -592,7 +592,7 @@ async def fetch(id: str, ctx: Context) -> dict:
             fetch_start = time.time()
             client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
             result = client.search(query=id, limit=1)
-            client.close()
+            # Don't close cached clients - let cache manage lifecycle
 
             fetch_duration = time.time() - fetch_start
             fetch_span.set_attribute("fetch.duration_ms", fetch_duration * 1000)
