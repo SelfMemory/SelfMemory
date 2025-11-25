@@ -7,8 +7,8 @@ This module provides:
 
 import logging
 import os
-from pathlib import Path
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from opentelemetry import trace
 from opentelemetry._logs import set_logger_provider
@@ -25,39 +25,37 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 
 def init_logging() -> None:
     """Initialize logging based on environment.
-    
+
     - Development: Logs to console (terminal)
     - Production: Logs to rotating file (/var/log/selfmemory-mcp/app.log)
-    
+
     Always maintains at least a console handler as fallback.
     This runs independently of OpenTelemetry configuration.
     """
     root_logger = logging.getLogger()
-    
+
     # Clear any existing handlers to avoid duplicates
     root_logger.handlers.clear()
-    
+
     # Set log level
     log_level = (
-        logging.DEBUG
-        if os.getenv("DEBUG", "false").lower() == "true"
-        else logging.INFO
+        logging.DEBUG if os.getenv("DEBUG", "false").lower() == "true" else logging.INFO
     )
     root_logger.setLevel(log_level)
-    
+
     # Get environment
     environment = os.getenv("ENVIRONMENT", "development").lower()
-    
+
     # Common formatter
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    
+
     # Always add console handler as fallback
     console_handler = logging.StreamHandler()
     console_handler.setLevel(log_level)
     console_handler.setFormatter(formatter)
-    
+
     # Configure logging based on environment
     if environment == "production":
         # Production: Try to add file-based logging
@@ -65,21 +63,23 @@ def init_logging() -> None:
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / "app.log"
-            
+
             # Rotating file handler (max 10MB, keep 5 backup files)
             file_handler = RotatingFileHandler(
                 log_file,
                 maxBytes=10 * 1024 * 1024,  # 10MB
-                backupCount=5
+                backupCount=5,
             )
             file_handler.setLevel(log_level)
             file_handler.setFormatter(formatter)
             root_logger.addHandler(file_handler)
-            
+
             # Add console handler as secondary handler for important logs
             root_logger.addHandler(console_handler)
-            
-            print(f"✅ Logging: level={logging.getLevelName(log_level)}, handlers=File+Console (fallback)")
+
+            print(
+                f"✅ Logging: level={logging.getLevelName(log_level)}, handlers=File+Console (fallback)"
+            )
             print(f"✅ Log file: {log_file}")
         except Exception as e:
             print(f"⚠️  Failed to setup file logging: {e}")
@@ -89,7 +89,7 @@ def init_logging() -> None:
     else:
         # Development: Console logging
         root_logger.addHandler(console_handler)
-        
+
         print(f"✅ Logging: level={logging.getLevelName(log_level)}, handler=Console")
 
 
@@ -169,7 +169,7 @@ def init_telemetry(service_name: str = "selfmemory-mcp") -> trace.Tracer | None:
         # Add OTLP logging handler to existing logger setup
         root_logger = logging.getLogger()
         root_logger.addHandler(handler)
-        
+
         print("✅ OTLP logging handler added - logs will be sent to SigNoz")
         print(f"✅ SigNoz endpoint: {otlp_endpoint}")
 
@@ -182,7 +182,7 @@ def init_telemetry(service_name: str = "selfmemory-mcp") -> trace.Tracer | None:
         HTTPXClientInstrumentor().instrument()
 
         tracer = trace.get_tracer(__name__)
-        print(f"✅ OpenTelemetry tracing initialized with SigNoz")
+        print("✅ OpenTelemetry tracing initialized with SigNoz")
         return tracer
 
     except Exception as e:

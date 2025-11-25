@@ -5,7 +5,6 @@ across middleware and tool implementations.
 """
 
 import logging
-from typing import List
 
 from opentelemetry import trace
 
@@ -14,7 +13,7 @@ tracer = trace.get_tracer(__name__)
 
 
 def validate_scope(
-    token_scopes: List[str],
+    token_scopes: list[str],
     required_scope: str,
     context_info: dict | None = None,
 ) -> bool:
@@ -49,8 +48,8 @@ def validate_scope(
 
 
 def validate_scopes(
-    token_scopes: List[str],
-    required_scopes: List[str],
+    token_scopes: list[str],
+    required_scopes: list[str],
     match_all: bool = True,
     context_info: dict | None = None,
 ) -> bool:
@@ -81,7 +80,9 @@ def validate_scopes(
                     project = context_info.get("project_id", "unknown")
                     context_str = f" (user={user}, project={project})"
 
-                error_msg = f"Token missing required scopes: {', '.join(missing)}{context_str}"
+                error_msg = (
+                    f"Token missing required scopes: {', '.join(missing)}{context_str}"
+                )
                 logger.warning(f"❌ {error_msg}")
                 span.set_attribute("validation_status", "failed_missing_all")
                 raise ValueError(error_msg)

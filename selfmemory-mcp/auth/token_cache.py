@@ -9,6 +9,9 @@ import logging
 
 from cachetools import TTLCache
 
+# PBKDF2 salt for secure token hashing in cache keys
+PBKDF2_CACHE_SALT = b"selfmemory.mcp.cache.salt.v1"
+
 logger = logging.getLogger(__name__)
 
 # Cache for OAuth token validation results (5 minute TTL)
@@ -21,15 +24,17 @@ _api_key_cache = TTLCache(maxsize=1000, ttl=600)
 
 
 def _hash_token(token: str) -> str:
-    """Create a secure hash of the token for cache key.
+    """Create a secure hash of the token for cache key using PBKDF2-HMAC-SHA256.
 
     Args:
         token: The token string to hash
 
     Returns:
-        SHA256 hash of the token
+        PBKDF2-HMAC-SHA256 hash of the token (hex)
     """
-    return hashlib.sha256(token.encode()).hexdigest()
+    # Use 100,000 iterations, which is recommended as minimum for PBKDF2.
+    dk = hashlib.pbkdf2_hmac("sha256", token.encode(), PBKDF2_CACHE_SALT, 100_000)
+    return dk.hex()
 
 
 def get_oauth_token_from_cache(token: str) -> dict | None:
@@ -84,9 +89,7 @@ def get_api_key_from_cache(api_key: str) -> dict | None:
     cached = _api_key_cache.get(key_hash)
 
     if cached:
-        logger.info(
-            f"💾 CACHE HIT: API key (cache size: {len(_api_key_cache)})"
-        )
+        logger.info(f"💾 CACHE HIT: API key (cache size: {len(_api_key_cache)})")
         return cached
 
     logger.info(

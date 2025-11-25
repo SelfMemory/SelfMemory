@@ -6,7 +6,8 @@ to follow the DRY principle.
 
 import logging
 import time
-from typing import Callable, TypeVar, Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from opentelemetry import trace
 
@@ -68,10 +69,14 @@ def validate_with_cache(
                 result = validator_func(token)
                 validation_duration = time.time() - validation_start
 
-            span.set_attribute(f"{operation_name}.validation_ms", validation_duration * 1000)
+            span.set_attribute(
+                f"{operation_name}.validation_ms", validation_duration * 1000
+            )
 
             if validation_duration > 3.0:
-                logger.warning(f"⚠️  Slow {operation_name} validation: {validation_duration:.2f}s")
+                logger.warning(
+                    f"⚠️  Slow {operation_name} validation: {validation_duration:.2f}s"
+                )
                 span.add_event(f"slow_{operation_name}_warning", {"threshold_ms": 3000})
 
             logger.info(

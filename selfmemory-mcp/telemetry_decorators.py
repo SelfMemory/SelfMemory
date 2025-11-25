@@ -7,7 +7,8 @@ eliminating the need to repeat span wrapping and timing logic.
 import functools
 import logging
 import time
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from opentelemetry import trace
 
@@ -59,10 +60,15 @@ def track_tool_execution(tool_name: str, slow_threshold_ms: int = 5000):
                         )
                         span.add_event(
                             "slow_tool_warning",
-                            {"threshold_ms": slow_threshold_ms, "actual_ms": duration_ms},
+                            {
+                                "threshold_ms": slow_threshold_ms,
+                                "actual_ms": duration_ms,
+                            },
                         )
                     else:
-                        logger.info(f"✅ Tool completed ({tool_name}): {tool_duration:.3f}s")
+                        logger.info(
+                            f"✅ Tool completed ({tool_name}): {tool_duration:.3f}s"
+                        )
 
                     return result
 
@@ -96,10 +102,15 @@ def track_tool_execution(tool_name: str, slow_threshold_ms: int = 5000):
                         )
                         span.add_event(
                             "slow_tool_warning",
-                            {"threshold_ms": slow_threshold_ms, "actual_ms": duration_ms},
+                            {
+                                "threshold_ms": slow_threshold_ms,
+                                "actual_ms": duration_ms,
+                            },
                         )
                     else:
-                        logger.info(f"✅ Tool completed ({tool_name}): {tool_duration:.3f}s")
+                        logger.info(
+                            f"✅ Tool completed ({tool_name}): {tool_duration:.3f}s"
+                        )
 
                     return result
 
