@@ -41,12 +41,12 @@ from oauth.metadata import (  # noqa: E402
     create_401_response,
     get_protected_resource_metadata,
 )
+from telemetry import init_logging, init_telemetry  # noqa: E402
 from tools.fetch import format_fetch_result  # noqa: E402
 from tools.search import format_search_results  # noqa: E402
 from utils import create_tool_success, handle_tool_errors  # noqa: E402
 
 from server.auth.hydra_validator import validate_token  # noqa: E402
-from telemetry import init_logging, init_telemetry  # noqa: E402
 
 load_dotenv()
 

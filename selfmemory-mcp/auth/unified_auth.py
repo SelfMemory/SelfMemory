@@ -190,9 +190,7 @@ def validate_api_key(token: str, core_server_host: str) -> TokenContext:
             span.set_attribute("cache.hit", True)
             cache_duration = (time.time() - span_start) * 1000
             span.set_attribute("cache.duration_ms", cache_duration)
-            logger.info(
-                f"✅ API KEY CACHE HIT ({cache_duration:.2f}ms)"
-            )
+            logger.info(f"✅ API KEY CACHE HIT ({cache_duration:.2f}ms)")
             return TokenContext(
                 auth_type=cached_context["auth_type"],
                 user_id=cached_context["user_id"],
