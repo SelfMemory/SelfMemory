@@ -85,7 +85,7 @@ def get_api_key_from_cache(api_key: str) -> dict | None:
 
     if cached:
         logger.info(
-            f"💾 CACHE HIT: API key for user {cached.get('user_id')} (cache size: {len(_api_key_cache)})"
+            f"💾 CACHE HIT: API key (cache size: {len(_api_key_cache)})"
         )
         return cached
 
@@ -105,8 +105,7 @@ def set_api_key_in_cache(api_key: str, token_context: dict) -> None:
     key_hash = _hash_token(api_key)
     _api_key_cache[key_hash] = token_context
     logger.info(
-        f"💾 CACHED: API key for user {token_context.get('user_id')} "
-        f"[TTL: 10min, size: {len(_api_key_cache)}/{_api_key_cache.maxsize}]"
+        f"💾 CACHED: API key [TTL: 10min, size: {len(_api_key_cache)}/{_api_key_cache.maxsize}]"
     )
 
 
