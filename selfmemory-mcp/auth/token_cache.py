@@ -46,7 +46,7 @@ def get_oauth_token_from_cache(token: str) -> dict | None:
 
     if cached:
         logger.info(
-            f"💾 CACHE HIT: OAuth token for user {cached.get('user_id')} (cache size: {len(_oauth_token_cache)})"
+            f"💾 CACHE HIT: OAuth token (cache size: {len(_oauth_token_cache)})"
         )
         return cached
 
