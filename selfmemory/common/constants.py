@@ -31,5 +31,5 @@ class MetadataConstants:
 class APIConstants:
     """Constants for API client configuration."""
 
-    DEFAULT_TIMEOUT = 300
+    DEFAULT_TIMEOUT = 30  # Reduced from 300s to 30s for better performance
     DEFAULT_API_HOST = "http://localhost:8081"

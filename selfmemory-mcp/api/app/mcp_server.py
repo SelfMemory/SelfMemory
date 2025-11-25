@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +25,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.routing import APIRouter
 from mcp.server.fastmcp import FastMCP
-from mcp.server.sse import SseServerTransport
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -32,6 +32,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 load_dotenv()  # Load environment variables from .env
+
+# Import client cache for performance optimization
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from auth.client_cache import get_client_from_cache, set_client_in_cache
 
 # Configure logging
 logging.basicConfig(
@@ -60,18 +64,16 @@ else:
     MEMORY_CLIENT_CLASS = SelfMemory
     logger.info("🏠 Open Source Mode: Using SelfMemory class without authentication")
 
-# Initialize MCP
-mcp = FastMCP("selfmemory-mcp-server")
+# Initialize MCP with stateless_http=False for session management
+mcp = FastMCP(
+    name="selfmemory-mcp-server",
+    stateless_http=False,
+    json_response=True,
+)
 
 # Context variables for user_id and client_name
 user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id")
 client_name_var: contextvars.ContextVar[str] = contextvars.ContextVar("client_name")
-
-# Create a router for MCP endpoints
-mcp_router = APIRouter(prefix="/mcp")
-
-# Initialize SSE transport
-sse = SseServerTransport("/mcp/messages/")
 
 
 def _extract_memory_contents(search_result: dict[str, Any]) -> list[str]:
@@ -104,12 +106,15 @@ def _generate_memory_confirmation(content: str) -> str:
 def validate_and_get_client_platform(api_key: str) -> SelfMemoryClient:
     """
     Validate request and create authenticated SelfMemoryClient (Platform Mode).
+    
+    Uses client caching to avoid creating new connections on every request,
+    significantly improving performance by reusing TCP/TLS connections.
 
     Args:
         api_key: API key for authentication
 
     Returns:
-        SelfMemoryClient: Client authenticated with the user's token
+        SelfMemoryClient: Client authenticated with the user's token (cached)
 
     Raises:
         ValueError: If authentication fails
@@ -118,10 +123,18 @@ def validate_and_get_client_platform(api_key: str) -> SelfMemoryClient:
         if not api_key:
             raise ValueError("No API key provided")
 
+        # Check cache first to reuse existing client connection
+        cached_client = get_client_from_cache(api_key)
+        if cached_client:
+            return cached_client
+
         # Create and validate client - this will raise ValueError if token is invalid
         client = SelfMemoryClient(api_key=api_key, host=CORE_SERVER_HOST)
 
-        logger.info("✅ MCP Platform: API key authenticated")
+        # Cache the client for future requests (reuses connection)
+        set_client_in_cache(api_key, client)
+
+        logger.info("✅ MCP Platform: API key authenticated (new client created)")
         return client
 
     except ValueError:
@@ -452,78 +465,44 @@ async def delete_all_memories() -> str:
         return f"Error deleting memories: {e}"
 
 
-# SSE endpoints following selfmemory pattern
-@mcp_router.get("/{client_name}/sse/{user_id}")
-async def handle_sse(request: Request):
-    """Handle SSE connections for a specific user and client"""
-    # Extract user_id and client_name from path parameters
-    uid = request.path_params.get("user_id")
-    user_token = user_id_var.set(uid or USER_ID)
-    client_name = request.path_params.get("client_name")
-    client_token = client_name_var.set(client_name or "selfmemory")
-
-    try:
-        # Handle SSE connection
-        async with sse.connect_sse(
-            request.scope,
-            request.receive,
-            request._send,
-        ) as (read_stream, write_stream):
-            await mcp._mcp_server.run(
-                read_stream,
-                write_stream,
-                mcp._mcp_server.create_initialization_options(),
-            )
-    finally:
-        # Clean up context variables
-        user_id_var.reset(user_token)
-        client_name_var.reset(client_token)
-
-
-@mcp_router.post("/messages/")
-async def handle_get_message(request: Request):
-    return await handle_post_message(request)
-
-
-@mcp_router.post("/{client_name}/sse/{user_id}/messages/")
-async def handle_post_message_with_params(request: Request):
-    return await handle_post_message(request)
-
-
-async def handle_post_message(request: Request):
-    """Handle POST messages for SSE"""
-    try:
-        body = await request.body()
-
-        # Create a simple receive function that returns the body
-        async def receive():
-            return {"type": "http.request", "body": body, "more_body": False}
-
-        # Create a simple send function that does nothing
-        async def send(message):
-            return {}
-
-        # Call handle_post_message with the correct arguments
-        await sse.handle_post_message(request.scope, receive, send)
-
-        # Return a success response
-        return {"status": "ok"}
-    finally:
-        pass
+# Lifespan context manager for MCP session management
+@asynccontextmanager
+async def lifespan(app_instance: FastAPI):
+    """Manage server lifecycle - ensures MCP session manager is running.
+    
+    This is critical for proper RequestResponder initialization and prevents
+    the 'RequestResponder must be used as a context manager' error.
+    """
+    async with mcp.session_manager.run():
+        yield
 
 
 def setup_mcp_server(app: FastAPI):
-    """Setup MCP server with the FastAPI application"""
+    """Setup MCP server with the FastAPI application.
+    
+    Mounts the MCP streamable HTTP app to handle all MCP protocol messages.
+    The session manager must be running (via lifespan) for this to work.
+    """
     mcp._mcp_server.name = "selfmemory-mcp-server"
-
-    # Include MCP router in the FastAPI app
-    app.include_router(mcp_router)
+    
+    # Configure streamable HTTP path
+    mcp.settings.streamable_http_path = "/"
+    
+    # Mount MCP app - this handles SSE connections automatically
+    app.mount("/mcp", mcp.streamable_http_app())
 
 
 def main():
-    """Main entry point for the SelfMemory MCP server."""
+    """Main entry point for the SelfMemory MCP server.
+    
+    Note: This is typically not used when running via api/main.py.
+    The server is set up through setup_mcp_server() called from api/main.py.
+    """
+    import uvicorn
+    from fastapi import FastAPI
+    
     logger.info("=" * 60)
-    logger.info("🚀 Starting SelfMemory MCP Server")
+    logger.info("🚀 Starting SelfMemory MCP Server (Standalone)")
     logger.info("=" * 60)
     logger.info(
         f"🔧 Mode: {'🏢 Platform' if SELFMEMORY_PLATFORM_MODE else '🏠 Open Source'}"
@@ -539,12 +518,27 @@ def main():
         logger.info("👤 Single-user: Default user context")
 
     logger.info(f"🌐 MCP Server: http://{MCP_SERVER_HOST}:{MCP_SERVER_PORT}")
-    logger.info("🛠️  Tools: add_memory, search_memories")
+    logger.info("🛠️  Tools: add_memories, search_memory, list_memories, delete_all_memories")
     logger.info("=" * 60)
 
+    # Create FastAPI app with lifespan
+    app = FastAPI(
+        title="SelfMemory MCP Server",
+        description="Memory operations via Model Context Protocol",
+        lifespan=lifespan,
+    )
+    
+    # Setup MCP server
+    setup_mcp_server(app)
+    
+    # Run with uvicorn
     try:
-        # Run server with streamable HTTP transport
-        mcp.run(transport="streamable-http")
+        uvicorn.run(
+            app,
+            host=MCP_SERVER_HOST,
+            port=MCP_SERVER_PORT,
+            log_level="info"
+        )
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:
