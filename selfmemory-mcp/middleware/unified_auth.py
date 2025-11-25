@@ -85,20 +85,45 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
                 root_span.set_attribute("auth.skipped.reason", "not_mcp_endpoint")
                 return await call_next(request)
 
+            # Check if this is the initial MCP initialization request
+            # The initialization request must complete BEFORE authentication
+            # per MCP protocol spec - it establishes the session
+            # Handle both /mcp and /mcp/ paths
+            is_mcp_endpoint = request.method == "POST" and request.url.path.rstrip("/") == "/mcp"
+            
+            # Skip authentication for initialization request
+            # The client will authenticate on subsequent requests after init completes
+            if is_mcp_endpoint:
+                # Check if this looks like an initialize request by examining body
+                try:
+                    body = await request.body()
+                    # Re-construct the request with the body we just read
+                    async def receive():
+                        return {"type": "http.request", "body": body, "more_body": False}
+                    request._receive = receive
+                    
+                    # Quick check if this is an initialize request
+                    import json
+                    try:
+                        data = json.loads(body.decode())
+                        if data.get("method") == "initialize":
+                            logger.info(f"⚡ Skipping auth for MCP initialize request (path: {request.url.path})")
+                            root_span.set_attribute("auth.skipped.reason", "mcp_initialization")
+                            return await call_next(request)
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        pass  # Not JSON, continue with auth
+                except Exception as e:
+                    logger.warning(f"Failed to check initialization request: {e}")
+
             # MCP Spec: Validate MCP-Protocol-Version header
             # Required on all requests after initialization
             with tracer.start_as_current_span("validate_protocol_version"):
                 protocol_version = request.headers.get("mcp-protocol-version")
 
-                # Check if this is the initial initialization request
-                # (InitializeRequest doesn't require the header yet)
-                is_initialization = (
-                    request.method == "POST" and request.url.path == "/mcp"
-                )
-
-                if not is_initialization and not protocol_version:
+                # Warn if protocol version missing
+                if not protocol_version:
                     logger.warning(
-                        "Missing MCP-Protocol-Version header on non-initialization request"
+                        "Missing MCP-Protocol-Version header on request"
                     )
                     # For backward compatibility, assume latest version
                     protocol_version = self.SUPPORTED_VERSIONS[0]
@@ -178,6 +203,12 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
 
                 # Also attach to request state for compatibility
                 request.state.token_context = token_context_dict
+                
+                # CRITICAL: Inject into ASGI scope for mounted apps (FastMCP)
+                # When FastAPI mounts sub-apps, request.state doesn't propagate,
+                # but the ASGI scope dict DOES propagate
+                request.scope["auth_context"] = token_context_dict
+                logger.debug("Injected auth context into ASGI scope")
 
                 logger.info(
                     f"✅ Authenticated via {token_context.auth_type}: "

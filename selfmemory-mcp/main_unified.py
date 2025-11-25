@@ -60,6 +60,10 @@ from tools.fetch import format_fetch_result  # noqa: E402
 from tools.search import format_search_results  # noqa: E402
 from utils import create_tool_success, handle_tool_errors  # noqa: E402
 
+# Global variable to pass auth context from middleware to tools
+# MCP requests are processed sequentially per session, so this is safe
+_current_auth_context: dict | None = None
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -112,6 +116,34 @@ app.add_middleware(
 
 # Register unified auth middleware (supports both OAuth and API key)
 app.add_middleware(UnifiedAuthMiddleware, core_server_host=CORE_SERVER_HOST)
+
+
+# Middleware to store auth context globally for FastMCP tool access
+# This must run AFTER UnifiedAuthMiddleware but BEFORE the MCP app processes the request
+@app.middleware("http")
+async def store_auth_globally(request: Request, call_next):
+    """Store auth context globally so FastMCP tools can access it.
+    
+    This middleware runs after UnifiedAuthMiddleware sets request.state.token_context,
+    but before FastMCP tools execute. MCP requests are sequential, making global
+    variable storage safe.
+    """
+    global _current_auth_context
+    
+    # Store auth BEFORE processing the request (before call_next)
+    # UnifiedAuthMiddleware has already run and set request.state
+    if request.url.path.startswith("/mcp"):
+        # Try to get from ContextVar first (set by UnifiedAuthMiddleware)
+        token_context = current_token_context.get()
+        if token_context:
+            _current_auth_context = token_context
+            logger.info(f"💾 Stored auth globally for user {token_context.get('user_id')}")
+        elif hasattr(request.state, 'token_context'):
+            _current_auth_context = request.state.token_context
+            logger.info(f"💾 Stored auth globally from request.state")
+    
+    response = await call_next(request)
+    return response
 
 
 # ============================================================================
@@ -324,6 +356,52 @@ async def dynamic_client_registration(request: Request):
         )
 
 
+# Helper function to get auth context
+def get_auth_from_context(ctx: Context) -> dict:
+    """Extract authentication context from FastMCP Context.
+    
+    Accesses the underlying Starlette Request via ctx.request_context,
+    then reads the auth context from request.scope where UnifiedAuthMiddleware injects it.
+    
+    MCP requests are sequential per session, making this approach safe.
+    """
+    global _current_auth_context
+    
+    # Priority 1: Access request.scope['auth_context'] via request_context
+    # This is where UnifiedAuthMiddleware injects the auth context
+    if hasattr(ctx, 'request_context') and ctx.request_context:
+        logger.info("🔍 Accessing request_context from FastMCP Context")
+        try:
+            request = ctx.request_context.request
+            if hasattr(request, 'scope'):
+                auth_context = request.scope.get('auth_context')
+                if auth_context:
+                    logger.info("✅ Got auth from request.scope['auth_context']")
+                    return auth_context
+                else:
+                    logger.warning("⚠️  request.scope['auth_context'] is None")
+            else:
+                logger.warning("⚠️  request object has no 'scope' attribute")
+        except Exception as e:
+            logger.error(f"❌ Error accessing request_context: {e}")
+    else:
+        logger.warning("⚠️  Context has no request_context attribute")
+    
+    # Priority 2: Try ContextVar (set by UnifiedAuthMiddleware)
+    token_context = current_token_context.get()
+    if token_context:
+        logger.info("✅ Got auth from ContextVar")
+        return token_context
+    
+    # Priority 3: Use globally stored auth context (fallback)
+    if _current_auth_context:
+        logger.info("✅ Got auth from global variable")
+        return _current_auth_context
+    
+    logger.error("❌ No auth context available from any source")
+    return None
+
+
 # Mount MCP server
 mcp.settings.streamable_http_path = "/"
 app.mount("/mcp", mcp.streamable_http_app())
@@ -363,12 +441,12 @@ async def search(query: str, ctx: Context) -> dict:
         tool_start = time.time()
         logger.info(f"🔍 Search: '{query}'")
 
-        # Get token context from ContextVar (set by middleware)
+        # Get token context from MCP Context (set by middleware)
         with tracer.start_as_current_span("get_token_context"):
-            token_context = current_token_context.get()
+            token_context = get_auth_from_context(ctx)
 
             if not token_context:
-                logger.error("❌ No token context available")
+                logger.error("❌ No token context available in search tool")
                 raise ValueError("No authentication context available")
 
             logger.info(
@@ -438,12 +516,12 @@ async def add(content: str, ctx: Context) -> dict:
         tool_start = time.time()
         logger.info(f"➕ Add: {content[:50]}...")
 
-        # Get token context from ContextVar
+        # Get token context from MCP Context
         with tracer.start_as_current_span("get_token_context"):
-            token_context = current_token_context.get()
+            token_context = get_auth_from_context(ctx)
 
             if not token_context:
-                logger.error("❌ No token context available")
+                logger.error("❌ No token context available in add tool")
                 raise ValueError("No authentication context available")
 
             logger.info(
@@ -528,12 +606,12 @@ async def fetch(id: str, ctx: Context) -> dict:
         tool_start = time.time()
         logger.info(f"📥 Fetch: id={id}")
 
-        # Get token context from ContextVar
+        # Get token context from MCP Context
         with tracer.start_as_current_span("get_token_context"):
-            token_context = current_token_context.get()
+            token_context = get_auth_from_context(ctx)
 
             if not token_context:
-                logger.error("❌ No token context available")
+                logger.error("❌ No token context available in fetch tool")
                 raise ValueError("No authentication context available")
 
             logger.info(

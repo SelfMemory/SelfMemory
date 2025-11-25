@@ -16,6 +16,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Import client cache for performance optimization
+from auth.client_cache import get_client_from_cache, set_client_in_cache
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,6 +114,9 @@ async def extract_token_context(
 
 def create_project_client(project_id: str, oauth_token: str, host: str):
     """Create SelfMemory client configured for specific project using OAuth token.
+    
+    Uses client caching to avoid creating new connections on every request,
+    significantly improving performance by reusing TCP/TLS connections.
 
     Args:
         project_id: Project ID from OAuth token claims
@@ -118,14 +124,24 @@ def create_project_client(project_id: str, oauth_token: str, host: str):
         host: SelfMemory API host
 
     Returns:
-        Configured SelfMemoryClient instance with OAuth authentication
+        Configured SelfMemoryClient instance with OAuth authentication (cached)
     """
     from selfmemory import SelfMemoryClient
+
+    # Check cache first to reuse existing client connection
+    cached_client = get_client_from_cache(oauth_token)
+    if cached_client:
+        return cached_client
 
     # Create client with OAuth token (no API key needed)
     client = SelfMemoryClient(oauth_token=oauth_token, host=host)
 
     # Set project context
     client.project_id = project_id
+
+    # Cache the client for future requests (reuses connection)
+    set_client_in_cache(oauth_token, client)
+
+    logger.info(f"✅ Created new SelfMemoryClient for project {project_id}")
 
     return client
