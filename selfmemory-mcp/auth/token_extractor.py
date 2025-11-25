@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 # Import client cache for performance optimization
-from auth.client_cache import get_client_from_cache, set_client_in_cache
+from auth.client_cache import get_or_create_client
 
 logger = logging.getLogger(__name__)
 
@@ -128,20 +128,11 @@ def create_project_client(project_id: str, oauth_token: str, host: str):
     """
     from selfmemory import SelfMemoryClient
 
-    # Check cache first to reuse existing client connection
-    cached_client = get_client_from_cache(oauth_token)
-    if cached_client:
-        return cached_client
-
-    # Create client with OAuth token (no API key needed)
-    client = SelfMemoryClient(oauth_token=oauth_token, host=host)
-
-    # Set project context
-    client.project_id = project_id
-
-    # Cache the client for future requests (reuses connection)
-    set_client_in_cache(oauth_token, client)
-
-    logger.info(f"✅ Created new SelfMemoryClient for project {project_id}")
-
-    return client
+    # Use helper function to eliminate DRY violation
+    def create_client():
+        client = SelfMemoryClient(oauth_token=oauth_token, host=host)
+        client.project_id = project_id
+        logger.info(f"✅ Created new SelfMemoryClient for project {project_id}")
+        return client
+    
+    return get_or_create_client(oauth_token, create_client)

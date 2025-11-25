@@ -90,6 +90,27 @@ def clear_cache() -> None:
     logger.info("🧹 Cleared client cache")
 
 
+def get_or_create_client(cache_key: str, factory_fn):
+    """Get cached client or create new one using factory function.
+    
+    This eliminates DRY violations by centralizing the cache-check-create-store pattern.
+    
+    Args:
+        cache_key: Key to use for caching (API key or OAuth token)
+        factory_fn: Callable that creates a new client instance
+        
+    Returns:
+        SelfMemoryClient instance (either cached or newly created)
+    """
+    cached = get_client_from_cache(cache_key)
+    if cached:
+        return cached
+    
+    client = factory_fn()
+    set_client_in_cache(cache_key, client)
+    return client
+
+
 def get_cache_stats() -> dict:
     """Get cache statistics for monitoring.
 
