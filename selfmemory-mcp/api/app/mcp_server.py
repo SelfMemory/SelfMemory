@@ -21,9 +21,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+from auth.client_cache import get_or_create_client
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
-from fastapi.routing import APIRouter
+from fastapi import FastAPI
 from mcp.server.fastmcp import FastMCP
 
 # Ensure project root is in sys.path
@@ -35,7 +35,6 @@ load_dotenv()  # Load environment variables from .env
 
 # Import client cache for performance optimization
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from auth.client_cache import get_or_create_client
 
 # Configure logging
 logging.basicConfig(
@@ -106,7 +105,7 @@ def _generate_memory_confirmation(content: str) -> str:
 def validate_and_get_client_platform(api_key: str) -> SelfMemoryClient:
     """
     Validate request and create authenticated SelfMemoryClient (Platform Mode).
-    
+
     Uses client caching to avoid creating new connections on every request,
     significantly improving performance by reusing TCP/TLS connections.
 
@@ -128,7 +127,7 @@ def validate_and_get_client_platform(api_key: str) -> SelfMemoryClient:
             client = SelfMemoryClient(api_key=api_key, host=CORE_SERVER_HOST)
             logger.info("✅ MCP Platform: API key authenticated (new client created)")
             return client
-        
+
         return get_or_create_client(api_key, create_client)
 
     except ValueError:
@@ -463,7 +462,7 @@ async def delete_all_memories() -> str:
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
     """Manage server lifecycle - ensures MCP session manager is running.
-    
+
     This is critical for proper RequestResponder initialization and prevents
     the 'RequestResponder must be used as a context manager' error.
     """
@@ -473,28 +472,28 @@ async def lifespan(app_instance: FastAPI):
 
 def setup_mcp_server(app: FastAPI):
     """Setup MCP server with the FastAPI application.
-    
+
     Mounts the MCP streamable HTTP app to handle all MCP protocol messages.
     The session manager must be running (via lifespan) for this to work.
     """
     mcp._mcp_server.name = "selfmemory-mcp-server"
-    
+
     # Configure streamable HTTP path
     mcp.settings.streamable_http_path = "/"
-    
+
     # Mount MCP app - this handles SSE connections automatically
     app.mount("/mcp", mcp.streamable_http_app())
 
 
 def main():
     """Main entry point for the SelfMemory MCP server.
-    
+
     Note: This is typically not used when running via api/main.py.
     The server is set up through setup_mcp_server() called from api/main.py.
     """
     import uvicorn
     from fastapi import FastAPI
-    
+
     logger.info("=" * 60)
     logger.info("🚀 Starting SelfMemory MCP Server (Standalone)")
     logger.info("=" * 60)
@@ -512,7 +511,9 @@ def main():
         logger.info("👤 Single-user: Default user context")
 
     logger.info(f"🌐 MCP Server: http://{MCP_SERVER_HOST}:{MCP_SERVER_PORT}")
-    logger.info("🛠️  Tools: add_memories, search_memory, list_memories, delete_all_memories")
+    logger.info(
+        "🛠️  Tools: add_memories, search_memory, list_memories, delete_all_memories"
+    )
     logger.info("=" * 60)
 
     # Create FastAPI app with lifespan
@@ -521,18 +522,13 @@ def main():
         description="Memory operations via Model Context Protocol",
         lifespan=lifespan,
     )
-    
+
     # Setup MCP server
     setup_mcp_server(app)
-    
+
     # Run with uvicorn
     try:
-        uvicorn.run(
-            app,
-            host=MCP_SERVER_HOST,
-            port=MCP_SERVER_PORT,
-            log_level="info"
-        )
+        uvicorn.run(app, host=MCP_SERVER_HOST, port=MCP_SERVER_PORT, log_level="info")
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:
