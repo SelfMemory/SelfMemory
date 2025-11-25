@@ -9,9 +9,6 @@ import logging
 
 from cachetools import TTLCache
 
-# PBKDF2 salt for secure token hashing in cache keys
-PBKDF2_CACHE_SALT = b"selfmemory.mcp.cache.salt.v1"
-
 logger = logging.getLogger(__name__)
 
 # Cache for OAuth token validation results (5 minute TTL)
@@ -24,17 +21,20 @@ _api_key_cache = TTLCache(maxsize=1000, ttl=600)
 
 
 def _hash_token(token: str) -> str:
-    """Create a secure hash of the token for cache key using PBKDF2-HMAC-SHA256.
+    """Create a secure hash of the token for cache key using SHA256.
+    
+    Uses SHA256 for fast, collision-resistant cache key generation.
+    This is appropriate for tokens which are already cryptographically
+    secure (high entropy). PBKDF2 would be inappropriate here as it's
+    designed for password hashing, not cache key generation.
 
     Args:
         token: The token string to hash
 
     Returns:
-        PBKDF2-HMAC-SHA256 hash of the token (hex)
+        SHA256 hash of the token (hex)
     """
-    # Use 100,000 iterations, which is recommended as minimum for PBKDF2.
-    dk = hashlib.pbkdf2_hmac("sha256", token.encode(), PBKDF2_CACHE_SALT, 100_000)
-    return dk.hex()
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def get_oauth_token_from_cache(token: str) -> dict | None:
