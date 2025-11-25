@@ -35,7 +35,7 @@ load_dotenv()  # Load environment variables from .env
 
 # Import client cache for performance optimization
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from auth.client_cache import get_client_from_cache, set_client_in_cache
+from auth.client_cache import get_or_create_client
 
 # Configure logging
 logging.basicConfig(
@@ -123,19 +123,13 @@ def validate_and_get_client_platform(api_key: str) -> SelfMemoryClient:
         if not api_key:
             raise ValueError("No API key provided")
 
-        # Check cache first to reuse existing client connection
-        cached_client = get_client_from_cache(api_key)
-        if cached_client:
-            return cached_client
-
-        # Create and validate client - this will raise ValueError if token is invalid
-        client = SelfMemoryClient(api_key=api_key, host=CORE_SERVER_HOST)
-
-        # Cache the client for future requests (reuses connection)
-        set_client_in_cache(api_key, client)
-
-        logger.info("✅ MCP Platform: API key authenticated (new client created)")
-        return client
+        # Use helper function to eliminate DRY violation
+        def create_client():
+            client = SelfMemoryClient(api_key=api_key, host=CORE_SERVER_HOST)
+            logger.info("✅ MCP Platform: API key authenticated (new client created)")
+            return client
+        
+        return get_or_create_client(api_key, create_client)
 
     except ValueError:
         # Re-raise ValueError as-is (these are our custom auth errors)
