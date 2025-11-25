@@ -22,7 +22,7 @@ _api_key_cache = TTLCache(maxsize=1000, ttl=600)
 
 def _hash_token(token: str) -> str:
     """Create a secure hash of the token for cache key using SHA256.
-    
+
     Uses SHA256 for fast, collision-resistant cache key generation.
     This is appropriate for tokens which are already cryptographically
     secure (high entropy). PBKDF2 would be inappropriate here as it's
