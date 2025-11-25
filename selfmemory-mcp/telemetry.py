@@ -29,9 +29,13 @@ def init_logging() -> None:
     - Development: Logs to console (terminal)
     - Production: Logs to rotating file (/var/log/selfmemory-mcp/app.log)
     
+    Always maintains at least a console handler as fallback.
     This runs independently of OpenTelemetry configuration.
     """
     root_logger = logging.getLogger()
+    
+    # Clear any existing handlers to avoid duplicates
+    root_logger.handlers.clear()
     
     # Set log level
     log_level = (
@@ -44,9 +48,19 @@ def init_logging() -> None:
     # Get environment
     environment = os.getenv("ENVIRONMENT", "development").lower()
     
+    # Common formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Always add console handler as fallback
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(log_level)
+    console_handler.setFormatter(formatter)
+    
     # Configure logging based on environment
     if environment == "production":
-        # Production: File-based logging
+        # Production: Try to add file-based logging
         log_dir = Path(os.getenv("LOG_DIR", "/var/log/selfmemory-mcp"))
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
@@ -59,33 +73,21 @@ def init_logging() -> None:
                 backupCount=5
             )
             file_handler.setLevel(log_level)
-            formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
             file_handler.setFormatter(formatter)
             root_logger.addHandler(file_handler)
             
-            print(f"✅ Logging: level={logging.getLevelName(log_level)}, handler=File")
+            # Add console handler as secondary handler for important logs
+            root_logger.addHandler(console_handler)
+            
+            print(f"✅ Logging: level={logging.getLevelName(log_level)}, handlers=File+Console (fallback)")
             print(f"✅ Log file: {log_file}")
         except Exception as e:
             print(f"⚠️  Failed to setup file logging: {e}")
-            print("⚠️  Falling back to console logging")
-            # Fallback to console
-            console_handler = logging.StreamHandler()
-            console_handler.setLevel(log_level)
-            formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
-            console_handler.setFormatter(formatter)
+            print("⚠️  Falling back to console logging only")
+            # Fallback to console only
             root_logger.addHandler(console_handler)
     else:
         # Development: Console logging
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(log_level)
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        console_handler.setFormatter(formatter)
         root_logger.addHandler(console_handler)
         
         print(f"✅ Logging: level={logging.getLevelName(log_level)}, handler=Console")
