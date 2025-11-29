@@ -87,7 +87,9 @@ def looks_like_jwt(token: str) -> bool:
         True if token appears to be an OAuth token (JWT or opaque), False otherwise
     """
     # Check for JWT format (2 dots) or Hydra opaque token format (starts with ory_at and has 1 dot)
-    return token.count(".") == 2 or (token.startswith("ory_at") and token.count(".") == 1)
+    return token.count(".") == 2 or (
+        token.startswith("ory_at") and token.count(".") == 1
+    )
 
 
 def validate_oauth_token(token: str, core_server_host: str) -> TokenContext:
