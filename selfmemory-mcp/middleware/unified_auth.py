@@ -100,7 +100,7 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
         except ValueError as e:
             logger.warning(f"❌ Authentication failed: {e}")
             return Response(
-                content=f"Authentication failed: {e}",
+                content="Authentication failed.",
                 status_code=401,
                 headers={"Content-Type": "text/plain"},
             )
