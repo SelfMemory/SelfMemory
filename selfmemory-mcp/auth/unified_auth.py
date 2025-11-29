@@ -76,7 +76,7 @@ def looks_like_jwt(token: str) -> bool:
     Hydra can issue two types of OAuth tokens:
     1. JWT tokens: header.payload.signature (2 dots) - e.g., eyJhbGc...
     2. Opaque tokens: ory_at_xxx or ory_at__xxx (1 dot) - e.g., ory_at__3uErCkxc...
-    
+
     Both are valid OAuth tokens that should be validated via Hydra introspection.
     API keys typically have a different format (e.g., sk_im_xxx or im_xxx)
 
@@ -86,15 +86,8 @@ def looks_like_jwt(token: str) -> bool:
     Returns:
         True if token appears to be an OAuth token (JWT or opaque), False otherwise
     """
-    # Check for JWT format (2 dots)
-    if token.count(".") == 2:
-        return True
-    
-    # Check for Hydra opaque token format (starts with ory_at and has 1 dot)
-    if token.startswith("ory_at") and token.count(".") == 1:
-        return True
-    
-    return False
+    # Check for JWT format (2 dots) or Hydra opaque token format (starts with ory_at and has 1 dot)
+    return token.count(".") == 2 or (token.startswith("ory_at") and token.count(".") == 1)
 
 
 def validate_oauth_token(token: str, core_server_host: str) -> TokenContext:

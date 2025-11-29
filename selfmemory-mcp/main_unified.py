@@ -150,7 +150,7 @@ async def oauth_authorization_server(request: Request):
     VS Code and other OAuth clients discover the authorization server
     by fetching this endpoint. We proxy to Hydra's OIDC discovery and
     inject the registration_endpoint for Dynamic Client Registration.
-    
+
     IMPORTANT: Points authorization_endpoint to our backend proxy to enable
     scope injection for Docker MCP Toolkit compatibility.
     """
@@ -170,7 +170,7 @@ async def oauth_authorization_server(request: Request):
             logger.info(
                 f"✅ Proxied OAuth authorization server metadata with DCR: {base_url}/register"
             )
-            
+
             return Response(
                 content=json.dumps(config_data),
                 status_code=200,
@@ -204,7 +204,7 @@ async def openid_configuration(request: Request):
             # Inject registration endpoint
             base_url = f"{request.url.scheme}://{request.url.netloc}"
             config_data["registration_endpoint"] = f"{base_url}/register"
-            
+
             # Note: authorization_endpoint stays as Hydra's (not modified)
             # Scope handling is done via consent-level fallback, not authorization proxy
 
@@ -244,13 +244,15 @@ async def dynamic_client_registration(request: Request):
         body_bytes = await request.body()
         registration_data = json.loads(body_bytes)
 
-        client_name = registration_data.get('client_name', 'Unknown')
+        client_name = registration_data.get("client_name", "Unknown")
         logger.info(f"📝 Client: {client_name}")
-        
+
         # DIAGNOSTIC: Log audience configuration
-        logger.info(f"🔍 DCR AUDIENCE CONFIG:")
+        logger.info("🔍 DCR AUDIENCE CONFIG:")
         logger.info(f"   MCP_SERVER_URL from config: {config.hydra.mcp_server_url}")
-        logger.info(f"   MCP_SERVER_URL from env: {os.getenv('MCP_SERVER_URL', 'NOT SET')}")
+        logger.info(
+            f"   MCP_SERVER_URL from env: {os.getenv('MCP_SERVER_URL', 'NOT SET')}"
+        )
         logger.info(f"   Request base URL: {request.url.scheme}://{request.url.netloc}")
 
         # Sanitize invalid URL fields (Hydra rejects null/empty URLs)
@@ -275,7 +277,7 @@ async def dynamic_client_registration(request: Request):
         # === SCOPE-AGNOSTIC HANDLING ===
         # Accept whatever scopes the client sends, and ensure our required scopes are included
         # This makes the server work with ANY OAuth client (Docker, Windsurf, ChatGPT, etc.)
-        
+
         current_scopes = registration_data.get("scope", "openid offline_access")
         if isinstance(current_scopes, str):
             current_scopes = current_scopes.split()

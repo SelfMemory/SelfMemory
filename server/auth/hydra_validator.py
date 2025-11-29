@@ -137,9 +137,9 @@ def validate_token(access_token: str) -> HydraToken:
         from ..config import config
 
         expected_resource = config.mcp.SERVER_URL.rstrip("/")
-        
+
         # DIAGNOSTIC: Log audience validation details
-        logger.info(f"🔍 AUDIENCE VALIDATION:")
+        logger.info("🔍 AUDIENCE VALIDATION:")
         logger.info(f"   Expected: {expected_resource}")
         logger.info(f"   Received: {audiences}")
         logger.info(f"   MCP_SERVER_URL env: {os.getenv('MCP_SERVER_URL', 'NOT SET')}")
@@ -155,20 +155,22 @@ def validate_token(access_token: str) -> HydraToken:
                 f"got {audiences}"
             )
             logger.error(f"{error_msg}, subject={subject}, client={client_id}")
-            logger.error(f"💡 FIX: Set MCP_SERVER_URL={expected_resource} and ensure consent flow includes this as grant_access_token_audience")
+            logger.error(
+                f"💡 FIX: Set MCP_SERVER_URL={expected_resource} and ensure consent flow includes this as grant_access_token_audience"
+            )
             raise ValueError(error_msg)
 
         logger.info(f"✅ Token audience validated: {audiences}, subject={subject}")
 
         # Extract scopes - handle missing scope attribute gracefully
         try:
-            scope_str = introspection.scope if hasattr(introspection, 'scope') else None
+            scope_str = introspection.scope if hasattr(introspection, "scope") else None
             scopes = scope_str.split() if scope_str else []
         except (AttributeError, ApiException):
             # If scope is not available, check the raw response
             scopes = []
-            if hasattr(introspection, '_data_store'):
-                scope_value = introspection._data_store.get('scope')
+            if hasattr(introspection, "_data_store"):
+                scope_value = introspection._data_store.get("scope")
                 if scope_value:
                     scopes = scope_value.split() if isinstance(scope_value, str) else []
             logger.warning(f"⚠️  Scope not directly accessible, extracted: {scopes}")

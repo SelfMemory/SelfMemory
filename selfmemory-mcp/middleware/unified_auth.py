@@ -10,11 +10,10 @@ Authentication logic is imported from auth.unified_auth to maintain DRY principl
 import logging
 from contextvars import ContextVar
 
+# Import auth logic from auth module (DRY - Don't Repeat Yourself)
+from auth.unified_auth import detect_and_validate_auth
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-
-# Import auth logic from auth module (DRY - Don't Repeat Yourself)
-from auth.unified_auth import TokenContext, detect_and_validate_auth
 
 logger = logging.getLogger(__name__)
 

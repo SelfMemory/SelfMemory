@@ -15,8 +15,7 @@ import logging
 import os
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..dependencies import AuthContext, authenticate_api_key
@@ -78,68 +77,72 @@ class LoginRejectRequest(BaseModel):
 SCOPE_DESCRIPTIONS = {
     "openid": {
         "name": "OpenID Connect",
-        "description": "Allows the application to verify your identity"
+        "description": "Allows the application to verify your identity",
     },
     "offline": {
         "name": "Offline Access",
-        "description": "Allows the application to maintain access when you're not actively using it"
+        "description": "Allows the application to maintain access when you're not actively using it",
     },
     "offline_access": {
         "name": "Offline Access",
-        "description": "Allows the application to maintain access when you're not actively using it"
+        "description": "Allows the application to maintain access when you're not actively using it",
     },
     "memories:read": {
         "name": "Read your AI memories",
-        "description": "Allows the application to search and retrieve your stored memories and conversations"
+        "description": "Allows the application to search and retrieve your stored memories and conversations",
     },
     "memories:write": {
         "name": "Store new AI memories",
-        "description": "Allows the application to save new memories and conversations on your behalf"
+        "description": "Allows the application to save new memories and conversations on your behalf",
     },
     "mcp.read": {
         "name": "MCP Read Access",
-        "description": "Allows the application to read MCP server information"
+        "description": "Allows the application to read MCP server information",
     },
     "mcp.write": {
         "name": "MCP Write Access",
-        "description": "Allows the application to write MCP server information"
-    }
+        "description": "Allows the application to write MCP server information",
+    },
 }
 
 
 def enrich_scope_metadata(scopes: list[str]) -> list[dict]:
     """
     Enrich raw scope strings with user-friendly names and descriptions.
-    
+
     This ensures the consent screen always shows meaningful information,
     even for custom scopes that Hydra doesn't know about.
-    
+
     Args:
         scopes: List of raw scope strings (e.g., ["memories:read", "openid"])
-        
+
     Returns:
         List of scope objects with name, description, and id fields
     """
     enriched = []
-    
+
     for scope in scopes:
         if scope in SCOPE_DESCRIPTIONS:
             # Use predefined description
-            enriched.append({
-                "id": scope,
-                "name": SCOPE_DESCRIPTIONS[scope]["name"],
-                "description": SCOPE_DESCRIPTIONS[scope]["description"]
-            })
+            enriched.append(
+                {
+                    "id": scope,
+                    "name": SCOPE_DESCRIPTIONS[scope]["name"],
+                    "description": SCOPE_DESCRIPTIONS[scope]["description"],
+                }
+            )
         else:
             # Generate fallback description for unknown scopes
             # Convert "my:scope" to "My Scope"
             name = scope.replace(":", " ").replace("_", " ").title()
-            enriched.append({
-                "id": scope,
-                "name": name,
-                "description": f"Allows the application to access {name.lower()}"
-            })
-    
+            enriched.append(
+                {
+                    "id": scope,
+                    "name": name,
+                    "description": f"Allows the application to access {name.lower()}",
+                }
+            )
+
     return enriched
 
 
@@ -153,7 +156,7 @@ async def get_consent_request(
 
     This endpoint proxies the Hydra admin API call securely.
     Only authenticated users can access this endpoint.
-    
+
     Enhances the response with user-friendly scope descriptions.
     IMPORTANT: Falls back to client's registered scopes if requested_scope is empty.
 
@@ -186,45 +189,53 @@ async def get_consent_request(
                 )
 
             consent_data = response.json()
-            
+
             # Get requested scopes
-            requested_scopes = consent_data.get('requested_scope', [])
-            
+            requested_scopes = consent_data.get("requested_scope", [])
+
             # FALLBACK: If requested_scope is empty, use client's registered scopes
             # This happens when Docker MCP Toolkit doesn't send scope parameter
             if not requested_scopes:
-                client_id = consent_data.get('client', {}).get('client_id')
-                logger.warning(f"⚠️  Empty requested_scope - fetching client's registered scopes for client_id={client_id}")
-                
+                client_id = consent_data.get("client", {}).get("client_id")
+                logger.warning(
+                    f"⚠️  Empty requested_scope - fetching client's registered scopes for client_id={client_id}"
+                )
+
                 try:
                     # Fetch client details from Hydra
                     client_response = await client.get(
                         f"{HYDRA_ADMIN_URL}/admin/clients/{client_id}",
                         timeout=10.0,
                     )
-                    
+
                     if client_response.status_code == 200:
                         client_details = client_response.json()
-                        client_scope_str = client_details.get('scope', '')
-                        client_scopes = client_scope_str.split() if client_scope_str else []
-                        
+                        client_scope_str = client_details.get("scope", "")
+                        client_scopes = (
+                            client_scope_str.split() if client_scope_str else []
+                        )
+
                         logger.info(f"✅ Fetched client scopes: {client_scopes}")
-                        
+
                         # Use client's registered scopes as fallback
                         requested_scopes = client_scopes
                         # Also update the consent_data so frontend knows what to grant
-                        consent_data['requested_scope'] = requested_scopes
-                        consent_data['scope_fallback_used'] = True
-                        
-                        logger.info(f"✅ Using client's registered scopes as fallback: {requested_scopes}")
+                        consent_data["requested_scope"] = requested_scopes
+                        consent_data["scope_fallback_used"] = True
+
+                        logger.info(
+                            f"✅ Using client's registered scopes as fallback: {requested_scopes}"
+                        )
                     else:
-                        logger.error(f"Failed to fetch client details: {client_response.status_code}")
-                        
+                        logger.error(
+                            f"Failed to fetch client details: {client_response.status_code}"
+                        )
+
                 except Exception as e:
                     logger.error(f"Error fetching client scopes: {e}")
-            
+
             # Enrich scope metadata with descriptions
-            consent_data['scope_metadata'] = enrich_scope_metadata(requested_scopes)
+            consent_data["scope_metadata"] = enrich_scope_metadata(requested_scopes)
 
             logger.info(
                 f"✅ Consent request fetched: client={consent_data.get('client', {}).get('client_id')}, "
@@ -265,25 +276,33 @@ async def accept_consent_request(
             f"Accepting consent: challenge={body.consent_challenge}, "
             f"user={auth.user_id}, scopes={body.grant_scope}"
         )
-        
+
         # DIAGNOSTIC: Log audience being granted
-        logger.info(f"🔍 CONSENT AUDIENCE:")
+        logger.info("🔍 CONSENT AUDIENCE:")
         logger.info(f"   Requested audience: {body.grant_access_token_audience}")
-        
+
         # FIX: Always include the correct MCP server URL as audience
         # This ensures tokens are always issued for the right resource server
-        mcp_server_url = os.getenv('MCP_SERVER_URL', 'https://mcp.selfmemory.com')
-        
+        mcp_server_url = os.getenv("MCP_SERVER_URL", "https://mcp.selfmemory.com")
+
         # Combine requested audiences with the required MCP server URL
-        audiences = list(body.grant_access_token_audience) if body.grant_access_token_audience else []
-        
+        audiences = (
+            list(body.grant_access_token_audience)
+            if body.grant_access_token_audience
+            else []
+        )
+
         # Remove any local development URLs that might have been requested
-        audiences = [aud for aud in audiences if not aud.startswith(('http://127.0.0.1', 'http://localhost'))]
-        
+        audiences = [
+            aud
+            for aud in audiences
+            if not aud.startswith(("http://127.0.0.1", "http://localhost"))
+        ]
+
         # Add the correct MCP server URL if not already present
         if mcp_server_url not in audiences:
             audiences.append(mcp_server_url)
-        
+
         logger.info(f"   MCP_SERVER_URL from env: {mcp_server_url}")
         logger.info(f"   ✅ Corrected audience: {audiences}")
 
