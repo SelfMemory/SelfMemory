@@ -1,26 +1,34 @@
-"""Unified authentication middleware supporting both OAuth 2.1 and API key methods.
+"""Unified authentication supporting both OAuth 2.1 and API key methods.
 
-This middleware:
-1. Validates MCP-Protocol-Version header (MCP spec requirement)
-2. Checks for Authorization header on /mcp/* requests
-3. Returns 401 with WWW-Authenticate if missing (OAuth challenge)
-4. Detects authentication method (OAuth JWT vs API key)
-5. Validates token via appropriate method (Hydra or Core server)
-6. Attaches unified token context to request.state for tool handlers
+This module provides authentication detection and validation that works with:
+1. OAuth 2.1 tokens from Hydra (JWT format)
+2. Legacy API keys from SelfMemory dashboard (simple format)
 
-This enables both OAuth 2.1 and legacy API key authentication to work
-seamlessly with the same MCP server endpoint.
+Both authentication methods result in a unified token context structure that
+tools can use transparently without knowing which auth method was used.
+
+Performance optimization: Token validation results are cached to avoid
+repeated expensive validation calls (OAuth: 5 min TTL, API keys: 10 min TTL).
 """
 
 import logging
 import time
 from contextvars import ContextVar
+from typing import Literal
 
-from auth.unified_auth import TokenContext, detect_and_validate_auth
 from fastapi import Request, Response
-from oauth.metadata import create_401_response
 from opentelemetry import trace
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from server.auth.hydra_validator import HydraToken, validate_token
+
+from auth.token_cache import (
+    get_api_key_from_cache,
+    get_oauth_token_from_cache,
+    set_api_key_in_cache,
+    set_oauth_token_in_cache,
+)
+from auth.token_extractor import extract_bearer_token
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -32,264 +40,392 @@ current_token_context: ContextVar[dict | None] = ContextVar(
 )
 
 
-class UnifiedAuthMiddleware(BaseHTTPMiddleware):
-    """Middleware to enforce unified authentication (OAuth 2.1 or API key) on MCP endpoints.
+# Type for authentication methods
+AuthType = Literal["oauth", "api_key"]
 
-    This middleware enables both modern OAuth 2.1 clients and legacy API key clients
-    to authenticate with the same MCP server endpoint, providing a smooth migration path.
 
-    Features:
-    - Supports OAuth 2.1 tokens from Hydra (JWT format)
-    - Supports legacy API keys from SelfMemory dashboard
-    - Automatic detection based on token format
-    - Returns proper OAuth challenges for OAuth clients
-    - Compatible with both SSE and HTTPS MCP transports
+class TokenContext:
+    """Unified token context from either OAuth or API key authentication."""
+
+    def __init__(
+        self,
+        auth_type: AuthType,
+        user_id: str,
+        project_id: str | None,
+        organization_id: str | None,
+        scopes: list[str],
+        raw_token: str,
+    ):
+        self.auth_type = auth_type
+        self.user_id = user_id
+        self.project_id = project_id
+        self.organization_id = organization_id
+        self.scopes = scopes
+        self.raw_token = raw_token
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for context storage."""
+        return {
+            "auth_type": self.auth_type,
+            "user_id": self.user_id,
+            "project_id": self.project_id,
+            "organization_id": self.organization_id,
+            "scopes": self.scopes,
+            "raw_token": self.raw_token,
+        }
+
+    def has_scope(self, scope: str) -> bool:
+        """Check if token has required scope."""
+        return scope in self.scopes
+
+
+def looks_like_jwt(token: str) -> bool:
+    """Check if token looks like a JWT or opaque OAuth token from Hydra.
+
+    Hydra can issue two types of OAuth tokens:
+    1. JWT tokens: header.payload.signature (2 dots) - e.g., eyJhbGc...
+    2. Opaque tokens: ory_at_xxx or ory_at__xxx (1 dot) - e.g., ory_at__3uErCkxc...
+    
+    Both are valid OAuth tokens that should be validated via Hydra introspection.
+    API keys typically have a different format (e.g., sk_im_xxx or im_xxx)
+
+    Args:
+        token: Token string to check
+
+    Returns:
+        True if token appears to be an OAuth token (JWT or opaque), False otherwise
     """
+    # Check for JWT format (2 dots)
+    if token.count(".") == 2:
+        return True
+    
+    # Check for Hydra opaque token format (starts with ory_at and has 1 dot)
+    if token.startswith("ory_at") and token.count(".") == 1:
+        return True
+    
+    return False
 
-    # Supported MCP protocol versions
-    SUPPORTED_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"]
+
+def validate_oauth_token(token: str, core_server_host: str) -> TokenContext:
+    """Validate OAuth token via Hydra and create token context.
+
+    Checks cache first to avoid expensive Hydra introspection calls.
+    Cache TTL: 5 minutes.
+
+    Args:
+        token: OAuth token (JWT format)
+        core_server_host: Core server URL (not used for OAuth validation)
+
+    Returns:
+        TokenContext with OAuth authentication details
+
+    Raises:
+        ValueError: If token is invalid or missing required claims
+    """
+    with tracer.start_as_current_span("validate_oauth_token") as span:
+        span_start = time.time()
+
+        # Check cache first
+        cached_context = get_oauth_token_from_cache(token)
+        if cached_context:
+            span.set_attribute("cache.hit", True)
+            cache_duration = (time.time() - span_start) * 1000
+            span.set_attribute("cache.duration_ms", cache_duration)
+            logger.info(
+                f"✅ OAuth cache HIT: [user and project ID redacted] ({cache_duration:.2f}ms)"
+            )
+            return TokenContext(
+                auth_type=cached_context["auth_type"],
+                user_id=cached_context["user_id"],
+                project_id=cached_context["project_id"],
+                organization_id=cached_context["organization_id"],
+                scopes=cached_context["scopes"],
+                raw_token=token,
+            )
+
+        span.set_attribute("cache.hit", False)
+        logger.info("❌ OAuth cache MISS - validating with Hydra")
+
+        try:
+            # Validate with Hydra introspection
+            with tracer.start_as_current_span("hydra_validate_token"):
+                hydra_token: HydraToken = validate_token(token)
+
+            hydra_duration = time.time() - span_start
+            span.set_attribute("hydra.validation_ms", hydra_duration * 1000)
+
+            # Validate project context exists
+            if not hydra_token.project_id:
+                raise ValueError("OAuth token missing project context")
+
+            logger.info(
+                f"✅ OAuth token validated: user={hydra_token.subject}, "
+                f"project={hydra_token.project_id}, scopes={hydra_token.scopes}"
+            )
+
+            span.set_attribute("auth.user_id", hydra_token.subject)
+            span.set_attribute("auth.project_id", hydra_token.project_id or "")
+            span.set_attribute("auth.scopes", ",".join(hydra_token.scopes))
+
+            context = TokenContext(
+                auth_type="oauth",
+                user_id=hydra_token.subject,
+                project_id=hydra_token.project_id,
+                organization_id=hydra_token.organization_id,
+                scopes=hydra_token.scopes,
+                raw_token=token,
+            )
+
+            # Cache the result
+            set_oauth_token_in_cache(token, context.to_dict())
+
+            return context
+        except Exception as e:
+            logger.debug(f"OAuth token validation failed: {e}")
+            span.record_exception(e)
+            raise ValueError(f"Invalid OAuth token: {e}") from e
+
+
+def validate_api_key(token: str, core_server_host: str) -> TokenContext:
+    """Validate API key via Core server and create token context.
+
+    Checks cache first to avoid expensive Core server API calls.
+    Cache TTL: 10 minutes.
+
+    Args:
+        token: API key string
+        core_server_host: Core server URL for validation
+
+    Returns:
+        TokenContext with API key authentication details
+
+    Raises:
+        ValueError: If API key is invalid
+    """
+    with tracer.start_as_current_span("validate_api_key") as span:
+        span_start = time.time()
+
+        # Check cache first
+        cached_context = get_api_key_from_cache(token)
+        if cached_context:
+            span.set_attribute("cache.hit", True)
+            cache_duration = (time.time() - span_start) * 1000
+            span.set_attribute("cache.duration_ms", cache_duration)
+            logger.info(f"✅ API KEY CACHE HIT ({cache_duration:.2f}ms)")
+            return TokenContext(
+                auth_type=cached_context["auth_type"],
+                user_id=cached_context["user_id"],
+                project_id=cached_context["project_id"],
+                organization_id=cached_context["organization_id"],
+                scopes=cached_context["scopes"],
+                raw_token=token,
+            )
+
+        span.set_attribute("cache.hit", False)
+        logger.info("❌ API KEY CACHE MISS - validating with Core server")
+
+        try:
+            # Validate API key by making a test request to Core server
+            import httpx
+
+            # Use /api/v1/ping endpoint to validate API key and get user context
+            with tracer.start_as_current_span("api_key_ping_request"):
+                response = httpx.get(
+                    f"{core_server_host}/api/v1/ping",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10.0,
+                )
+
+            api_duration = time.time() - span_start
+            span.set_attribute("api_key.validation_ms", api_duration * 1000)
+            span.set_attribute("http.status_code", response.status_code)
+
+            if api_duration > 3.0:
+                logger.warning(f"⚠️  Slow API key validation: {api_duration:.2f}s")
+                span.add_event("slow_api_key_warning", {"threshold_ms": 3000})
+
+            if response.status_code != 200:
+                raise ValueError(
+                    f"API key validation returned status {response.status_code}"
+                )
+
+            user_info = response.json()
+
+            # API keys have full access to memories
+            scopes = ["memories:read", "memories:write"]
+
+            logger.info(
+                f"✅ API key validated: user={user_info.get('user_id')}, "
+                f"project={user_info.get('project_id')}"
+            )
+
+            span.set_attribute("auth.user_id", user_info.get("user_id", ""))
+            span.set_attribute("auth.project_id", user_info.get("project_id", ""))
+            span.set_attribute("auth.scopes", ",".join(scopes))
+
+            context = TokenContext(
+                auth_type="api_key",
+                user_id=user_info["user_id"],
+                project_id=user_info.get("project_id"),
+                organization_id=user_info.get("organization_id"),
+                scopes=scopes,
+                raw_token=token,
+            )
+
+            # Cache the result
+            set_api_key_in_cache(token, context.to_dict())
+
+            return context
+        except httpx.HTTPError as e:
+            logger.debug(f"API key validation failed (HTTP error): {e}")
+            span.record_exception(e)
+            raise ValueError(f"Invalid API key: {e}") from e
+        except Exception as e:
+            logger.debug(f"API key validation failed: {e}")
+            span.record_exception(e)
+            raise ValueError(f"Invalid API key: {e}") from e
+
+
+async def detect_and_validate_auth(
+    authorization_header: str,
+    core_server_host: str,
+) -> TokenContext:
+    """Detect authentication method and validate token accordingly.
+
+    This function intelligently detects whether the provided token is:
+    1. OAuth token (JWT format) - validates via Hydra
+    2. API key (other format) - validates via Core server
+
+    Args:
+        authorization_header: Full Authorization header value
+        core_server_host: Core server URL for API key validation
+
+    Returns:
+        TokenContext with unified authentication details
+
+    Raises:
+        ValueError: If authentication fails with both methods
+    """
+    with tracer.start_as_current_span("detect_and_validate_auth") as span:
+        detect_start = time.time()
+
+        # Extract Bearer token
+        with tracer.start_as_current_span("extract_bearer_token"):
+            token = extract_bearer_token(authorization_header)
+
+        span.set_attribute(
+            "token.format_detected", "jwt" if looks_like_jwt(token) else "api_key"
+        )
+
+        # Try OAuth validation first if token looks like JWT
+        if looks_like_jwt(token):
+            try:
+                result = validate_oauth_token(token, core_server_host)
+                detect_duration = time.time() - detect_start
+                span.set_attribute("auth.detection_ms", detect_duration * 1000)
+                span.set_attribute("auth.method_detected", "oauth")
+                return result
+            except ValueError as e:
+                logger.debug(f"JWT token validation failed, trying API key: {e}")
+
+        # Try API key validation
+        try:
+            result = validate_api_key(token, core_server_host)
+            detect_duration = time.time() - detect_start
+            span.set_attribute("auth.detection_ms", detect_duration * 1000)
+            span.set_attribute("auth.method_detected", "api_key")
+            return result
+        except ValueError as api_error:
+            # Both validations failed
+            if looks_like_jwt(token):
+                error_msg = "Token validation failed for both OAuth and API key"
+            else:
+                error_msg = f"Invalid API key: {api_error}"
+
+            logger.warning(f"❌ Authentication failed: {error_msg}")
+            span.set_attribute("auth.method_detected", "none")
+            span.set_attribute("auth.error", error_msg)
+            span.record_exception(api_error)
+            raise ValueError(error_msg) from None
+
+
+class UnifiedAuthMiddleware(BaseHTTPMiddleware):
+    """Middleware to enforce unified authentication (OAuth 2.1 + API key) on MCP endpoints.
+
+    This middleware:
+    1. Detects authentication method (JWT vs API key)
+    2. Validates token via appropriate method (Hydra or Core server)
+    3. Attaches unified token context to request for tool handlers
+    4. Works transparently with both auth methods
+    """
 
     def __init__(self, app, core_server_host: str):
         """Initialize unified auth middleware.
 
         Args:
-            app: FastAPI application instance
+            app: FastAPI application
             core_server_host: Core server URL for API key validation
         """
         super().__init__(app)
         self.core_server_host = core_server_host
 
     async def dispatch(self, request: Request, call_next):
-        """Process request and enforce unified authentication."""
-        # Create root span for entire middleware dispatch
-        with tracer.start_as_current_span("mcp_auth_middleware") as root_span:
-            root_span.set_attribute("http.method", request.method)
-            root_span.set_attribute("http.url.path", request.url.path)
+        """Process request and enforce authentication."""
 
-            # Skip authentication for metadata endpoints (OAuth discovery)
-            if request.url.path in [
-                "/.well-known/oauth-protected-resource",
-                "/.well-known/oauth-authorization-server",
-                "/.well-known/openid-configuration",
-            ]:
-                root_span.set_attribute("auth.skipped.reason", "metadata_endpoint")
-                return await call_next(request)
+        # Skip authentication for public endpoints
+        public_paths = [
+            "/.well-known/oauth-protected-resource",
+            "/.well-known/oauth-authorization-server",
+            "/.well-known/openid-configuration",
+            "/register",
+        ]
 
-            # Skip authentication for registration endpoint (OAuth DCR)
-            if request.url.path == "/register":
-                root_span.set_attribute("auth.skipped.reason", "registration_endpoint")
-                return await call_next(request)
+        if request.url.path in public_paths:
+            return await call_next(request)
 
-            # Only protect MCP endpoints
-            if not request.url.path.startswith("/mcp"):
-                root_span.set_attribute("auth.skipped.reason", "not_mcp_endpoint")
-                return await call_next(request)
+        # Only protect MCP endpoints
+        if not request.url.path.startswith("/mcp"):
+            return await call_next(request)
 
-            # Check if this is the initial MCP initialization request
-            # The initialization request must complete BEFORE authentication
-            # per MCP protocol spec - it establishes the session
-            # Handle both /mcp and /mcp/ paths
-            is_mcp_endpoint = (
-                request.method == "POST" and request.url.path.rstrip("/") == "/mcp"
+        # Check for Authorization header
+        auth_header = request.headers.get("authorization")
+
+        if not auth_header:
+            logger.warning("🔒 No Authorization header - access denied")
+            return Response(
+                content="Authorization required. Please provide OAuth token or API key.",
+                status_code=401,
+                headers={"Content-Type": "text/plain"},
             )
 
-            # Skip authentication for initialization request
-            # The client will authenticate on subsequent requests after init completes
-            if is_mcp_endpoint:
-                # Check if this looks like an initialize request by examining body
-                try:
-                    body = await request.body()
+        # Validate token and set context
+        try:
+            token_context = await detect_and_validate_auth(
+                auth_header, self.core_server_host
+            )
 
-                    # Re-construct the request with the body we just read
-                    async def receive():
-                        return {
-                            "type": "http.request",
-                            "body": body,
-                            "more_body": False,
-                        }
+            # Convert TokenContext to dict
+            token_context_data = token_context.to_dict()
 
-                    request._receive = receive
+            # Set in ContextVar for tool access
+            current_token_context.set(token_context_data)
 
-                    # Quick check if this is an initialize request
-                    import json
+            # Also attach to request.scope for ASGI compatibility
+            request.scope["auth_context"] = token_context_data
 
-                    try:
-                        data = json.loads(body.decode())
-                        if data.get("method") == "initialize":
-                            logger.info(
-                                f"⚡ Skipping auth for MCP initialize request (path: {request.url.path})"
-                            )
-                            root_span.set_attribute(
-                                "auth.skipped.reason", "mcp_initialization"
-                            )
-                            return await call_next(request)
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        pass  # Not JSON, continue with auth
-                except Exception as e:
-                    logger.warning(f"Failed to check initialization request: {e}")
+            logger.info(
+                f"✅ Authentication successful: {token_context.auth_type} - "
+                f"user={token_context.user_id}, project={token_context.project_id}"
+            )
 
-            # MCP Spec: Validate MCP-Protocol-Version header
-            # Required on all requests after initialization
-            with tracer.start_as_current_span("validate_protocol_version"):
-                protocol_version = request.headers.get("mcp-protocol-version")
-
-                # Warn if protocol version missing
-                if not protocol_version:
-                    logger.warning("Missing MCP-Protocol-Version header on request")
-                    # For backward compatibility, assume latest version
-                    protocol_version = self.SUPPORTED_VERSIONS[0]
-                    logger.info(f"Defaulting to protocol version: {protocol_version}")
-
-                # Validate version if present
-                if protocol_version and protocol_version not in self.SUPPORTED_VERSIONS:
-                    logger.error(
-                        f"Unsupported MCP protocol version: {protocol_version}"
-                    )
-                    return Response(
-                        content=f"Unsupported MCP protocol version: {protocol_version}. Supported versions: {', '.join(self.SUPPORTED_VERSIONS)}",
-                        status_code=400,
-                        media_type="text/plain",
-                    )
-
-                # Store protocol version for later use
-                if protocol_version:
-                    request.state.mcp_protocol_version = protocol_version
-                    logger.debug(f"MCP protocol version: {protocol_version}")
-                    root_span.set_attribute("mcp.protocol_version", protocol_version)
-
-            # Check for Authorization header
-            auth_header = request.headers.get("authorization")
-
-            if not auth_header:
-                # No auth header - return 401 with OAuth challenge
-                # Note: This OAuth challenge is ignored by --oauth no clients
-                logger.info(
-                    f"🔒 No Authorization header - returning OAuth challenge for {request.url.path}"
-                )
-                root_span.set_attribute("auth.status", "missing_header")
-                return self._create_oauth_challenge_response()
-
-            # Detect and validate authentication (OAuth or API key)
-            try:
-                with tracer.start_as_current_span(
-                    "detect_and_validate_auth"
-                ) as auth_span:
-                    auth_start_time = time.time()
-                    token_context: TokenContext = await detect_and_validate_auth(
-                        auth_header, self.core_server_host
-                    )
-                    auth_duration = time.time() - auth_start_time
-
-                    auth_span.set_attribute("auth.type", token_context.auth_type)
-                    auth_span.set_attribute("auth.duration_ms", auth_duration * 1000)
-                    auth_span.set_attribute("user.id", token_context.user_id)
-                    auth_span.set_attribute(
-                        "project.id", token_context.project_id or ""
-                    )
-                    auth_span.set_attribute("scopes", ",".join(token_context.scopes))
-
-                    root_span.set_attribute("auth.type", token_context.auth_type)
-                    root_span.set_attribute("auth.duration_ms", auth_duration * 1000)
-
-                    if auth_duration > 3.0:
-                        logger.warning(f"⚠️  Slow auth validation: {auth_duration:.2f}s")
-                        auth_span.add_event("slow_auth_warning", {"threshold_ms": 3000})
-
-                # Validate project context exists (required for tools)
-                if not token_context.project_id:
-                    logger.error(
-                        f"❌ Token missing project context: user={token_context.user_id}"
-                    )
-                    root_span.set_attribute("auth.status", "missing_project")
-                    return self._create_error_response(
-                        error="insufficient_scope",
-                        error_description="Token missing project context",
-                    )
-
-                # Convert to dict for storage
-                token_context_dict = token_context.to_dict()
-
-                # Set in ContextVar for tool access
-                current_token_context.set(token_context_dict)
-
-                # Also attach to request state for compatibility
-                request.state.token_context = token_context_dict
-
-                # CRITICAL: Inject into ASGI scope for mounted apps (FastMCP)
-                # When FastAPI mounts sub-apps, request.state doesn't propagate,
-                # but the ASGI scope dict DOES propagate
-                request.scope["auth_context"] = token_context_dict
-                logger.debug("Injected auth context into ASGI scope")
-
-                logger.info(
-                    f"✅ Authenticated via {token_context.auth_type}: "
-                    f"user={token_context.user_id}, project={token_context.project_id}, "
-                    f"scopes={token_context.scopes}"
-                )
-                root_span.set_attribute("auth.status", "success")
-
-            except ValueError as e:
-                # Authentication failed
-                logger.warning(f"❌ Authentication failed: {e}")
-                root_span.set_attribute("auth.status", "failed")
-                root_span.record_exception(e)
-                # Never return detailed error info to the client
-                return self._create_error_response(
-                    error="invalid_token",
-                    error_description="Invalid authentication token.",
-                )
-
-            # Authentication successful - proceed with request
-            with tracer.start_as_current_span("call_next"):
-                response = await call_next(request)
+            # Token valid - proceed with request
+            response = await call_next(request)
             return response
 
-    def _create_oauth_challenge_response(self) -> Response:
-        """Create 401 response with OAuth challenge.
-
-        Returns proper WWW-Authenticate header for OAuth 2.0 clients.
-        API key clients (using --oauth no) will ignore this challenge.
-        """
-        error_response = create_401_response(
-            error="invalid_token",
-            error_description="Authorization required. Use OAuth 2.0 or API key.",
-        )
-
-        # Build WWW-Authenticate header
-        www_auth = error_response["www_authenticate"]
-        www_auth_header = f'Bearer realm="{www_auth["realm"]}", '
-        www_auth_header += f'resource="{www_auth["resource"]}", '
-        www_auth_header += f'resource_metadata="{www_auth["resource_metadata"]}"'
-
-        if "error" in www_auth:
-            www_auth_header += f', error="{www_auth["error"]}"'
-        if "error_description" in www_auth:
-            www_auth_header += f', error_description="{www_auth["error_description"]}"'
-
-        return Response(
-            content=error_response["error_description"],
-            status_code=401,
-            headers={"WWW-Authenticate": www_auth_header, "Content-Type": "text/plain"},
-        )
-
-    def _create_error_response(self, error: str, error_description: str) -> Response:
-        """Create 401 error response for authentication failures.
-
-        Args:
-            error: OAuth error code (e.g., "invalid_token", "insufficient_scope")
-            error_description: Human-readable error description
-        """
-        error_response = create_401_response(
-            error=error, error_description=error_description
-        )
-
-        www_auth = error_response["www_authenticate"]
-        www_auth_header = f'Bearer realm="{www_auth["realm"]}", '
-        www_auth_header += f'error="{www_auth["error"]}", '
-        www_auth_header += f'error_description="{www_auth["error_description"]}"'
-
-        return Response(
-            content=error_response["error_description"],
-            status_code=401,
-            headers={"WWW-Authenticate": www_auth_header, "Content-Type": "text/plain"},
-        )
+        except ValueError as e:
+            logger.warning(f"❌ Authentication failed: {e}")
+            return Response(
+                content=f"Authentication failed: {e}",
+                status_code=401,
+                headers={"Content-Type": "text/plain"},
+            )

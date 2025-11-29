@@ -239,7 +239,7 @@ class MCPConfig:
 
     # Resource documentation
     RESOURCE_DOCUMENTATION_URL: str = os.getenv(
-        "MCP_RESOURCE_DOCUMENTATION_URL", "https://github.com/yourusername/selfmemory"
+        "MCP_RESOURCE_DOCUMENTATION_URL", "https://docs.selfmemory.com"
     )
 
 
