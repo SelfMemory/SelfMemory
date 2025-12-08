@@ -19,6 +19,11 @@ except ImportError:
 
 from pydantic import BaseModel, Field, model_validator
 
+# Import the working config classes
+from selfmemory.embeddings.configs import EmbedderConfig
+from selfmemory.llms.configs import LlmConfig
+from selfmemory.vector_stores.configs import VectorStoreConfig
+
 # Static imports for core providers (always loaded for performance)
 
 logger = logging.getLogger(__name__)
@@ -103,50 +108,16 @@ class VectorStoreConfig(BaseModel):
         return self
 
 
-class EmbeddingConfig(BaseModel):
-    """Configuration for embedding providers following selfmemory pattern."""
+# EmbeddingConfig removed - using direct EmbedderConfig import like mem0
 
-    provider: str = Field(default="ollama", description="Embedding provider")
+
+class LlmConfig(BaseModel):
+    """Configuration for LLM providers (optional - for selfmemory-style fact extraction)."""
+
+    provider: str = Field(default="anthropic", description="LLM provider")
     config: dict | None = Field(
         default=None, description="Provider-specific configuration dictionary"
     )
-
-    # Simple provider registry (selfmemory style)
-    _provider_configs: dict[str, str] = {
-        "ollama": "OllamaConfig",
-        "openai": "OpenAIConfig",
-        "huggingface": "HuggingFaceConfig",
-        "cohere": "CohereConfig",
-        "azure": "AzureConfig",
-    }
-
-    @model_validator(mode="after")
-    def validate_and_create_config(self) -> "EmbeddingConfig":
-        """Create provider-specific config object using selfmemory pattern."""
-        provider = self.provider
-        config = self.config
-
-        if provider not in self._provider_configs:
-            raise ValueError(f"Unsupported embedding provider: {provider}")
-
-        # Dynamic import (selfmemory style)
-        module = __import__(
-            f"selfmemory.configs.embeddings.{provider}",
-            fromlist=[self._provider_configs[provider]],
-        )
-        config_class = getattr(module, self._provider_configs[provider])
-
-        if config is None:
-            config = {}
-
-        if not isinstance(config, dict):
-            if not isinstance(config, config_class):
-                raise ValueError(f"Invalid config type for provider {provider}")
-            return self
-
-        # Create provider-specific config object
-        self.config = config_class(**config)
-        return self
 
 
 class ServerConfig(BaseModel):
@@ -163,7 +134,8 @@ class SelfMemoryConfig(BaseModel):
 
     # auth: AuthConfig = Field(default_factory=AuthConfig)
     vector_store: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
-    embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
+    embedding: EmbedderConfig = Field(default_factory=EmbedderConfig, description="Embedding configuration")
+    llm: LlmConfig | None = Field(default=None, description="Optional LLM for intelligent memory extraction")
     server: ServerConfig = Field(default_factory=ServerConfig)
 
     # history_db_path: str = Field(
@@ -324,6 +296,30 @@ def get_default_config() -> SelfMemoryConfig:
         SelfMemoryConfig: Default configuration optimized for ease of use
     """
     return SelfMemoryConfig()
+
+
+class AzureConfig(BaseModel):
+    """
+    Configuration settings for Azure.
+
+    Args:
+        api_key (str): The API key used for authenticating with the Azure service.
+        azure_deployment (str): The name of the Azure deployment.
+        azure_endpoint (str): The endpoint URL for the Azure service.
+        api_version (str): The version of the Azure API being used.
+        default_headers (Dict[str, str]): Headers to include in requests to the Azure API.
+    """
+
+    api_key: str = Field(
+        description="The API key used for authenticating with the Azure service.",
+        default=None,
+    )
+    azure_deployment: str = Field(description="The name of the Azure deployment.", default=None)
+    azure_endpoint: str = Field(description="The endpoint URL for the Azure service.", default=None)
+    api_version: str = Field(description="The version of the Azure API being used.", default=None)
+    default_headers: dict[str, str] | None = Field(
+        description="Headers to include in requests to the Azure API.", default=None
+    )
 
 
 # def get_enterprise_config() -> SelfMemoryConfig:

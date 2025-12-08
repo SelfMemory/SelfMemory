@@ -146,6 +146,17 @@ class EmbeddingConfig:
     OLLAMA_BASE_URL: str | None = os.getenv("OLLAMA_BASE_URL")
 
 
+class LlmConfig:
+    """Configuration for LLM (for intelligent memory extraction)."""
+
+    PROVIDER: str | None = os.getenv("LLM_PROVIDER")
+    MODEL: str | None = os.getenv("LLM_MODEL")
+    API_KEY: str | None = os.getenv("LLM_API_KEY")
+    BASE_URL: str | None = os.getenv("LLM_BASE_URL")  # For vLLM/custom endpoints
+    TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.1"))
+    MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "200"))
+
+
 class ValidationConfig:
     """Configuration for input validation."""
 
@@ -257,6 +268,7 @@ class Config:
     server = ServerConfig()
     vector_store = VectorStoreConfig()
     embedding = EmbeddingConfig()
+    llm = LlmConfig()
     validation = ValidationConfig()
     rate_limit = RateLimitConfig()
     health = HealthConfig()
@@ -318,6 +330,7 @@ class Config:
         logger.info(f"SMTP Configured: {'Yes' if cls.email.SMTP_HOST else 'No'}")
         logger.info(f"Vector Store: {cls.vector_store.PROVIDER or 'Not configured'}")
         logger.info(f"Embedding Provider: {cls.embedding.PROVIDER or 'Not configured'}")
+        logger.info(f"LLM Provider: {cls.llm.PROVIDER or 'Not configured'}")
         logger.info(f"Metrics: {'Enabled' if cls.metrics.ENABLED else 'Disabled'}")
         logger.info(f"Log Level: {cls.logging.LEVEL}")
         logger.info(f"Error Details Exposed: {cls.error.EXPOSE_DETAILS}")

@@ -6,20 +6,23 @@ with a zero-setup API for direct usage without authentication.
 
 """
 
+import hashlib
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
-from selfmemory.configs import SelfMemoryConfig
+from selfmemory.configs.base import SelfMemoryConfig
+from selfmemory.exceptions import ValidationError, LLMError, VectorStoreError
 from selfmemory.memory.base import MemoryBase
 from selfmemory.memory.utils import (
     audit_memory_access,
     build_add_metadata,
     build_search_filters,
     validate_isolation_context,
+    build_filters_and_metadata,
 )
-from selfmemory.utils.factory import EmbeddingFactory, VectorStoreFactory
+from selfmemory.utils.factory import EmbedderFactory, VectorStoreFactory
 
 logger = logging.getLogger(__name__)
 
@@ -148,22 +151,39 @@ class SelfMemory(MemoryBase):
             self.config = config
 
         # Use factories with exact pattern - pass raw config
-        self.embedding_provider = EmbeddingFactory.create(
-            self.config.embedding.provider, self.config.embedding.config
+        self.embedding_provider = EmbedderFactory.create(
+            self.config.embedding.provider, 
+            self.config.embedding.config,
+            self.config.vector_store.config
         )
 
         self.vector_store = VectorStoreFactory.create(
             self.config.vector_store.provider, self.config.vector_store.config
         )
 
-        logger.info(
-            f"Memory SDK initialized: "
-            f"{self.config.embedding.provider} + {self.config.vector_store.provider}"
-        )
+        # Initialize LLM
+        if self.config.llm:
+            from selfmemory.utils.factory import LlmFactory
+            
+            self.llm = LlmFactory.create(
+                self.config.llm.provider, self.config.llm.config
+            )
+            self.enable_llm = True
+            logger.info(
+                f"Memory SDK initialized: "
+                f"{self.config.embedding.provider} + {self.config.vector_store.provider} + LLM({self.config.llm.provider})"
+            )
+        else:
+            self.llm = None
+            self.enable_llm = False
+            logger.info(
+                f"Memory SDK initialized: "
+                f"{self.config.embedding.provider} + {self.config.vector_store.provider}"
+            )
 
     def add(
         self,
-        memory_content: str,
+        messages,  # Can be string, dict, or list of dicts
         *,  # Enforce keyword-only arguments
         user_id: str,
         tags: str | None = None,
@@ -172,12 +192,16 @@ class SelfMemory(MemoryBase):
         project_id: str | None = None,
         organization_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        infer: bool = True,  # Whether to use LLM for fact extraction
     ) -> dict[str, Any]:
         """
-        Add a new memory to storage with multi-tenant isolation (selfmemory style).
+        Add memory(ies) to storage with optional LLM-based fact extraction.
+
+        Supports both simple string input and message lists (mem0-style).
+        When LLM is configured and infer=True, uses intelligent fact extraction.
 
         Args:
-            memory_content: The memory text to store
+            messages: String, dict, or list of message dicts (e.g., [{"role": "user", "content": "..."}])
             user_id: Required user identifier for memory isolation
             tags: Optional comma-separated tags
             people_mentioned: Optional comma-separated people names
@@ -185,29 +209,88 @@ class SelfMemory(MemoryBase):
             project_id: Optional project identifier for project-level isolation
             organization_id: Optional organization identifier for org-level isolation
             metadata: Optional additional metadata
+            infer: Whether to use LLM for intelligent fact extraction (default: True)
 
         Returns:
-            Dict: Result information including memory_id and status
+            Dict: Result information
 
         Examples:
-            Basic user isolation (backward compatible):
-            >>> memory = Memory()
-            >>> memory.add("I love pizza", user_id="alice", tags="food,personal")
+            Simple string (backward compatible):
+            >>> memory = SelfMemory()
+            >>> memory.add("I love pizza", user_id="alice")
 
-            Multi-tenant isolation:
-            >>> memory.add("Meeting notes from project discussion",
-            ...           user_id="alice", project_id="proj_123",
-            ...           organization_id="org_456", tags="work,meeting",
-            ...           people_mentioned="Sarah,Mike")
+            Message list (mem0-style):
+            >>> messages = [
+            ...     {"role": "user", "content": "I love horror movies"},
+            ...     {"role": "assistant", "content": "Got it!"}
+            ... ]
+            >>> memory.add(messages, user_id="alice")
+        """
+        # Handle different message formats
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+        elif isinstance(messages, dict):
+            messages = [messages]
+        elif not isinstance(messages, list):
+            raise ValueError("messages must be string, dict, or list of dicts")
+
+        # Use LLM-based processing if enabled and infer=True
+        if self.enable_llm and infer:
+            return self._add_with_llm(
+                messages=messages,
+                user_id=user_id,
+                tags=tags,
+                people_mentioned=people_mentioned,
+                topic_category=topic_category,
+                project_id=project_id,
+                organization_id=organization_id,
+                metadata=metadata,
+            )
+        else:
+            return self._add_without_llm(
+                messages=messages,
+                user_id=user_id,
+                tags=tags,
+                people_mentioned=people_mentioned,
+                topic_category=topic_category,
+                project_id=project_id,
+                organization_id=organization_id,
+                metadata=metadata,
+            )
+
+    def _add_without_llm(
+        self,
+        messages: list,
+        user_id: str,
+        tags: str | None = None,
+        people_mentioned: str | None = None,
+        topic_category: str | None = None,
+        project_id: str | None = None,
+        organization_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Add memory without LLM processing (original behavior).
+        
+        Stores the first user message content as-is.
         """
         try:
-            # STRICT ISOLATION VALIDATION: Validate isolation context before proceeding
+            # STRICT ISOLATION VALIDATION
             validate_isolation_context(
                 user_id=user_id,
                 project_id=project_id,
                 organization_id=organization_id,
                 operation="memory_add",
             )
+
+            # Extract content from first user message
+            memory_content = ""
+            for msg in messages:
+                if msg.get("role") == "user" and msg.get("content"):
+                    memory_content = msg["content"]
+                    break
+
+            if not memory_content:
+                return {"success": False, "error": "No user message content found"}
 
             # Build memory-specific metadata
             memory_metadata = {
@@ -221,8 +304,7 @@ class SelfMemory(MemoryBase):
             if metadata:
                 memory_metadata.update(metadata)
 
-            # Build user-scoped metadata using specialized function for add operations
-            # Now supports multi-tenant isolation with project/organization context
+            # Build user-scoped metadata
             storage_metadata = build_add_metadata(
                 user_id=user_id,
                 input_metadata=memory_metadata,
@@ -230,18 +312,18 @@ class SelfMemory(MemoryBase):
                 organization_id=organization_id,
             )
 
-            # Generate embedding using provider
+            # Generate embedding
             embedding = self.embedding_provider.embed(memory_content)
 
             # Generate unique ID
             memory_id = str(uuid.uuid4())
 
-            # Insert using vector store provider with multi-tenant metadata
+            # Insert into vector store
             self.vector_store.insert(
                 vectors=[embedding], payloads=[storage_metadata], ids=[memory_id]
             )
 
-            # AUDIT: Log successful memory addition
+            # AUDIT
             audit_memory_access(
                 operation="memory_add",
                 user_id=user_id,
@@ -263,7 +345,7 @@ class SelfMemory(MemoryBase):
             }
 
         except Exception as e:
-            # AUDIT: Log failed memory addition
+            # AUDIT
             audit_memory_access(
                 operation="memory_add",
                 user_id=user_id,
@@ -273,14 +355,461 @@ class SelfMemory(MemoryBase):
                 error=str(e),
             )
 
-            context_info = f"user='{user_id}'"
-            if project_id and organization_id:
-                context_info += f", project='{project_id}', org='{organization_id}'"
-
-            logger.error(f"Memory.add() failed ({context_info}): {e}")
-            logger.error(f"Exception type: {type(e)}")
-            logger.error(f"Exception details: {str(e)}")
+            logger.error(f"Memory.add() failed: {e}")
             return {"success": False, "error": f"Memory addition failed: {str(e)}"}
+
+    def _add_with_llm(
+        self,
+        messages: list,
+        user_id: str,
+        tags: str | None = None,
+        people_mentioned: str | None = None,
+        topic_category: str | None = None,
+        project_id: str | None = None,
+        organization_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Add memory with LLM-based fact extraction (mem0-style).
+        
+        Uses LLM to extract facts and intelligently ADD/UPDATE/DELETE memories.
+        Adapted from mem0's _add_to_vector_store method.
+        """
+        import json
+        import hashlib
+        from selfmemory.memory.utils import (
+            parse_messages,
+            get_fact_retrieval_messages,
+            remove_code_blocks,
+            extract_json,
+        )
+        from selfmemory.configs.prompts import get_update_memory_messages
+
+        try:
+            # Validate isolation
+            validate_isolation_context(
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id,
+                operation="memory_add_llm",
+            )
+
+            # Parse messages for LLM processing
+            parsed_messages = parse_messages(messages)
+
+            # Step 1: Extract facts from conversation using LLM
+            system_prompt, user_prompt = get_fact_retrieval_messages(parsed_messages, is_agent_memory=False)
+
+            print("LLM Fact Extraction Prompts:",[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ])
+
+            response = self.llm.generate_response(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                response_format={"type": "json_object"},
+            )
+            print("LLM Fact Extraction Response:", response)
+
+            try:
+                response = remove_code_blocks(response)
+                print("After removing code blocks:", response)
+                if not response.strip():
+                    new_facts = []
+                    extracted_tags = []
+                    extracted_category = None
+                    extracted_people = []
+                else:
+                    # Clean the response - remove leading/trailing whitespace and newlines
+                    response = response.strip()
+
+                    # Try to parse as JSON directly first
+                    try:
+                        response_json = json.loads(response)
+                        # Check if this is the new structured format with "output" array
+                        if isinstance(response_json, dict) and "output" in response_json:
+                            # Extract memory operations from the new format
+                            if (len(response_json["output"]) > 1 and
+                                "content" in response_json["output"][1] and
+                                len(response_json["output"][1]["content"]) > 0):
+                                memory_text = response_json["output"][1]["content"][0].get("text", "")
+                                if memory_text.strip():
+                                    # Parse the memory operations JSON
+                                    memory_operations = json.loads(memory_text)
+                                    print("Parsed new format memory operations:", memory_operations)
+
+                                    # Skip to Step 5: Execute memory operations directly
+                                    # Set variables to skip intermediate steps
+                                    new_facts = []  # Skip fact extraction since we have operations
+                                    extracted_tags = []
+                                    extracted_category = None
+                                    extracted_people = []
+
+                                    # Jump directly to executing operations
+                                    returned_memories = []
+                                    for op in memory_operations.get("memory", []):
+                                        try:
+                                            action_text = op.get("text")
+                                            if not action_text:
+                                                continue
+
+                                            event_type = op.get("event")
+
+                                            if event_type == "ADD":
+                                                # Create new memory with default metadata
+                                                memory_id = self._create_memory_with_embedding(
+                                                    data=action_text,
+                                                    existing_embeddings={},  # No precomputed embeddings
+                                                    user_id=user_id,
+                                                    tags=tags,  # Use user-provided metadata
+                                                    people_mentioned=people_mentioned,
+                                                    topic_category=topic_category,
+                                                    project_id=project_id,
+                                                    organization_id=organization_id,
+                                                    metadata=metadata,
+                                                )
+                                                returned_memories.append({
+                                                    "id": memory_id,
+                                                    "memory": action_text,
+                                                    "event": event_type
+                                                })
+
+                                            elif event_type == "UPDATE":
+                                                # For UPDATE, we need to find existing memory
+                                                # This is a simplified version - in practice you might need more complex logic
+                                                search_filters = build_search_filters(
+                                                    user_id=user_id,
+                                                    project_id=project_id,
+                                                    organization_id=organization_id,
+                                                )
+                                                existing_memories = self.vector_store.search(
+                                                    query=action_text,
+                                                    limit=1,
+                                                    filters=search_filters,
+                                                )
+                                                if existing_memories:
+                                                    old_id = self._extract_memory_id(existing_memories[0])
+                                                    self._update_memory_with_embedding(
+                                                        memory_id=old_id,
+                                                        data=action_text,
+                                                        existing_embeddings={},
+                                                    )
+                                                    returned_memories.append({
+                                                        "id": old_id,
+                                                        "memory": action_text,
+                                                        "event": event_type,
+                                                        "previous_memory": op.get("old_memory")
+                                                    })
+
+                                            elif event_type == "DELETE":
+                                                # For DELETE, we need to find existing memory
+                                                search_filters = build_search_filters(
+                                                    user_id=user_id,
+                                                    project_id=project_id,
+                                                    organization_id=organization_id,
+                                                )
+                                                existing_memories = self.vector_store.search(
+                                                    query=action_text,
+                                                    limit=1,
+                                                    filters=search_filters,
+                                                )
+                                                if existing_memories:
+                                                    old_id = self._extract_memory_id(existing_memories[0])
+                                                    self.vector_store.delete(old_id)
+                                                    returned_memories.append({
+                                                        "id": old_id,
+                                                        "memory": action_text,
+                                                        "event": event_type
+                                                    })
+
+                                        except Exception as e:
+                                            logger.error(f"Error processing memory operation {op}: {e}")
+
+                                    logger.info(f"LLM memory processing complete (new format): {len(returned_memories)} operations")
+                                    return {"results": returned_memories}
+                        else:
+                            # Fall back to old format parsing
+                            new_facts = response_json.get("facts", [])
+                            extracted_tags = response_json.get("tags", [])
+                            extracted_category = response_json.get("topic_category")
+                            extracted_people = response_json.get("people_mentioned", [])
+                    except json.JSONDecodeError:
+                        # Try extracting JSON from text if direct parsing failed
+                        try:
+                            extracted_json = extract_json(response)
+                            response_json = json.loads(extracted_json)
+                            new_facts = response_json.get("facts", [])
+                            extracted_tags = response_json.get("tags", [])
+                            extracted_category = response_json.get("topic_category")
+                            extracted_people = response_json.get("people_mentioned", [])
+                        except (json.JSONDecodeError, AttributeError):
+                            # If all parsing attempts fail, log and fall back to empty
+                            logger.error(f"Failed to parse LLM response as JSON: {response[:200]}...")
+                            new_facts = []
+                            extracted_tags = []
+                            extracted_category = None
+                            extracted_people = []
+            except Exception as e:
+                logger.error(f"Error extracting facts and metadata: {e}")
+                new_facts = []
+                extracted_tags = []
+                extracted_category = None
+                extracted_people = []
+
+            # Use LLM-extracted metadata, fallback to user-provided if not extracted
+            final_tags = ",".join(extracted_tags) if extracted_tags else (tags or "")
+            final_category = extracted_category if extracted_category else topic_category
+            final_people = ",".join(extracted_people) if extracted_people else (people_mentioned or "")
+
+            logger.info(f"LLM extracted: {len(new_facts)} facts, {len(extracted_tags)} tags, category={extracted_category}, {len(extracted_people)} people")
+
+            if not new_facts:
+                logger.debug("No new facts retrieved from input. Skipping memory update LLM call.")
+                # Return empty results - this is a valid scenario (same as mem0)
+                return {"results": []}
+
+            # Step 2: Search for existing memories
+            retrieved_old_memory = []
+            new_message_embeddings = {}
+
+            # Build search filters
+            search_filters = build_search_filters(
+                user_id=user_id,
+                project_id=project_id,
+                organization_id=organization_id,
+            )
+
+            for new_fact in new_facts:
+                fact_embedding = self.embedding_provider.embed(new_fact)
+                new_message_embeddings[new_fact] = fact_embedding
+
+                existing_memories = self.vector_store.search(
+                    query=new_fact,
+                    vectors=fact_embedding,
+                    limit=5,
+                    filters=search_filters,
+                )
+
+                for mem in existing_memories:
+                    retrieved_old_memory.append({
+                        "id": mem.id,
+                        "text": mem.payload.get("data", "")
+                    })
+
+            # Deduplicate by ID
+            unique_memories = {}
+            for item in retrieved_old_memory:
+                unique_memories[item["id"]] = item
+            retrieved_old_memory = list(unique_memories.values())
+
+            logger.info(f"Found {len(retrieved_old_memory)} existing memories to compare against")
+
+            # Step 3: Create ID mapping (handles UUID hallucinations)
+            temp_uuid_mapping = {}
+            for idx, item in enumerate(retrieved_old_memory):
+                temp_uuid_mapping[str(idx)] = item["id"]
+                retrieved_old_memory[idx]["id"] = str(idx)
+
+            # Step 4: Use LLM to decide ADD/UPDATE/DELETE
+            # NOTE: This step is skipped when using the new LLM format since operations are already provided
+            if new_facts:
+                update_prompt = get_update_memory_messages(
+                    retrieved_old_memory, new_facts
+                )
+
+                try:
+                    logger.info(f"Sending update prompt to LLM (length: {len(update_prompt)})")
+                    # Use higher max_tokens for memory operations to avoid truncation
+                    response = self.llm.generate_response(
+                        messages=[{"role": "user", "content": update_prompt}],
+                        response_format={"type": "json_object"},
+                        max_tokens=3192,  # Higher limit for memory operations JSON
+                    )
+                    logger.info(f"LLM Memory Operations Response received (length: {len(response) if response else 0})")
+
+                    # Save full response to file for debugging
+                    with open("/tmp/llm_response_debug.txt", "w") as f:
+                        f.write(f"Full response:\n{response}\n")
+                        f.write(f"Response length: {len(response) if response else 0}\n")
+
+                except Exception as e:
+                    logger.error(f"Error getting memory operations from LLM: {e}")
+                    response = ""
+
+                try:
+                    if not response or not response.strip():
+                        memory_operations = {}
+                    else:
+                        original_response = response
+                        response = remove_code_blocks(response)
+                        logger.info(f"After remove_code_blocks (length: {len(response)})")
+
+                        # Log first 1000 chars and last 500 chars to see structure
+                        logger.info(f"Response start: {repr(response[:1000])}")
+                        if len(response) > 1500:
+                            logger.info(f"Response end: {repr(response[-500:])}")
+
+                        memory_operations = json.loads(response)
+                except Exception as e:
+                    logger.error(f"Invalid JSON from LLM: {e}")
+                    logger.error(f"Original response length: {len(original_response)}")
+                    logger.error(f"Cleaned response length: {len(response)}")
+                    logger.error(f"Original response start: {repr(original_response[:500])}...")
+                    logger.error(f"Cleaned response start: {repr(response[:500])}...")
+                    memory_operations = {}
+            else:
+                memory_operations = {}
+
+            # Step 5: Execute memory operations
+            returned_memories = []
+
+            for op in memory_operations.get("memory", []):
+                try:
+                    action_text = op.get("text")
+                    if not action_text:
+                        continue
+
+                    event_type = op.get("event")
+
+                    if event_type == "ADD":
+                        # Create new memory with LLM-extracted metadata
+                        memory_id = self._create_memory_with_embedding(
+                            data=action_text,
+                            existing_embeddings=new_message_embeddings,
+                            user_id=user_id,
+                            tags=final_tags,
+                            people_mentioned=final_people,
+                            topic_category=final_category,
+                            project_id=project_id,
+                            organization_id=organization_id,
+                            metadata=metadata,
+                        )
+                        returned_memories.append({
+                            "id": memory_id,
+                            "memory": action_text,
+                            "event": event_type
+                        })
+
+                    elif event_type == "UPDATE":
+                        # Update existing memory
+                        old_id = temp_uuid_mapping[op.get("id")]
+                        self._update_memory_with_embedding(
+                            memory_id=old_id,
+                            data=action_text,
+                            existing_embeddings=new_message_embeddings,
+                        )
+                        returned_memories.append({
+                            "id": old_id,
+                            "memory": action_text,
+                            "event": event_type,
+                            "previous_memory": op.get("old_memory")
+                        })
+
+                    elif event_type == "DELETE":
+                        # Delete memory
+                        old_id = temp_uuid_mapping[op.get("id")]
+                        self.vector_store.delete(old_id)
+                        returned_memories.append({
+                            "id": old_id,
+                            "memory": action_text,
+                            "event": event_type
+                        })
+
+                    elif event_type == "NONE":
+                        # No operation needed - this is a valid scenario (same as mem0)
+                        logger.info("NOOP for Memory - no changes required")
+                        # Don't add to returned_memories as no actual change occurred
+
+                except Exception as e:
+                    logger.error(f"Error processing memory operation {op}: {e}")
+
+            logger.info(f"LLM memory processing complete: {len(returned_memories)} operations")
+            return {"results": returned_memories}
+
+        except Exception as e:
+            logger.error(f"_add_with_llm failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _create_memory_with_embedding(
+        self,
+        data: str,
+        existing_embeddings: dict,
+        user_id: str,
+        tags: str | None = None,
+        people_mentioned: str | None = None,
+        topic_category: str | None = None,
+        project_id: str | None = None,
+        organization_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Create a new memory with precomputed embeddings."""
+        # Get or create embedding
+        if data in existing_embeddings:
+            embedding = existing_embeddings[data]
+        else:
+            embedding = self.embedding_provider.embed(data)
+
+        # Build metadata
+        memory_metadata = {
+            "data": data,
+            "hash": hashlib.md5(data.encode()).hexdigest(),
+            "tags": tags or "",
+            "people_mentioned": people_mentioned or "",
+            "topic_category": topic_category or "",
+        }
+
+        if metadata:
+            memory_metadata.update(metadata)
+
+        storage_metadata = build_add_metadata(
+            user_id=user_id,
+            input_metadata=memory_metadata,
+            project_id=project_id,
+            organization_id=organization_id,
+        )
+
+        # Generate ID and insert
+        memory_id = str(uuid.uuid4())
+        self.vector_store.insert(
+            vectors=[embedding],
+            payloads=[storage_metadata],
+            ids=[memory_id]
+        )
+
+        return memory_id
+
+    def _update_memory_with_embedding(
+        self,
+        memory_id: str,
+        data: str,
+        existing_embeddings: dict,
+    ):
+        """Update an existing memory with new data and embedding."""
+        # Get existing memory
+        existing_memory = self.vector_store.get(vector_id=memory_id)
+
+        # Get or create embedding
+        if data in existing_embeddings:
+            embedding = existing_embeddings[data]
+        else:
+            embedding = self.embedding_provider.embed(data)
+
+        # Update metadata
+        new_metadata = existing_memory.payload.copy()
+        new_metadata["data"] = data
+        new_metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
+        new_metadata["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Update in vector store
+        self.vector_store.update(
+            vector_id=memory_id,
+            vector=embedding,
+            payload=new_metadata,
+        )
+
+        logger.info(f"Updated memory {memory_id}")
 
     def search(
         self,
@@ -397,15 +926,18 @@ class SelfMemory(MemoryBase):
                 query.strip() if query else ""
             )
 
+            # Build filters for vector store (exclude people_mentioned for post-filtering)
+            vector_store_filters = {k: v for k, v in user_filters.items() if k != "people_mentioned"}
+
             # Execute semantic search with multi-tenant isolation
             logger.info(
-                f"🔍 Memory.search: Calling vector_store.search with filters: {user_filters}"
+                f"🔍 Memory.search: Calling vector_store.search with filters: {vector_store_filters}"
             )
             results = self.vector_store.search(
                 query=query,
                 vectors=query_embedding,
-                limit=limit,
-                filters=user_filters,  # Includes automatic user_id + project_id + org_id filtering
+                limit=limit * 2 if people_mentioned else limit,  # Get more results if we need to filter
+                filters=vector_store_filters,  # Includes automatic user_id + project_id + org_id filtering
             )
             logger.info(
                 f"🔍 Memory.search: Received {len(results) if results else 0} raw results from vector store"
@@ -416,6 +948,19 @@ class SelfMemory(MemoryBase):
                 results, include_metadata, include_score=True
             )
 
+            # Apply people_mentioned filtering (case-insensitive substring match)
+            if people_mentioned:
+                logger.info(f"🔍 Memory.search: Applying people_mentioned filter: {people_mentioned}")
+                filtered_results = []
+                for result in formatted_results:
+                    metadata = result.get("metadata", {})
+                    stored_people = metadata.get("people_mentioned", "").lower()
+                    # Check if any of the search terms are contained in the stored people string
+                    if any(search_person.lower() in stored_people for search_person in people_mentioned):
+                        filtered_results.append(result)
+                formatted_results = filtered_results
+                logger.info(f"🔍 Memory.search: After people_mentioned filtering: {len(formatted_results)} results")
+
             # Apply threshold filtering if specified
             if threshold is not None:
                 formatted_results = [
@@ -423,6 +968,9 @@ class SelfMemory(MemoryBase):
                     for result in formatted_results
                     if result.get("score", 0) >= threshold
                 ]
+
+            # Apply limit after filtering
+            formatted_results = formatted_results[:limit]
 
             # Apply sorting using helper method
             formatted_results = self._apply_sorting(formatted_results, sort_by)

@@ -1,6 +1,6 @@
 import logging
+import os
 import shutil
-from pathlib import Path
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -31,7 +31,6 @@ class Qdrant(VectorStoreBase):
         url: str = None,
         api_key: str = None,
         on_disk: bool = False,
-        **kwargs,
     ):
         """
         Initialize the Qdrant vector store.
@@ -59,14 +58,13 @@ class Qdrant(VectorStoreBase):
             if host and port:
                 params["host"] = host
                 params["port"] = port
-
+            
             if not params:
                 params["path"] = path
                 self.is_local = True
-                if not on_disk and path:
-                    p = Path(path)
-                    if p.exists() and p.is_dir():
-                        shutil.rmtree(p)
+                if not on_disk:
+                    if os.path.exists(path) and os.path.isdir(path):
+                        shutil.rmtree(path)
             else:
                 self.is_local = False
 
@@ -77,9 +75,7 @@ class Qdrant(VectorStoreBase):
         self.on_disk = on_disk
         self.create_col(embedding_model_dims, on_disk)
 
-    def create_col(
-        self, vector_size: int, on_disk: bool, distance: Distance = Distance.COSINE
-    ):
+    def create_col(self, vector_size: int, on_disk: bool, distance: Distance = Distance.COSINE):
         """
         Create a new collection.
 
@@ -92,17 +88,13 @@ class Qdrant(VectorStoreBase):
         response = self.list_cols()
         for collection in response.collections:
             if collection.name == self.collection_name:
-                logger.debug(
-                    f"Collection {self.collection_name} already exists. Skipping creation."
-                )
+                logger.debug(f"Collection {self.collection_name} already exists. Skipping creation.")
                 self._create_filter_indexes()
                 return
 
         self.client.create_collection(
             collection_name=self.collection_name,
-            vectors_config=VectorParams(
-                size=vector_size, distance=distance, on_disk=on_disk
-            ),
+            vectors_config=VectorParams(size=vector_size, distance=distance, on_disk=on_disk),
         )
         self._create_filter_indexes()
 
@@ -110,33 +102,19 @@ class Qdrant(VectorStoreBase):
         """Create indexes for commonly used filter fields to enable filtering."""
         # Only create payload indexes for remote Qdrant servers
         if self.is_local:
-            logger.debug(
-                "Skipping payload index creation for local Qdrant (not supported)"
-            )
+            logger.debug("Skipping payload index creation for local Qdrant (not supported)")
             return
-
-        common_fields = [
-            "user_id",
-            "project_id",  # Critical for multi-tenant project isolation
-            "organization_id",  # Critical for multi-tenant organization isolation
-            "agent_id",
-            "run_id",
-            "actor_id",
-            "tags",
-            "people_mentioned",
-            "topic_category",
-        ]
-
+            
+        common_fields = ["user_id", "agent_id", "run_id", "actor_id"]
+        
         for field in common_fields:
             try:
                 self.client.create_payload_index(
                     collection_name=self.collection_name,
                     field_name=field,
-                    field_schema="keyword",
+                    field_schema="keyword"
                 )
-                logger.info(
-                    f"Created index for {field} in collection {self.collection_name}"
-                )
+                logger.info(f"Created index for {field} in collection {self.collection_name}")
             except Exception as e:
                 logger.debug(f"Index for {field} might already exist: {e}")
 
@@ -149,9 +127,7 @@ class Qdrant(VectorStoreBase):
             payloads (list, optional): List of payloads corresponding to vectors. Defaults to None.
             ids (list, optional): List of IDs corresponding to vectors. Defaults to None.
         """
-        logger.info(
-            f"Inserting {len(vectors)} vectors into collection {self.collection_name}"
-        )
+        logger.info(f"Inserting {len(vectors)} vectors into collection {self.collection_name}")
         points = [
             PointStruct(
                 id=idx if ids is None else ids[idx],
@@ -173,34 +149,17 @@ class Qdrant(VectorStoreBase):
             Filter: The created Filter object.
         """
         if not filters:
-            logger.info("🔍 Qdrant: No filters provided, returning None")
             return None
-
-        logger.info(f"🔍 Qdrant: Creating filters from: {filters}")
-
+            
         conditions = []
         for key, value in filters.items():
             if isinstance(value, dict) and "gte" in value and "lte" in value:
-                condition = FieldCondition(
-                    key=key, range=Range(gte=value["gte"], lte=value["lte"])
-                )
-                logger.info(
-                    f"🔍 Qdrant: Added range condition: {key} >= {value['gte']} <= {value['lte']}"
-                )
+                conditions.append(FieldCondition(key=key, range=Range(gte=value["gte"], lte=value["lte"])))
             else:
-                condition = FieldCondition(key=key, match=MatchValue(value=value))
-                logger.info(f"🔍 Qdrant: Added match condition: {key} = {value}")
-            conditions.append(condition)
+                conditions.append(FieldCondition(key=key, match=MatchValue(value=value)))
+        return Filter(must=conditions) if conditions else None
 
-        filter_obj = Filter(must=conditions) if conditions else None
-        logger.info(
-            f"🔍 Qdrant: Created filter with {len(conditions)} conditions: {filter_obj}"
-        )
-        return filter_obj
-
-    def search(
-        self, query: str, vectors: list, limit: int = 5, filters: dict = None
-    ) -> list:
+    def search(self, query: str, vectors: list, limit: int = 5, filters: dict = None) -> list:
         """
         Search for similar vectors.
 
@@ -258,9 +217,7 @@ class Qdrant(VectorStoreBase):
         Returns:
             dict: Retrieved vector.
         """
-        result = self.client.retrieve(
-            collection_name=self.collection_name, ids=[vector_id], with_payload=True
-        )
+        result = self.client.retrieve(collection_name=self.collection_name, ids=[vector_id], with_payload=True)
         return result[0] if result else None
 
     def list_cols(self) -> list:
@@ -305,35 +262,6 @@ class Qdrant(VectorStoreBase):
             with_vectors=False,
         )
         return result
-
-    def count(self):
-        """
-        Get count of points in the collection.
-
-        Returns:
-            int: Number of points in collection
-        """
-        try:
-            collection_info = self.client.get_collection(self.collection_name)
-            return collection_info.points_count
-        except Exception as e:
-            logger.error(f"Error getting count: {e}")
-            return 0
-
-    def delete_all(self):
-        """
-        Delete all points from the collection.
-
-        Returns:
-            bool: True if successful
-        """
-        try:
-            # Reset the collection (delete and recreate)
-            self.reset()
-            return True
-        except Exception as e:
-            logger.error(f"Error in delete_all: {e}")
-            return False
 
     def reset(self):
         """Reset the index by deleting and recreating it."""
