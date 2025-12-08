@@ -5,10 +5,10 @@ description = "Enhanced Memory Management for AI Agents with zero-setup simplici
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    {name = "SelfMemory Team", email = "shrijayan@cpluz.com"}
+    {name = "SelfMemory Team"}
 ]
 maintainers = [
-    {name = "SelfMemory Team", email = "shrijayan@cpluz.com"}
+    {name = "SelfMemory Team"}
 ]
 license = "Apache-2.0"
 keywords = [

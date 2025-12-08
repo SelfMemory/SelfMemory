@@ -129,6 +129,41 @@ async def log_requests(request: Request, call_next):
 
 
 # ============================================================================
+# Trailing Slash Handler for MCP (Prevents 307 Redirects)
+# ============================================================================
+
+
+@app.middleware("http")
+async def handle_trailing_slash(request: Request, call_next):
+    """Handle trailing slash for MCP endpoints without 307 redirect.
+    
+    This ensures both /mcp and /mcp/ work seamlessly for SSE clients.
+    FastAPI automatically adds trailing slashes and returns 307 redirects,
+    which breaks SSE streaming. This middleware rewrites the path internally
+    instead of redirecting the client.
+    """
+    path = request.url.path
+    
+    # If path is /mcp (no slash), rewrite it to /mcp/ internally
+    if path == "/mcp" or path.startswith("/mcp?"):
+        # Create new scope with updated path
+        scope = request.scope.copy()
+        scope["path"] = "/mcp/"
+        scope["raw_path"] = b"/mcp/"
+        
+        # Preserve query string if present
+        if "?" in path:
+            query = path.split("?", 1)[1]
+            scope["query_string"] = query.encode()
+        
+        # Create new request with updated scope
+        request = Request(scope, request.receive)
+    
+    response = await call_next(request)
+    return response
+
+
+# ============================================================================
 # OAuth Discovery Endpoints (For OAuth Clients)
 # ============================================================================
 
@@ -526,8 +561,19 @@ async def add(content: str, ctx: Context) -> dict:
             store_start = time.time()
             client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
 
+            # Parse content format (simple string or JSON array)
+            import json
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, list):
+                    messages = parsed
+                else:
+                    messages = [{"role": "user", "content": content}]
+            except (json.JSONDecodeError, ValueError):
+                messages = [{"role": "user", "content": content}]
+
             memory_data = {
-                "messages": [{"role": "user", "content": content}],
+                "messages": messages,
                 "metadata": {"source": "mcp_unified", "project_id": project_id},
             }
 
@@ -538,7 +584,7 @@ async def add(content: str, ctx: Context) -> dict:
 
             store_duration = time.time() - store_start
             store_span.set_attribute("store.duration_ms", store_duration * 1000)
-            store_span.set_attribute("memory.id", result.get("id", ""))
+            store_span.set_attribute("memory.id", result.get("memory_id", result.get("id", "")))
 
             if store_duration > 3.0:
                 logger.warning(f"⚠️  Slow memory storage: {store_duration:.2f}s")
@@ -548,14 +594,9 @@ async def add(content: str, ctx: Context) -> dict:
         span.set_attribute("tool.duration_ms", tool_duration * 1000)
         logger.info(f"✅ Add completed in {tool_duration:.3f}s")
 
-        memory_id = result.get("id")
-        return create_tool_success(
-            {
-                "status": "success",
-                "id": memory_id,
-                "message": "Memory stored successfully",
-            }
-        )
+        # Return full API response (includes operations!)
+        # This matches OpenMemory's approach and provides LLM operation details
+        return result
 
 
 @mcp.tool(

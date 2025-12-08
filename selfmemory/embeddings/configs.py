@@ -1,42 +1,31 @@
-from dataclasses import dataclass
+from typing import Optional
+
+from pydantic import BaseModel, Field, field_validator
 
 
-class BaseEmbedderConfig:
-    """
-    Base configuration class for all embedding providers.
+class EmbedderConfig(BaseModel):
+    provider: str = Field(
+        description="Provider of the embedding model (e.g., 'ollama', 'openai')",
+        default="openai",
+    )
+    config: Optional[dict] = Field(description="Configuration for the specific embedding model", default={})
 
-    This matches  BaseEmbedderConfig pattern.
-    """
-
-    def __init__(
-        self,
-        model: str | None = None,
-        api_key: str | None = None,
-        embedding_dims: int | None = None,
-        # Ollama specific
-        ollama_base_url: str | None = None,
-        # Future providers can add their specific params here
-        **kwargs,
-    ):
-        self.model = model
-        self.api_key = api_key
-        self.embedding_dims = embedding_dims
-
-        # Ollama specific
-        self.ollama_base_url = ollama_base_url or "http://localhost:11434"
-
-        # Store any additional kwargs for future extensibility
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-
-# Keep the dataclass version for backward compatibility if needed
-
-
-@dataclass
-class OllamaEmbedderConfig(BaseEmbedderConfig):
-    """Configuration for Ollama embedding provider."""
-
-    model: str = "nomic-embed-text"
-    embedding_dims: int | None = None
-    ollama_base_url: str = "http://localhost:11434"
+    @field_validator("config")
+    def validate_config(cls, v, values):
+        provider = values.data.get("provider")
+        if provider in [
+            "openai",
+            "ollama",
+            "huggingface",
+            "azure_openai",
+            "gemini",
+            "vertexai",
+            "together",
+            "lmstudio",
+            "langchain",
+            "aws_bedrock",
+            "fastembed",
+        ]:
+            return v
+        else:
+            raise ValueError(f"Unsupported embedding provider: {provider}")

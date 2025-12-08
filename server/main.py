@@ -5,7 +5,7 @@ from bson import ObjectId
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi_csrf_protect import CsrfProtect
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 from pydantic import BaseModel, Field, field_validator
@@ -68,9 +68,19 @@ DEFAULT_CONFIG = {
             "ollama_base_url": config.embedding.OLLAMA_BASE_URL,
         },
     },
+    "llm" : {
+        "provider": "vllm",
+        "config": {
+            "vllm_base_url": config.llm.BASE_URL,
+            "model": config.llm.MODEL,
+            "api_key": config.llm.API_KEY,
+            "temperature": config.llm.TEMPERATURE,
+            "max_tokens": config.llm.MAX_TOKENS,
+        }
+    }
 }
 
-# Global Memory instance (selfmemory style - single instance for all users)
+# Global Memory instance
 MEMORY_INSTANCE = SelfMemory(config=DEFAULT_CONFIG)
 
 # Validate configuration on startup
@@ -90,9 +100,7 @@ config.log_config()
 
 # FastAPI app
 app = FastAPI(
-    title="SelfMemory REST APIs",
-    description="A REST API for managing and searching memories - following selfmemory patterns.",
-    version="1.0.0",
+    title="SelfMemory APIs",
 )
 
 # Add rate limiting to app state
@@ -328,6 +336,7 @@ class SearchRequest(BaseModel):
     user_id: str | None = None
     agent_id: str | None = None
     run_id: str | None = None
+    people_mentioned: str | None = None
     filters: dict[str, Any] | None = None
 
 
@@ -554,7 +563,7 @@ def add_memory(
         )
 
         response = MEMORY_INSTANCE.add(
-            memory_content=memory_content,
+            messages=memory_content,
             user_id=final_project_id,  # Project as session identifier for shared memories
             tags=tags,
             people_mentioned=people_mentioned,
@@ -562,10 +571,40 @@ def add_memory(
             metadata=creator_metadata,
         )
 
-        logging.info(
-            f"✅ Memory created: project={final_project_id}, memory_id={response.get('memory_id')}, creator={user_email}"
-        )
-        return JSONResponse(content=response)
+        # Handle different response formats from _add_with_llm and _add_without_llm
+        if "results" in response:
+            # response from _add_with_llm
+            results = response.get("results", [])
+            if results:
+                # Extract memory ID from first result
+                memory_id = results[0].get("id") if results else None
+                logging.info(
+                    f"✅ Memory created (LLM): project={final_project_id}, memory_id={memory_id}, operations={len(results)}, creator={user_email}"
+                )
+                return JSONResponse(content={
+                    "success": True,
+                    "memory_id": memory_id,
+                    "operations": results,
+                    "message": f"Memory processed with {len(results)} operations"
+                })
+            else:
+                # Empty results - no changes needed, this is a valid scenario
+                logging.info(
+                    f"✅ LLM determined no memory changes needed for project={final_project_id}, creator={user_email}"
+                )
+                return JSONResponse(content={
+                    "success": True,
+                    "message": "No memory changes required - content already adequately captured",
+                    "operations": [],
+                    "memory_id": None
+                })
+        else:
+            # Standard response from _add_without_llm
+            memory_id = response.get("memory_id")
+            logging.info(
+                f"✅ Memory created: project={final_project_id}, memory_id={memory_id}, creator={user_email}"
+            )
+            return JSONResponse(content=response)
     except HTTPException:
         raise
     except Exception as e:
@@ -770,11 +809,16 @@ def search_memories(
         params = {
             k: v
             for k, v in search_req.model_dump().items()
-            if v is not None and k not in ["query", "filters"]
+            if v is not None and k not in ["query", "filters", "people_mentioned"]
         }
 
         # Project as session identifier for shared memory search
         params["user_id"] = final_project_id
+
+        # Handle top-level people_mentioned field
+        if search_req.people_mentioned:
+            # Convert string to list for the search method
+            params["people_mentioned"] = [search_req.people_mentioned]
 
         # Handle filters parameter by extracting supported filter options
         if search_req.filters:
@@ -803,6 +847,9 @@ def search_memories(
                     ):
                         # Keep as list - Memory.search() expects list
                         params[filter_key] = filter_value
+                    elif filter_key == "people_mentioned" and isinstance(filter_value, str):
+                        # Convert string to list for people_mentioned
+                        params[filter_key] = [filter_value]
                     else:
                         params[filter_key] = filter_value
 
@@ -1588,31 +1635,28 @@ def readiness_probe():
         )
 
 
-@app.post("/reset", summary="Reset all memories")
-def reset_memory():
-    """Completely reset stored memories (selfmemory style)."""
-    try:
-        MEMORY_INSTANCE.reset()
-        return {"message": "All memories reset"}
-    except Exception as e:
-        logging.exception("Error in reset_memory:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+# @app.post("/reset", summary="Reset all memories")
+# def reset_memory():
+#     """Completely reset stored memories (selfmemory style)."""
+#     try:
+#         MEMORY_INSTANCE.reset()
+#         return {"message": "All memories reset"}
+#     except Exception as e:
+#         logging.exception("Error in reset_memory:")
+#         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.get("/", summary="Redirect to docs")
-def home():
-    """Redirect to the OpenAPI documentation."""
-    return RedirectResponse(url="/docs")
+# @app.get("/", summary="Redirect to docs")
+# def home():
+#     """Redirect to the OpenAPI documentation."""
+#     return RedirectResponse(url="/docs")
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    logging.info("Starting SelfMemory Server...")
+    logging.info("Starting SelfMemory Backend Server")
     logging.info(f"API available at: http://{config.server.HOST}:{config.server.PORT}/")
-    logging.info(
-        f"Documentation: http://{config.server.HOST}:{config.server.PORT}/docs"
-    )
 
     uvicorn.run(
         app,

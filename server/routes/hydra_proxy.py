@@ -234,6 +234,22 @@ async def get_consent_request(
                 except Exception as e:
                     logger.error(f"Error fetching client scopes: {e}")
 
+            # CRITICAL: Always ensure memory scopes are included (required for MCP tools)
+            # This matches the behavior in Dynamic Client Registration
+            required_memory_scopes = ["memories:read", "memories:write"]
+            scopes_added = []
+            for scope in required_memory_scopes:
+                if scope not in requested_scopes:
+                    requested_scopes.append(scope)
+                    scopes_added.append(scope)
+
+            if scopes_added:
+                logger.info(
+                    f"➕ Added required memory scopes to consent: {scopes_added}"
+                )
+                # Update consent_data so frontend displays all scopes
+                consent_data["requested_scope"] = requested_scopes
+
             # Enrich scope metadata with descriptions
             consent_data["scope_metadata"] = enrich_scope_metadata(requested_scopes)
 
