@@ -2,19 +2,19 @@ import logging
 import os
 import pickle
 import uuid
+import warnings
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import numpy as np
 from pydantic import BaseModel
 
-import warnings
-
 try:
     # Suppress SWIG deprecation warnings from FAISS
     warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*SwigPy.*")
-    warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*swigvarlink.*")
-    
+    warnings.filterwarnings(
+        "ignore", category=DeprecationWarning, message=".*swigvarlink.*"
+    )
+
     logging.getLogger("faiss").setLevel(logging.WARNING)
     logging.getLogger("faiss.loader").setLevel(logging.WARNING)
 
@@ -32,16 +32,16 @@ logger = logging.getLogger(__name__)
 
 
 class OutputData(BaseModel):
-    id: Optional[str]  # memory id
-    score: Optional[float]  # distance
-    payload: Optional[Dict]  # metadata
+    id: str | None  # memory id
+    score: float | None  # distance
+    payload: dict | None  # metadata
 
 
 class FAISS(VectorStoreBase):
     def __init__(
         self,
         collection_name: str,
-        path: Optional[str] = None,
+        path: str | None = None,
         distance_strategy: str = "euclidean",
         normalize_L2: bool = False,
         embedding_model_dims: int = 1536,
@@ -92,7 +92,9 @@ class FAISS(VectorStoreBase):
             self.index = faiss.read_index(index_path)
             with open(docstore_path, "rb") as f:
                 self.docstore, self.index_to_id = pickle.load(f)
-            logger.info(f"Loaded FAISS index from {index_path} with {self.index.ntotal} vectors")
+            logger.info(
+                f"Loaded FAISS index from {index_path} with {self.index.ntotal} vectors"
+            )
         except Exception as e:
             logger.warning(f"Failed to load FAISS index: {e}")
 
@@ -115,7 +117,7 @@ class FAISS(VectorStoreBase):
         except Exception as e:
             logger.warning(f"Failed to save FAISS index: {e}")
 
-    def _parse_output(self, scores, ids, limit=None) -> List[OutputData]:
+    def _parse_output(self, scores, ids, limit=None) -> list[OutputData]:
         """
         Parse the output data.
 
@@ -171,7 +173,10 @@ class FAISS(VectorStoreBase):
         distance_strategy = distance or self.distance_strategy
 
         # Create index based on distance strategy
-        if distance_strategy.lower() == "inner_product" or distance_strategy.lower() == "cosine":
+        if (
+            distance_strategy.lower() == "inner_product"
+            or distance_strategy.lower() == "cosine"
+        ):
             self.index = faiss.IndexFlatIP(self.embedding_model_dims)
         else:
             self.index = faiss.IndexFlatL2(self.embedding_model_dims)
@@ -184,9 +189,9 @@ class FAISS(VectorStoreBase):
 
     def insert(
         self,
-        vectors: List[list],
-        payloads: Optional[List[Dict]] = None,
-        ids: Optional[List[str]] = None,
+        vectors: list[list],
+        payloads: list[dict] | None = None,
+        ids: list[str] | None = None,
     ):
         """
         Insert vectors into a collection.
@@ -216,17 +221,23 @@ class FAISS(VectorStoreBase):
         self.index.add(vectors_np)
 
         starting_idx = len(self.index_to_id)
-        for i, (vector_id, payload) in enumerate(zip(ids, payloads)):
+        for i, (vector_id, payload) in enumerate(zip(ids, payloads, strict=False)):
             self.docstore[vector_id] = payload.copy()
             self.index_to_id[starting_idx + i] = vector_id
 
         self._save()
 
-        logger.info(f"Inserted {len(vectors)} vectors into collection {self.collection_name}")
+        logger.info(
+            f"Inserted {len(vectors)} vectors into collection {self.collection_name}"
+        )
 
     def search(
-        self, query: str, vectors: List[list], limit: int = 5, filters: Optional[Dict] = None
-    ) -> List[OutputData]:
+        self,
+        query: str,
+        vectors: list[list],
+        limit: int = 5,
+        filters: dict | None = None,
+    ) -> list[OutputData]:
         """
         Search for similar vectors.
 
@@ -266,7 +277,7 @@ class FAISS(VectorStoreBase):
 
         return results
 
-    def _apply_filters(self, payload: Dict, filters: Dict) -> bool:
+    def _apply_filters(self, payload: dict, filters: dict) -> bool:
         """
         Apply filters to a payload.
 
@@ -314,15 +325,19 @@ class FAISS(VectorStoreBase):
 
             self._save()
 
-            logger.info(f"Deleted vector {vector_id} from collection {self.collection_name}")
+            logger.info(
+                f"Deleted vector {vector_id} from collection {self.collection_name}"
+            )
         else:
-            logger.warning(f"Vector {vector_id} not found in collection {self.collection_name}")
+            logger.warning(
+                f"Vector {vector_id} not found in collection {self.collection_name}"
+            )
 
     def update(
         self,
         vector_id: str,
-        vector: Optional[List[float]] = None,
-        payload: Optional[Dict] = None,
+        vector: list[float] | None = None,
+        payload: dict | None = None,
     ):
         """
         Update a vector and its payload.
@@ -376,7 +391,7 @@ class FAISS(VectorStoreBase):
             payload=payload,
         )
 
-    def list_cols(self) -> List[str]:
+    def list_cols(self) -> list[str]:
         """
         List all collections.
 
@@ -418,7 +433,7 @@ class FAISS(VectorStoreBase):
         self.docstore = {}
         self.index_to_id = {}
 
-    def col_info(self) -> Dict:
+    def col_info(self) -> dict:
         """
         Get information about a collection.
 
@@ -435,7 +450,7 @@ class FAISS(VectorStoreBase):
             "distance": self.distance_strategy,
         }
 
-    def list(self, filters: Optional[Dict] = None, limit: int = 100) -> List[OutputData]:
+    def list(self, filters: dict | None = None, limit: int = 100) -> list[OutputData]:
         """
         List all vectors in a collection.
 

@@ -1,5 +1,4 @@
 import logging
-from typing import Dict, Optional
 
 from pydantic import BaseModel
 
@@ -9,7 +8,9 @@ from selfmemory.vector_stores.base import VectorStoreBase
 try:
     import pymilvus  # noqa: F401
 except ImportError:
-    raise ImportError("The 'pymilvus' library is required. Please install it using 'pip install pymilvus'.")
+    raise ImportError(
+        "The 'pymilvus' library is required. Please install it using 'pip install pymilvus'."
+    )
 
 from pymilvus import CollectionSchema, DataType, FieldSchema, MilvusClient
 
@@ -17,9 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 class OutputData(BaseModel):
-    id: Optional[str]  # memory id
-    score: Optional[float]  # distance
-    payload: Optional[Dict]  # metadata
+    id: str | None  # memory id
+    score: float | None  # distance
+    payload: dict | None  # metadata
 
 
 class MilvusDB(VectorStoreBase):
@@ -67,22 +68,33 @@ class MilvusDB(VectorStoreBase):
         """
 
         if self.client.has_collection(collection_name):
-            logger.info(f"Collection {collection_name} already exists. Skipping creation.")
+            logger.info(
+                f"Collection {collection_name} already exists. Skipping creation."
+            )
         else:
             fields = [
-                FieldSchema(name="id", dtype=DataType.VARCHAR, is_primary=True, max_length=512),
-                FieldSchema(name="vectors", dtype=DataType.FLOAT_VECTOR, dim=vector_size),
+                FieldSchema(
+                    name="id", dtype=DataType.VARCHAR, is_primary=True, max_length=512
+                ),
+                FieldSchema(
+                    name="vectors", dtype=DataType.FLOAT_VECTOR, dim=vector_size
+                ),
                 FieldSchema(name="metadata", dtype=DataType.JSON),
             ]
 
             schema = CollectionSchema(fields, enable_dynamic_field=True)
 
             index = self.client.prepare_index_params(
-                field_name="vectors", metric_type=metric_type, index_type="AUTOINDEX", index_name="vector_index"
+                field_name="vectors",
+                metric_type=metric_type,
+                index_type="AUTOINDEX",
+                index_name="vector_index",
             )
-            self.client.create_collection(collection_name=collection_name, schema=schema, index_params=index)
+            self.client.create_collection(
+                collection_name=collection_name, schema=schema, index_params=index
+            )
 
-    def insert(self, ids, vectors, payloads, **kwargs: Optional[dict[str, any]]):
+    def insert(self, ids, vectors, payloads, **kwargs: dict[str, any] | None):
         """Insert vectors into a collection.
 
         Args:
@@ -93,7 +105,7 @@ class MilvusDB(VectorStoreBase):
         # Batch insert all records at once for better performance and consistency
         data = [
             {"id": idx, "vectors": embedding, "metadata": metadata}
-            for idx, embedding, metadata in zip(ids, vectors, payloads)
+            for idx, embedding, metadata in zip(ids, vectors, payloads, strict=False)
         ]
         self.client.insert(collection_name=self.collection_name, data=data, **kwargs)
 
@@ -139,7 +151,9 @@ class MilvusDB(VectorStoreBase):
 
         return memory
 
-    def search(self, query: str, vectors: list, limit: int = 5, filters: dict = None) -> list:
+    def search(
+        self, query: str, vectors: list, limit: int = 5, filters: dict = None
+    ) -> list:
         """
         Search for similar vectors.
 
@@ -236,10 +250,14 @@ class MilvusDB(VectorStoreBase):
             List[OutputData]: List of vectors.
         """
         query_filter = self._create_filter(filters) if filters else None
-        result = self.client.query(collection_name=self.collection_name, filter=query_filter, limit=limit)
+        result = self.client.query(
+            collection_name=self.collection_name, filter=query_filter, limit=limit
+        )
         memories = []
         for data in result:
-            obj = OutputData(id=data.get("id"), score=None, payload=data.get("metadata"))
+            obj = OutputData(
+                id=data.get("id"), score=None, payload=data.get("metadata")
+            )
             memories.append(obj)
         return [memories]
 
@@ -247,4 +265,6 @@ class MilvusDB(VectorStoreBase):
         """Reset the index by deleting and recreating it."""
         logger.warning(f"Resetting index {self.collection_name}...")
         self.delete_col()
-        self.create_col(self.collection_name, self.embedding_model_dims, self.metric_type)
+        self.create_col(
+            self.collection_name, self.embedding_model_dims, self.metric_type
+        )

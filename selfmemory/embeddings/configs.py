@@ -1,5 +1,3 @@
-from typing import Optional
-
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -8,7 +6,9 @@ class EmbedderConfig(BaseModel):
         description="Provider of the embedding model (e.g., 'ollama', 'openai')",
         default="openai",
     )
-    config: Optional[dict] = Field(description="Configuration for the specific embedding model", default={})
+    config: dict | None = Field(
+        description="Configuration for the specific embedding model", default={}
+    )
 
     @field_validator("config")
     def validate_config(cls, v, values):
@@ -27,5 +27,4 @@ class EmbedderConfig(BaseModel):
             "fastembed",
         ]:
             return v
-        else:
-            raise ValueError(f"Unsupported embedding provider: {provider}")
+        raise ValueError(f"Unsupported embedding provider: {provider}")

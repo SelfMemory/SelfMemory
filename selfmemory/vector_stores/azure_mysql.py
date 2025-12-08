@@ -1,14 +1,14 @@
 import json
 import logging
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
 try:
     import pymysql
-    from pymysql.cursors import DictCursor
     from dbutils.pooled_db import PooledDB
+    from pymysql.cursors import DictCursor
 except ImportError:
     raise ImportError(
         "Azure MySQL vector store requires PyMySQL and DBUtils. "
@@ -17,6 +17,7 @@ except ImportError:
 
 try:
     from azure.identity import DefaultAzureCredential
+
     AZURE_IDENTITY_AVAILABLE = True
 except ImportError:
     AZURE_IDENTITY_AVAILABLE = False
@@ -27,9 +28,9 @@ logger = logging.getLogger(__name__)
 
 
 class OutputData(BaseModel):
-    id: Optional[str]
-    score: Optional[float]
-    payload: Optional[dict]
+    id: str | None
+    score: float | None
+    payload: dict | None
 
 
 class AzureMySQL(VectorStoreBase):
@@ -38,16 +39,16 @@ class AzureMySQL(VectorStoreBase):
         host: str,
         port: int,
         user: str,
-        password: Optional[str],
+        password: str | None,
         database: str,
         collection_name: str,
         embedding_model_dims: int,
         use_azure_credential: bool = False,
-        ssl_ca: Optional[str] = None,
+        ssl_ca: str | None = None,
         ssl_disabled: bool = False,
         minconn: int = 1,
         maxconn: int = 5,
-        connection_pool: Optional[Any] = None,
+        connection_pool: Any | None = None,
     ):
         """
         Initialize the Azure MySQL vector store.
@@ -95,14 +96,20 @@ class AzureMySQL(VectorStoreBase):
         # Create collection if it doesn't exist
         collections = self.list_cols()
         if collection_name not in collections:
-            self.create_col(name=collection_name, vector_size=embedding_model_dims, distance="cosine")
+            self.create_col(
+                name=collection_name,
+                vector_size=embedding_model_dims,
+                distance="cosine",
+            )
 
     def _setup_azure_auth(self):
         """Setup Azure authentication using DefaultAzureCredential."""
         try:
             credential = DefaultAzureCredential()
             # Get access token for Azure Database for MySQL
-            token = credential.get_token("https://ossrdbms-aad.database.windows.net/.default")
+            token = credential.get_token(
+                "https://ossrdbms-aad.database.windows.net/.default"
+            )
             # Use token as password
             self.password = token.token
             logger.info("Successfully authenticated using Azure DefaultAzureCredential")
@@ -137,7 +144,7 @@ class AzureMySQL(VectorStoreBase):
                 maxcached=maxconn,
                 maxconnections=maxconn,
                 blocking=True,
-                **connect_kwargs
+                **connect_kwargs,
             )
             logger.info("Successfully created MySQL connection pool")
         except Exception as e:
@@ -164,7 +171,9 @@ class AzureMySQL(VectorStoreBase):
             cur.close()
             conn.close()
 
-    def create_col(self, name: str = None, vector_size: int = None, distance: str = "cosine"):
+    def create_col(
+        self, name: str = None, vector_size: int = None, distance: str = "cosine"
+    ):
         """
         Create a new collection (table in MySQL).
         Enables vector extension and creates appropriate indexes.
@@ -187,9 +196,16 @@ class AzureMySQL(VectorStoreBase):
                     INDEX idx_payload_keys ((CAST(payload AS CHAR(255)) ARRAY))
                 )
             """)
-            logger.info(f"Created collection '{table_name}' with vector dimension {dims}")
+            logger.info(
+                f"Created collection '{table_name}' with vector dimension {dims}"
+            )
 
-    def insert(self, vectors: List[List[float]], payloads: Optional[List[Dict]] = None, ids: Optional[List[str]] = None):
+    def insert(
+        self,
+        vectors: list[list[float]],
+        payloads: list[dict] | None = None,
+        ids: list[str] | None = None,
+    ):
         """
         Insert vectors into the collection.
 
@@ -198,26 +214,29 @@ class AzureMySQL(VectorStoreBase):
             payloads (List[Dict], optional): List of payloads corresponding to vectors
             ids (List[str], optional): List of IDs corresponding to vectors
         """
-        logger.info(f"Inserting {len(vectors)} vectors into collection {self.collection_name}")
+        logger.info(
+            f"Inserting {len(vectors)} vectors into collection {self.collection_name}"
+        )
 
         if payloads is None:
             payloads = [{}] * len(vectors)
         if ids is None:
             import uuid
+
             ids = [str(uuid.uuid4()) for _ in range(len(vectors))]
 
         data = []
-        for vector, payload, vec_id in zip(vectors, payloads, ids):
+        for vector, payload, vec_id in zip(vectors, payloads, ids, strict=False):
             data.append((vec_id, json.dumps(vector), json.dumps(payload)))
 
         with self._get_cursor(commit=True) as cur:
             cur.executemany(
                 f"INSERT INTO `{self.collection_name}` (id, vector, payload) VALUES (%s, %s, %s) "
                 f"ON DUPLICATE KEY UPDATE vector = VALUES(vector), payload = VALUES(payload)",
-                data
+                data,
             )
 
-    def _cosine_distance(self, vec1_json: str, vec2: List[float]) -> str:
+    def _cosine_distance(self, vec1_json: str, vec2: list[float]) -> str:
         """Generate SQL for cosine distance calculation."""
         # For MySQL, we need to calculate cosine similarity manually
         # This is a simplified version - in production, you'd use stored procedures or UDFs
@@ -242,10 +261,10 @@ class AzureMySQL(VectorStoreBase):
     def search(
         self,
         query: str,
-        vectors: List[float],
+        vectors: list[float],
         limit: int = 5,
-        filters: Optional[Dict] = None,
-    ) -> List[OutputData]:
+        filters: dict | None = None,
+    ) -> list[OutputData]:
         """
         Search for similar vectors using cosine similarity.
 
@@ -266,7 +285,9 @@ class AzureMySQL(VectorStoreBase):
                 filter_conditions.append("JSON_EXTRACT(payload, %s) = %s")
                 filter_params.extend([f"$.{k}", json.dumps(v)])
 
-        filter_clause = "WHERE " + " AND ".join(filter_conditions) if filter_conditions else ""
+        filter_clause = (
+            "WHERE " + " AND ".join(filter_conditions) if filter_conditions else ""
+        )
 
         # For simplicity, we'll compute cosine similarity in Python
         # In production, you'd want to use MySQL stored procedures or UDFs
@@ -281,22 +302,29 @@ class AzureMySQL(VectorStoreBase):
 
         # Calculate cosine similarity in Python
         import numpy as np
+
         query_vec = np.array(vectors)
         scored_results = []
 
         for row in results:
-            vec = np.array(json.loads(row['vector']))
+            vec = np.array(json.loads(row["vector"]))
             # Cosine similarity
-            similarity = np.dot(query_vec, vec) / (np.linalg.norm(query_vec) * np.linalg.norm(vec))
+            similarity = np.dot(query_vec, vec) / (
+                np.linalg.norm(query_vec) * np.linalg.norm(vec)
+            )
             distance = 1 - similarity
-            scored_results.append((row['id'], distance, row['payload']))
+            scored_results.append((row["id"], distance, row["payload"]))
 
         # Sort by distance and limit
         scored_results.sort(key=lambda x: x[1])
         scored_results = scored_results[:limit]
 
         return [
-            OutputData(id=r[0], score=float(r[1]), payload=json.loads(r[2]) if isinstance(r[2], str) else r[2])
+            OutputData(
+                id=r[0],
+                score=float(r[1]),
+                payload=json.loads(r[2]) if isinstance(r[2], str) else r[2],
+            )
             for r in scored_results
         ]
 
@@ -308,13 +336,15 @@ class AzureMySQL(VectorStoreBase):
             vector_id (str): ID of the vector to delete
         """
         with self._get_cursor(commit=True) as cur:
-            cur.execute(f"DELETE FROM `{self.collection_name}` WHERE id = %s", (vector_id,))
+            cur.execute(
+                f"DELETE FROM `{self.collection_name}` WHERE id = %s", (vector_id,)
+            )
 
     def update(
         self,
         vector_id: str,
-        vector: Optional[List[float]] = None,
-        payload: Optional[Dict] = None,
+        vector: list[float] | None = None,
+        payload: dict | None = None,
     ):
         """
         Update a vector and its payload.
@@ -336,7 +366,7 @@ class AzureMySQL(VectorStoreBase):
                     (json.dumps(payload), vector_id),
                 )
 
-    def get(self, vector_id: str) -> Optional[OutputData]:
+    def get(self, vector_id: str) -> OutputData | None:
         """
         Retrieve a vector by ID.
 
@@ -355,12 +385,14 @@ class AzureMySQL(VectorStoreBase):
             if not result:
                 return None
             return OutputData(
-                id=result['id'],
+                id=result["id"],
                 score=None,
-                payload=json.loads(result['payload']) if isinstance(result['payload'], str) else result['payload']
+                payload=json.loads(result["payload"])
+                if isinstance(result["payload"], str)
+                else result["payload"],
             )
 
-    def list_cols(self) -> List[str]:
+    def list_cols(self) -> list[str]:
         """
         List all collections (tables).
 
@@ -377,7 +409,7 @@ class AzureMySQL(VectorStoreBase):
             cur.execute(f"DROP TABLE IF EXISTS `{self.collection_name}`")
         logger.info(f"Deleted collection '{self.collection_name}'")
 
-    def col_info(self) -> Dict[str, Any]:
+    def col_info(self) -> dict[str, Any]:
         """
         Get information about the collection.
 
@@ -385,29 +417,30 @@ class AzureMySQL(VectorStoreBase):
             Dict[str, Any]: Collection information
         """
         with self._get_cursor() as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT
                     TABLE_NAME as name,
                     TABLE_ROWS as count,
                     ROUND(((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024), 2) as size_mb
                 FROM information_schema.TABLES
                 WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
-            """, (self.database, self.collection_name))
+            """,
+                (self.database, self.collection_name),
+            )
             result = cur.fetchone()
 
         if result:
             return {
-                "name": result['name'],
-                "count": result['count'],
-                "size": f"{result['size_mb']} MB"
+                "name": result["name"],
+                "count": result["count"],
+                "size": f"{result['size_mb']} MB",
             }
         return {}
 
     def list(
-        self,
-        filters: Optional[Dict] = None,
-        limit: int = 100
-    ) -> List[List[OutputData]]:
+        self, filters: dict | None = None, limit: int = 100
+    ) -> list[list[OutputData]]:
         """
         List all vectors in the collection.
 
@@ -426,7 +459,9 @@ class AzureMySQL(VectorStoreBase):
                 filter_conditions.append("JSON_EXTRACT(payload, %s) = %s")
                 filter_params.extend([f"$.{k}", json.dumps(v)])
 
-        filter_clause = "WHERE " + " AND ".join(filter_conditions) if filter_conditions else ""
+        filter_clause = (
+            "WHERE " + " AND ".join(filter_conditions) if filter_conditions else ""
+        )
 
         with self._get_cursor() as cur:
             cur.execute(
@@ -436,28 +471,35 @@ class AzureMySQL(VectorStoreBase):
                 {filter_clause}
                 LIMIT %s
                 """,
-                (*filter_params, limit)
+                (*filter_params, limit),
             )
             results = cur.fetchall()
 
-        return [[
-            OutputData(
-                id=r['id'],
-                score=None,
-                payload=json.loads(r['payload']) if isinstance(r['payload'], str) else r['payload']
-            ) for r in results
-        ]]
+        return [
+            [
+                OutputData(
+                    id=r["id"],
+                    score=None,
+                    payload=json.loads(r["payload"])
+                    if isinstance(r["payload"], str)
+                    else r["payload"],
+                )
+                for r in results
+            ]
+        ]
 
     def reset(self):
         """Reset the collection by deleting and recreating it."""
         logger.warning(f"Resetting collection {self.collection_name}...")
         self.delete_col()
-        self.create_col(name=self.collection_name, vector_size=self.embedding_model_dims)
+        self.create_col(
+            name=self.collection_name, vector_size=self.embedding_model_dims
+        )
 
     def __del__(self):
         """Close the connection pool when the object is deleted."""
         try:
-            if hasattr(self, 'connection_pool') and self.connection_pool:
+            if hasattr(self, "connection_pool") and self.connection_pool:
                 self.connection_pool.close()
         except Exception:
             pass

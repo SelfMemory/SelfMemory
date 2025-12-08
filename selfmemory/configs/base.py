@@ -134,8 +134,12 @@ class SelfMemoryConfig(BaseModel):
 
     # auth: AuthConfig = Field(default_factory=AuthConfig)
     vector_store: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
-    embedding: EmbedderConfig = Field(default_factory=EmbedderConfig, description="Embedding configuration")
-    llm: LlmConfig | None = Field(default=None, description="Optional LLM for intelligent memory extraction")
+    embedding: EmbedderConfig = Field(
+        default_factory=EmbedderConfig, description="Embedding configuration"
+    )
+    llm: LlmConfig | None = Field(
+        default=None, description="Optional LLM for intelligent memory extraction"
+    )
     server: ServerConfig = Field(default_factory=ServerConfig)
 
     # history_db_path: str = Field(
@@ -314,9 +318,15 @@ class AzureConfig(BaseModel):
         description="The API key used for authenticating with the Azure service.",
         default=None,
     )
-    azure_deployment: str = Field(description="The name of the Azure deployment.", default=None)
-    azure_endpoint: str = Field(description="The endpoint URL for the Azure service.", default=None)
-    api_version: str = Field(description="The version of the Azure API being used.", default=None)
+    azure_deployment: str = Field(
+        description="The name of the Azure deployment.", default=None
+    )
+    azure_endpoint: str = Field(
+        description="The endpoint URL for the Azure service.", default=None
+    )
+    api_version: str = Field(
+        description="The version of the Azure API being used.", default=None
+    )
     default_headers: dict[str, str] | None = Field(
         description="Headers to include in requests to the Azure API.", default=None
     )

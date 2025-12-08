@@ -1,6 +1,5 @@
 import os
 from abc import ABC
-from typing import Dict, Optional, Union
 
 import httpx
 
@@ -14,32 +13,32 @@ class BaseEmbedderConfig(ABC):
 
     def __init__(
         self,
-        model: Optional[str] = None,
-        api_key: Optional[str] = None,
-        embedding_dims: Optional[int] = None,
+        model: str | None = None,
+        api_key: str | None = None,
+        embedding_dims: int | None = None,
         # Ollama specific
-        ollama_base_url: Optional[str] = None,
+        ollama_base_url: str | None = None,
         # Openai specific
-        openai_base_url: Optional[str] = None,
+        openai_base_url: str | None = None,
         # Huggingface specific
-        model_kwargs: Optional[dict] = None,
-        huggingface_base_url: Optional[str] = None,
+        model_kwargs: dict | None = None,
+        huggingface_base_url: str | None = None,
         # AzureOpenAI specific
-        azure_kwargs: Optional[AzureConfig] = {},
-        http_client_proxies: Optional[Union[Dict, str]] = None,
+        azure_kwargs: AzureConfig | None = {},
+        http_client_proxies: dict | str | None = None,
         # VertexAI specific
-        vertex_credentials_json: Optional[str] = None,
-        memory_add_embedding_type: Optional[str] = None,
-        memory_update_embedding_type: Optional[str] = None,
-        memory_search_embedding_type: Optional[str] = None,
+        vertex_credentials_json: str | None = None,
+        memory_add_embedding_type: str | None = None,
+        memory_update_embedding_type: str | None = None,
+        memory_search_embedding_type: str | None = None,
         # Gemini specific
-        output_dimensionality: Optional[str] = None,
+        output_dimensionality: str | None = None,
         # LM Studio specific
-        lmstudio_base_url: Optional[str] = "http://localhost:1234/v1",
+        lmstudio_base_url: str | None = "http://localhost:1234/v1",
         # AWS Bedrock specific
-        aws_access_key_id: Optional[str] = None,
-        aws_secret_access_key: Optional[str] = None,
-        aws_region: Optional[str] = None,
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
+        aws_region: str | None = None,
     ):
         """
         Initializes a configuration class instance for the Embeddings.
@@ -80,7 +79,9 @@ class BaseEmbedderConfig(ABC):
         self.embedding_dims = embedding_dims
 
         # AzureOpenAI specific
-        self.http_client = httpx.Client(proxies=http_client_proxies) if http_client_proxies else None
+        self.http_client = (
+            httpx.Client(proxies=http_client_proxies) if http_client_proxies else None
+        )
 
         # Ollama specific
         self.ollama_base_url = ollama_base_url
@@ -107,4 +108,3 @@ class BaseEmbedderConfig(ABC):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_region = aws_region or os.environ.get("AWS_REGION") or "us-west-2"
-

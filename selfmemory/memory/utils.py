@@ -282,36 +282,36 @@ def build_search_filters(
 
     return effective_filters
 
+
 import re
 
 from selfmemory.configs.prompts import (
-    USER_MEMORY_EXTRACTION_PROMPT,
     AGENT_MEMORY_EXTRACTION_PROMPT,
+    USER_MEMORY_EXTRACTION_PROMPT,
 )
 
 
 def get_fact_retrieval_messages(message, is_agent_memory=False):
     """Get fact retrieval messages based on the memory type.
-    
+
     Args:
         message: The message content to extract facts from
         is_agent_memory: If True, use agent memory extraction prompt, else use user memory extraction prompt
-        
+
     Returns:
         tuple: (system_prompt, user_prompt)
     """
     if is_agent_memory:
         return AGENT_MEMORY_EXTRACTION_PROMPT, f"Input:\n{message}"
-    else:
-        return USER_MEMORY_EXTRACTION_PROMPT, f"Input:\n{message}"
+    return USER_MEMORY_EXTRACTION_PROMPT, f"Input:\n{message}"
 
 
 def parse_messages(messages):
     """Parse message list into formatted string for LLM processing.
-    
+
     Args:
         messages: List of message dictionaries with 'role' and 'content' keys
-        
+
     Returns:
         str: Formatted message string
     """
@@ -328,10 +328,10 @@ def parse_messages(messages):
 
 def remove_code_blocks(content: str) -> str:
     """Remove enclosing code block markers from LLM responses.
-    
+
     Args:
         content: String potentially containing code block markers
-        
+
     Returns:
         str: Cleaned content without code block markers
     """
@@ -343,10 +343,10 @@ def remove_code_blocks(content: str) -> str:
 
 def extract_json(text):
     """Extract JSON content from string, removing code block markers if present.
-    
+
     Args:
         text: String potentially containing JSON in code blocks
-        
+
     Returns:
         str: Extracted JSON string
     """
@@ -370,8 +370,8 @@ def build_filters_and_metadata(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Build metadata for storage and filters for querying based on project-based session identifiers.
-    
-    Adapted from mem0's _build_filters_and_metadata but enhanced for SelfMemory's 
+
+    Adapted from mem0's _build_filters_and_metadata but enhanced for SelfMemory's
     superior project-based multi-tenant architecture.
 
     This helper supports SelfMemory's session identifiers (user_id, project_id, organization_id)
@@ -379,7 +379,7 @@ def build_filters_and_metadata(
 
     Args:
         user_id: User identifier for individual user context
-        project_id: Project identifier for project-level isolation  
+        project_id: Project identifier for project-level isolation
         organization_id: Organization identifier for org-level isolation
         actor_id: Explicit actor identifier for actor-specific filtering
         input_metadata: Base metadata to be augmented with session identifiers
@@ -396,16 +396,16 @@ def build_filters_and_metadata(
     Examples:
         Basic user isolation:
         >>> metadata, filters = build_filters_and_metadata(user_id="alice")
-        
+
         Project-based isolation (recommended):
         >>> metadata, filters = build_filters_and_metadata(
-        ...     user_id="alice", 
-        ...     project_id="proj_123", 
+        ...     user_id="alice",
+        ...     project_id="proj_123",
         ...     organization_id="org_456"
         ... )
     """
     from copy import deepcopy
-    
+
     base_metadata_template = deepcopy(input_metadata) if input_metadata else {}
     effective_query_filters = deepcopy(input_filters) if input_filters else {}
 
@@ -453,7 +453,7 @@ def build_filters_and_metadata(
         context_info += f", project={project_id}, org={organization_id}"
     if resolved_actor_id:
         context_info += f", actor={resolved_actor_id}"
-    
+
     logger.debug(f"Built session context: {context_info}")
 
     return base_metadata_template, effective_query_filters
@@ -466,12 +466,12 @@ def map_to_mem0_session(
 ) -> dict[str, str]:
     """
     Map SelfMemory's project-based session identifiers to mem0's session format.
-    
+
     This provides compatibility with mem0's expected session format while preserving
     SelfMemory's superior multi-tenant architecture.
 
     Args:
-        user_id: SelfMemory user identifier  
+        user_id: SelfMemory user identifier
         project_id: SelfMemory project identifier (becomes mem0's user_id)
         organization_id: SelfMemory organization identifier (preserved as metadata)
 
@@ -480,9 +480,9 @@ def map_to_mem0_session(
 
     Examples:
         Project-based mapping (recommended):
-        >>> session = map_to_mem0_session("alice", "proj_123", "org_456") 
+        >>> session = map_to_mem0_session("alice", "proj_123", "org_456")
         >>> # Returns: {"user_id": "proj_123", "agent_id": "alice", "run_id": "alice_proj_123"}
-        
+
         User-only mapping (fallback):
         >>> session = map_to_mem0_session("alice")
         >>> # Returns: {"user_id": "alice", "agent_id": None, "run_id": None}
@@ -490,17 +490,12 @@ def map_to_mem0_session(
     if project_id and organization_id:
         # Project-based mapping: Project becomes mem0's "user", real user becomes "agent"
         return {
-            "user_id": project_id,                           # Project → mem0 user_id
-            "agent_id": user_id,                            # Real user → mem0 agent_id  
-            "run_id": f"{user_id}_{project_id}",           # Session context
-            "organization_id": organization_id,             # Preserved for additional isolation
-            "original_user_id": user_id,                   # Track original user
-            "original_project_id": project_id              # Track original project
+            "user_id": project_id,  # Project → mem0 user_id
+            "agent_id": user_id,  # Real user → mem0 agent_id
+            "run_id": f"{user_id}_{project_id}",  # Session context
+            "organization_id": organization_id,  # Preserved for additional isolation
+            "original_user_id": user_id,  # Track original user
+            "original_project_id": project_id,  # Track original project
         }
-    else:
-        # User-only mapping (backward compatibility)
-        return {
-            "user_id": user_id,
-            "agent_id": None,
-            "run_id": None
-        }
+    # User-only mapping (backward compatibility)
+    return {"user_id": user_id, "agent_id": None, "run_id": None}

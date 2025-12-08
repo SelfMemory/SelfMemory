@@ -1,5 +1,3 @@
-from typing import Optional
-
 from selfmemory.configs.llms.base import BaseLlmConfig
 
 
@@ -12,17 +10,17 @@ class DeepSeekConfig(BaseLlmConfig):
     def __init__(
         self,
         # Base parameters
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.1,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         max_tokens: int = 2000,
         top_p: float = 0.1,
         top_k: int = 1,
         enable_vision: bool = False,
-        vision_details: Optional[str] = "auto",
-        http_client_proxies: Optional[dict] = None,
+        vision_details: str | None = "auto",
+        http_client_proxies: dict | None = None,
         # DeepSeek-specific parameters
-        deepseek_base_url: Optional[str] = None,
+        deepseek_base_url: str | None = None,
     ):
         """
         Initialize DeepSeek configuration.

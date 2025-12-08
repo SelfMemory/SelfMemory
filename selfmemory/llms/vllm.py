@@ -1,6 +1,5 @@
 import json
 import os
-from typing import Dict, List, Optional, Union
 
 from openai import OpenAI
 
@@ -11,7 +10,7 @@ from selfmemory.memory.utils import extract_json
 
 
 class VllmLLM(LLMBase):
-    def __init__(self, config: Optional[Union[BaseLlmConfig, VllmConfig, Dict]] = None):
+    def __init__(self, config: BaseLlmConfig | VllmConfig | dict | None = None):
         # Convert to VllmConfig if needed
         if config is None:
             config = VllmConfig()
@@ -36,7 +35,9 @@ class VllmLLM(LLMBase):
         if not self.config.model:
             self.config.model = "Qwen/Qwen2.5-32B-Instruct"
 
-        self.config.api_key = self.config.api_key or os.getenv("VLLM_API_KEY") or "vllm-api-key"
+        self.config.api_key = (
+            self.config.api_key or os.getenv("VLLM_API_KEY") or "vllm-api-key"
+        )
         base_url = self.config.vllm_base_url or os.getenv("VLLM_BASE_URL")
         self.client = OpenAI(api_key=self.config.api_key, base_url=base_url)
 
@@ -62,19 +63,20 @@ class VllmLLM(LLMBase):
                     processed_response["tool_calls"].append(
                         {
                             "name": tool_call.function.name,
-                            "arguments": json.loads(extract_json(tool_call.function.arguments)),
+                            "arguments": json.loads(
+                                extract_json(tool_call.function.arguments)
+                            ),
                         }
                     )
 
             return processed_response
-        else:
-            return response.choices[0].message.content
+        return response.choices[0].message.content
 
     def generate_response(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         response_format=None,
-        tools: Optional[List[Dict]] = None,
+        tools: list[dict] | None = None,
         tool_choice: str = "auto",
         **kwargs,
     ):

@@ -1,5 +1,5 @@
+import builtins
 import logging
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -8,25 +8,27 @@ from selfmemory.vector_stores.base import VectorStoreBase
 try:
     from upstash_vector import Index
 except ImportError:
-    raise ImportError("The 'upstash_vector' library is required. Please install it using 'pip install upstash_vector'.")
+    raise ImportError(
+        "The 'upstash_vector' library is required. Please install it using 'pip install upstash_vector'."
+    )
 
 
 logger = logging.getLogger(__name__)
 
 
 class OutputData(BaseModel):
-    id: Optional[str]  # memory id
-    score: Optional[float]  # is None for `get` method
-    payload: Optional[Dict]  # metadata
+    id: str | None  # memory id
+    score: float | None  # is None for `get` method
+    payload: dict | None  # metadata
 
 
 class UpstashVector(VectorStoreBase):
     def __init__(
         self,
         collection_name: str,
-        url: Optional[str] = None,
-        token: Optional[str] = None,
-        client: Optional[Index] = None,
+        url: str | None = None,
+        token: str | None = None,
+        client: Index | None = None,
         enable_embeddings: bool = False,
     ):
         """
@@ -51,9 +53,9 @@ class UpstashVector(VectorStoreBase):
 
     def insert(
         self,
-        vectors: List[list],
-        payloads: Optional[List[Dict]] = None,
-        ids: Optional[List[str]] = None,
+        vectors: list[list],
+        payloads: list[dict] | None = None,
+        ids: list[str] | None = None,
     ):
         """
         Insert vectors
@@ -63,11 +65,17 @@ class UpstashVector(VectorStoreBase):
             payloads (list, optional): List of payloads corresponding to vectors. These will be passed as metadatas to the Upstash Vector client. Defaults to None.
             ids (list, optional): List of IDs corresponding to vectors. Defaults to None.
         """
-        logger.info(f"Inserting {len(vectors)} vectors into namespace {self.collection_name}")
+        logger.info(
+            f"Inserting {len(vectors)} vectors into namespace {self.collection_name}"
+        )
 
         if self.enable_embeddings:
-            if not payloads or any("data" not in m or m["data"] is None for m in payloads):
-                raise ValueError("When embeddings are enabled, all payloads must contain a 'data' field.")
+            if not payloads or any(
+                "data" not in m or m["data"] is None for m in payloads
+            ):
+                raise ValueError(
+                    "When embeddings are enabled, all payloads must contain a 'data' field."
+                )
             processed_vectors = [
                 {
                     "id": ids[i] if ids else None,
@@ -97,10 +105,10 @@ class UpstashVector(VectorStoreBase):
     def search(
         self,
         query: str,
-        vectors: List[list],
+        vectors: list[list],
         limit: int = 5,
-        filters: Optional[Dict] = None,
-    ) -> List[OutputData]:
+        filters: dict | None = None,
+    ) -> list[OutputData]:
         """
         Search for similar vectors.
 
@@ -113,7 +121,11 @@ class UpstashVector(VectorStoreBase):
             List[OutputData]: Search results.
         """
 
-        filters_str = " AND ".join([f"{k} = {self._stringify(v)}" for k, v in filters.items()]) if filters else None
+        filters_str = (
+            " AND ".join([f"{k} = {self._stringify(v)}" for k, v in filters.items()])
+            if filters
+            else None
+        )
 
         response = []
 
@@ -164,8 +176,8 @@ class UpstashVector(VectorStoreBase):
     def update(
         self,
         vector_id: int,
-        vector: Optional[list] = None,
-        payload: Optional[dict] = None,
+        vector: list | None = None,
+        payload: dict | None = None,
     ):
         """
         Update a vector and its payload.
@@ -183,7 +195,7 @@ class UpstashVector(VectorStoreBase):
             namespace=self.collection_name,
         )
 
-    def get(self, vector_id: int) -> Optional[OutputData]:
+    def get(self, vector_id: int) -> OutputData | None:
         """
         Retrieve a vector by ID.
 
@@ -205,7 +217,9 @@ class UpstashVector(VectorStoreBase):
             return None
         return OutputData(id=vector.id, score=None, payload=vector.metadata)
 
-    def list(self, filters: Optional[Dict] = None, limit: int = 100) -> List[List[OutputData]]:
+    def list(
+        self, filters: dict | None = None, limit: int = 100
+    ) -> list[list[OutputData]]:
         """
         List all memories.
         Args:
@@ -214,7 +228,11 @@ class UpstashVector(VectorStoreBase):
         Returns:
             List[OutputData]: Search results.
         """
-        filters_str = " AND ".join([f"{k} = {self._stringify(v)}" for k, v in filters.items()]) if filters else None
+        filters_str = (
+            " AND ".join([f"{k} = {self._stringify(v)}" for k, v in filters.items()])
+            if filters
+            else None
+        )
 
         info = self.client.info()
         ns_info = info.namespaces.get(self.collection_name)
@@ -258,7 +276,7 @@ class UpstashVector(VectorStoreBase):
         """
         pass
 
-    def list_cols(self) -> List[str]:
+    def list_cols(self) -> builtins.list[str]:
         """
         Lists all namespaces in the Upstash Vector index.
         Returns:

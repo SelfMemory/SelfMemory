@@ -1,5 +1,4 @@
 import importlib
-from typing import Dict, Optional, Union
 
 from selfmemory.configs.embeddings.base import BaseEmbedderConfig
 from selfmemory.configs.llms.anthropic import AnthropicConfig
@@ -10,6 +9,7 @@ from selfmemory.configs.llms.lmstudio import LMStudioConfig
 from selfmemory.configs.llms.ollama import OllamaConfig
 from selfmemory.configs.llms.openai import OpenAIConfig
 from selfmemory.configs.llms.vllm import VllmConfig
+
 # from selfmemory.configs.rerankers.base import BaseRerankerConfig
 # from selfmemory.configs.rerankers.cohere import CohereRerankerConfig
 # from selfmemory.configs.rerankers.sentence_transformer import SentenceTransformerRerankerConfig
@@ -39,10 +39,19 @@ class LlmFactory:
         "together": ("selfmemory.llms.together.TogetherLLM", BaseLlmConfig),
         "aws_bedrock": ("selfmemory.llms.aws_bedrock.AWSBedrockLLM", BaseLlmConfig),
         "litellm": ("selfmemory.llms.litellm.LiteLLM", BaseLlmConfig),
-        "azure_openai": ("selfmemory.llms.azure_openai.AzureOpenAILLM", AzureOpenAIConfig),
-        "openai_structured": ("selfmemory.llms.openai_structured.OpenAIStructuredLLM", OpenAIConfig),
+        "azure_openai": (
+            "selfmemory.llms.azure_openai.AzureOpenAILLM",
+            AzureOpenAIConfig,
+        ),
+        "openai_structured": (
+            "selfmemory.llms.openai_structured.OpenAIStructuredLLM",
+            OpenAIConfig,
+        ),
         "anthropic": ("selfmemory.llms.anthropic.AnthropicLLM", AnthropicConfig),
-        "azure_openai_structured": ("selfmemory.llms.azure_openai_structured.AzureOpenAIStructuredLLM", AzureOpenAIConfig),
+        "azure_openai_structured": (
+            "selfmemory.llms.azure_openai_structured.AzureOpenAIStructuredLLM",
+            AzureOpenAIConfig,
+        ),
         "gemini": ("selfmemory.llms.gemini.GeminiLLM", BaseLlmConfig),
         "deepseek": ("selfmemory.llms.deepseek.DeepSeekLLM", DeepSeekConfig),
         "xai": ("selfmemory.llms.xai.XAILLM", BaseLlmConfig),
@@ -53,7 +62,12 @@ class LlmFactory:
     }
 
     @classmethod
-    def create(cls, provider_name: str, config: Optional[Union[BaseLlmConfig, Dict]] = None, **kwargs):
+    def create(
+        cls,
+        provider_name: str,
+        config: BaseLlmConfig | dict | None = None,
+        **kwargs,
+    ):
         """
         Create an LLM instance with the appropriate configuration.
 
@@ -149,16 +163,19 @@ class EmbedderFactory:
     }
 
     @classmethod
-    def create(cls, provider_name, config, vector_config: Optional[dict]):
-        if provider_name == "upstash_vector" and vector_config and vector_config.enable_embeddings:
+    def create(cls, provider_name, config, vector_config: dict | None):
+        if (
+            provider_name == "upstash_vector"
+            and vector_config
+            and vector_config.enable_embeddings
+        ):
             return MockEmbeddings()
         class_type = cls.provider_to_class.get(provider_name)
         if class_type:
             embedder_instance = load_class(class_type)
             base_config = BaseEmbedderConfig(**config)
             return embedder_instance(base_config)
-        else:
-            raise ValueError(f"Unsupported Embedder provider: {provider_name}")
+        raise ValueError(f"Unsupported Embedder provider: {provider_name}")
 
 
 class VectorStoreFactory:
@@ -196,8 +213,7 @@ class VectorStoreFactory:
                 config = config.model_dump()
             vector_store_instance = load_class(class_type)
             return vector_store_instance(**config)
-        else:
-            raise ValueError(f"Unsupported VectorStore provider: {provider_name}")
+        raise ValueError(f"Unsupported VectorStore provider: {provider_name}")
 
     @classmethod
     def reset(cls, instance):
