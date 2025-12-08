@@ -58,7 +58,7 @@ from middleware import UnifiedAuthMiddleware, current_token_context  # noqa: E40
 from oauth.metadata import get_protected_resource_metadata  # noqa: E402
 from tools.fetch import format_fetch_result  # noqa: E402
 from tools.search import format_search_results  # noqa: E402
-from utils import create_tool_success, handle_tool_errors  # noqa: E402
+from utils import handle_tool_errors  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -136,29 +136,29 @@ async def log_requests(request: Request, call_next):
 @app.middleware("http")
 async def handle_trailing_slash(request: Request, call_next):
     """Handle trailing slash for MCP endpoints without 307 redirect.
-    
+
     This ensures both /mcp and /mcp/ work seamlessly for SSE clients.
     FastAPI automatically adds trailing slashes and returns 307 redirects,
     which breaks SSE streaming. This middleware rewrites the path internally
     instead of redirecting the client.
     """
     path = request.url.path
-    
+
     # If path is /mcp (no slash), rewrite it to /mcp/ internally
     if path == "/mcp" or path.startswith("/mcp?"):
         # Create new scope with updated path
         scope = request.scope.copy()
         scope["path"] = "/mcp/"
         scope["raw_path"] = b"/mcp/"
-        
+
         # Preserve query string if present
         if "?" in path:
             query = path.split("?", 1)[1]
             scope["query_string"] = query.encode()
-        
+
         # Create new request with updated scope
         request = Request(scope, request.receive)
-    
+
     response = await call_next(request)
     return response
 
@@ -563,6 +563,7 @@ async def add(content: str, ctx: Context) -> dict:
 
             # Parse content format (simple string or JSON array)
             import json
+
             try:
                 parsed = json.loads(content)
                 if isinstance(parsed, list):
@@ -584,7 +585,9 @@ async def add(content: str, ctx: Context) -> dict:
 
             store_duration = time.time() - store_start
             store_span.set_attribute("store.duration_ms", store_duration * 1000)
-            store_span.set_attribute("memory.id", result.get("memory_id", result.get("id", "")))
+            store_span.set_attribute(
+                "memory.id", result.get("memory_id", result.get("id", ""))
+            )
 
             if store_duration > 3.0:
                 logger.warning(f"⚠️  Slow memory storage: {store_duration:.2f}s")

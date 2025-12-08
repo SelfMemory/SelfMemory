@@ -1,6 +1,6 @@
 import subprocess
 import sys
-from typing import Literal, Optional
+from typing import Literal
 
 from selfmemory.configs.embeddings.base import BaseEmbedderConfig
 from selfmemory.embeddings.base import EmbeddingBase
@@ -14,7 +14,9 @@ except ImportError:
             subprocess.check_call([sys.executable, "-m", "pip", "install", "ollama"])
             from ollama import Client
         except subprocess.CalledProcessError:
-            print("Failed to install 'ollama'. Please install it manually using 'pip install ollama'.")
+            print(
+                "Failed to install 'ollama'. Please install it manually using 'pip install ollama'."
+            )
             sys.exit(1)
     else:
         print("The required 'ollama' library is not installed.")
@@ -22,7 +24,7 @@ except ImportError:
 
 
 class OllamaEmbedding(EmbeddingBase):
-    def __init__(self, config: Optional[BaseEmbedderConfig] = None):
+    def __init__(self, config: BaseEmbedderConfig | None = None):
         super().__init__(config)
 
         self.config.model = self.config.model or "nomic-embed-text"
@@ -36,10 +38,16 @@ class OllamaEmbedding(EmbeddingBase):
         Ensure the specified model exists locally. If not, pull it from Ollama.
         """
         local_models = self.client.list()["models"]
-        if not any(model.get("name") == self.config.model or model.get("model") == self.config.model for model in local_models):
+        if not any(
+            model.get("name") == self.config.model
+            or model.get("model") == self.config.model
+            for model in local_models
+        ):
             self.client.pull(self.config.model)
 
-    def embed(self, text, memory_action: Optional[Literal["add", "search", "update"]] = None):
+    def embed(
+        self, text, memory_action: Literal["add", "search", "update"] | None = None
+    ):
         """
         Get the embedding for the given text using Ollama.
 

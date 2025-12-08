@@ -68,7 +68,7 @@ DEFAULT_CONFIG = {
             "ollama_base_url": config.embedding.OLLAMA_BASE_URL,
         },
     },
-    "llm" : {
+    "llm": {
         "provider": "vllm",
         "config": {
             "vllm_base_url": config.llm.BASE_URL,
@@ -76,8 +76,8 @@ DEFAULT_CONFIG = {
             "api_key": config.llm.API_KEY,
             "temperature": config.llm.TEMPERATURE,
             "max_tokens": config.llm.MAX_TOKENS,
-        }
-    }
+        },
+    },
 }
 
 # Global Memory instance
@@ -581,30 +581,32 @@ def add_memory(
                 logging.info(
                     f"✅ Memory created (LLM): project={final_project_id}, memory_id={memory_id}, operations={len(results)}, creator={user_email}"
                 )
-                return JSONResponse(content={
-                    "success": True,
-                    "memory_id": memory_id,
-                    "operations": results,
-                    "message": f"Memory processed with {len(results)} operations"
-                })
-            else:
-                # Empty results - no changes needed, this is a valid scenario
-                logging.info(
-                    f"✅ LLM determined no memory changes needed for project={final_project_id}, creator={user_email}"
+                return JSONResponse(
+                    content={
+                        "success": True,
+                        "memory_id": memory_id,
+                        "operations": results,
+                        "message": f"Memory processed with {len(results)} operations",
+                    }
                 )
-                return JSONResponse(content={
+            # Empty results - no changes needed, this is a valid scenario
+            logging.info(
+                f"✅ LLM determined no memory changes needed for project={final_project_id}, creator={user_email}"
+            )
+            return JSONResponse(
+                content={
                     "success": True,
                     "message": "No memory changes required - content already adequately captured",
                     "operations": [],
-                    "memory_id": None
-                })
-        else:
-            # Standard response from _add_without_llm
-            memory_id = response.get("memory_id")
-            logging.info(
-                f"✅ Memory created: project={final_project_id}, memory_id={memory_id}, creator={user_email}"
+                    "memory_id": None,
+                }
             )
-            return JSONResponse(content=response)
+        # Standard response from _add_without_llm
+        memory_id = response.get("memory_id")
+        logging.info(
+            f"✅ Memory created: project={final_project_id}, memory_id={memory_id}, creator={user_email}"
+        )
+        return JSONResponse(content=response)
     except HTTPException:
         raise
     except Exception as e:
@@ -847,7 +849,9 @@ def search_memories(
                     ):
                         # Keep as list - Memory.search() expects list
                         params[filter_key] = filter_value
-                    elif filter_key == "people_mentioned" and isinstance(filter_value, str):
+                    elif filter_key == "people_mentioned" and isinstance(
+                        filter_value, str
+                    ):
                         # Convert string to list for people_mentioned
                         params[filter_key] = [filter_value]
                     else:

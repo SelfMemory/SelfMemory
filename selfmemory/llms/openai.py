@@ -1,17 +1,16 @@
 import json
 import logging
 import os
-from typing import Dict, List, Optional, Union
 
 from openai import OpenAI
 
-from selfmemory.llms.configs import BaseLlmConfig, OpenAIConfig
 from selfmemory.llms.base import LLMBase
+from selfmemory.llms.configs import BaseLlmConfig, OpenAIConfig
 from selfmemory.memory.utils import extract_json
 
 
 class OpenAILLM(LLMBase):
-    def __init__(self, config: Optional[Union[BaseLlmConfig, OpenAIConfig, Dict]] = None):
+    def __init__(self, config: BaseLlmConfig | OpenAIConfig | dict | None = None):
         # Convert to OpenAIConfig if needed
         if config is None:
             config = OpenAIConfig()
@@ -45,7 +44,11 @@ class OpenAILLM(LLMBase):
             )
         else:
             api_key = self.config.api_key or os.getenv("OPENAI_API_KEY")
-            base_url = self.config.openai_base_url or os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
+            base_url = (
+                self.config.openai_base_url
+                or os.getenv("OPENAI_BASE_URL")
+                or "https://api.openai.com/v1"
+            )
 
             self.client = OpenAI(api_key=api_key, base_url=base_url)
 
@@ -71,19 +74,20 @@ class OpenAILLM(LLMBase):
                     processed_response["tool_calls"].append(
                         {
                             "name": tool_call.function.name,
-                            "arguments": json.loads(extract_json(tool_call.function.arguments)),
+                            "arguments": json.loads(
+                                extract_json(tool_call.function.arguments)
+                            ),
                         }
                     )
 
             return processed_response
-        else:
-            return response.choices[0].message.content
+        return response.choices[0].message.content
 
     def generate_response(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         response_format=None,
-        tools: Optional[List[Dict]] = None,
+        tools: list[dict] | None = None,
         tool_choice: str = "auto",
         **kwargs,
     ):
@@ -101,11 +105,13 @@ class OpenAILLM(LLMBase):
             json: The generated response.
         """
         params = self._get_supported_params(messages=messages, **kwargs)
-        
-        params.update({
-            "model": self.config.model,
-            "messages": messages,
-        })
+
+        params.update(
+            {
+                "model": self.config.model,
+                "messages": messages,
+            }
+        )
 
         if os.getenv("OPENROUTER_API_KEY"):
             openrouter_params = {}
@@ -122,16 +128,18 @@ class OpenAILLM(LLMBase):
                 openrouter_params["extra_headers"] = extra_headers
 
             params.update(**openrouter_params)
-        
+
         else:
             openai_specific_generation_params = ["store"]
             for param in openai_specific_generation_params:
                 if hasattr(self.config, param):
                     params[param] = getattr(self.config, param)
-            
+
         if response_format:
             params["response_format"] = response_format
-        if tools:  # TODO: Remove tools if no issues found with new memory addition logic
+        if (
+            tools
+        ):  # TODO: Remove tools if no issues found with new memory addition logic
             params["tools"] = tools
             params["tool_choice"] = tool_choice
         response = self.client.chat.completions.create(**params)

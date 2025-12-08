@@ -31,11 +31,23 @@ DEFAULT_FIELDS = [
     {
         "name": "embedding",
         "type": "vector",
-        "attrs": {"distance_metric": "cosine", "algorithm": "flat", "datatype": "float32"},
+        "attrs": {
+            "distance_metric": "cosine",
+            "algorithm": "flat",
+            "datatype": "float32",
+        },
     },
 ]
 
-excluded_keys = {"user_id", "agent_id", "run_id", "hash", "data", "created_at", "updated_at"}
+excluded_keys = {
+    "user_id",
+    "agent_id",
+    "run_id",
+    "hash",
+    "data",
+    "created_at",
+    "updated_at",
+}
 
 
 class MemoryResult:
@@ -121,13 +133,15 @@ class RedisDB(VectorStoreBase):
 
     def insert(self, vectors: list, payloads: list = None, ids: list = None):
         data = []
-        for vector, payload, id in zip(vectors, payloads, ids):
+        for vector, payload, id in zip(vectors, payloads, ids, strict=False):
             # Start with required fields
             entry = {
                 "memory_id": id,
                 "hash": payload["hash"],
                 "memory": payload["data"],
-                "created_at": int(datetime.fromisoformat(payload["created_at"]).timestamp()),
+                "created_at": int(
+                    datetime.fromisoformat(payload["created_at"]).timestamp()
+                ),
                 "embedding": np.array(vector, dtype=np.float32).tobytes(),
             }
 
@@ -137,19 +151,32 @@ class RedisDB(VectorStoreBase):
                     entry[field] = payload[field]
 
             # Add metadata excluding specific keys
-            entry["metadata"] = json.dumps({k: v for k, v in payload.items() if k not in excluded_keys})
+            entry["metadata"] = json.dumps(
+                {k: v for k, v in payload.items() if k not in excluded_keys}
+            )
 
             data.append(entry)
         self.index.load(data, id_field="memory_id")
 
     def search(self, query: str, vectors: list, limit: int = 5, filters: dict = None):
-        conditions = [Tag(key) == value for key, value in filters.items() if value is not None]
+        conditions = [
+            Tag(key) == value for key, value in filters.items() if value is not None
+        ]
         filter = reduce(lambda x, y: x & y, conditions)
 
         v = VectorQuery(
             vector=np.array(vectors, dtype=np.float32).tobytes(),
             vector_field_name="embedding",
-            return_fields=["memory_id", "hash", "agent_id", "run_id", "user_id", "memory", "metadata", "created_at"],
+            return_fields=[
+                "memory_id",
+                "hash",
+                "agent_id",
+                "run_id",
+                "user_id",
+                "memory",
+                "metadata",
+                "created_at",
+            ],
             filter_expression=filter,
             num_results=limit,
         )
@@ -169,14 +196,22 @@ class RedisDB(VectorStoreBase):
                     **(
                         {
                             "updated_at": datetime.fromtimestamp(
-                                int(result["updated_at"]), tz=pytz.timezone("US/Pacific")
+                                int(result["updated_at"]),
+                                tz=pytz.timezone("US/Pacific"),
                             ).isoformat(timespec="microseconds")
                         }
                         if "updated_at" in result
                         else {}
                     ),
-                    **{field: result[field] for field in ["agent_id", "run_id", "user_id"] if field in result},
-                    **{k: v for k, v in json.loads(extract_json(result["metadata"])).items()},
+                    **{
+                        field: result[field]
+                        for field in ["agent_id", "run_id", "user_id"]
+                        if field in result
+                    },
+                    **{
+                        k: v
+                        for k, v in json.loads(extract_json(result["metadata"])).items()
+                    },
                 },
             )
             for result in results
@@ -190,8 +225,12 @@ class RedisDB(VectorStoreBase):
             "memory_id": vector_id,
             "hash": payload["hash"],
             "memory": payload["data"],
-            "created_at": int(datetime.fromisoformat(payload["created_at"]).timestamp()),
-            "updated_at": int(datetime.fromisoformat(payload["updated_at"]).timestamp()),
+            "created_at": int(
+                datetime.fromisoformat(payload["created_at"]).timestamp()
+            ),
+            "updated_at": int(
+                datetime.fromisoformat(payload["updated_at"]).timestamp()
+            ),
             "embedding": np.array(vector, dtype=np.float32).tobytes(),
         }
 
@@ -199,17 +238,23 @@ class RedisDB(VectorStoreBase):
             if field in payload:
                 data[field] = payload[field]
 
-        data["metadata"] = json.dumps({k: v for k, v in payload.items() if k not in excluded_keys})
-        self.index.load(data=[data], keys=[f"{self.schema['index']['prefix']}:{vector_id}"], id_field="memory_id")
+        data["metadata"] = json.dumps(
+            {k: v for k, v in payload.items() if k not in excluded_keys}
+        )
+        self.index.load(
+            data=[data],
+            keys=[f"{self.schema['index']['prefix']}:{vector_id}"],
+            id_field="memory_id",
+        )
 
     def get(self, vector_id):
         result = self.index.fetch(vector_id)
         payload = {
             "hash": result["hash"],
             "data": result["memory"],
-            "created_at": datetime.fromtimestamp(int(result["created_at"]), tz=pytz.timezone("US/Pacific")).isoformat(
-                timespec="microseconds"
-            ),
+            "created_at": datetime.fromtimestamp(
+                int(result["created_at"]), tz=pytz.timezone("US/Pacific")
+            ).isoformat(timespec="microseconds"),
             **(
                 {
                     "updated_at": datetime.fromtimestamp(
@@ -219,7 +264,11 @@ class RedisDB(VectorStoreBase):
                 if "updated_at" in result
                 else {}
             ),
-            **{field: result[field] for field in ["agent_id", "run_id", "user_id"] if field in result},
+            **{
+                field: result[field]
+                for field in ["agent_id", "run_id", "user_id"]
+                if field in result
+            },
             **{k: v for k, v in json.loads(extract_json(result["metadata"])).items()},
         }
 
@@ -256,7 +305,9 @@ class RedisDB(VectorStoreBase):
         """
         List all recent created memories from the vector store.
         """
-        conditions = [Tag(key) == value for key, value in filters.items() if value is not None]
+        conditions = [
+            Tag(key) == value for key, value in filters.items() if value is not None
+        ]
         filter = reduce(lambda x, y: x & y, conditions)
         query = Query(str(filter)).sort_by("created_at", asc=False)
         if limit is not None:
@@ -276,7 +327,8 @@ class RedisDB(VectorStoreBase):
                         **(
                             {
                                 "updated_at": datetime.fromtimestamp(
-                                    int(result["updated_at"]), tz=pytz.timezone("US/Pacific")
+                                    int(result["updated_at"]),
+                                    tz=pytz.timezone("US/Pacific"),
                                 ).isoformat(timespec="microseconds")
                             }
                             if result.__dict__.get("updated_at")
@@ -287,7 +339,12 @@ class RedisDB(VectorStoreBase):
                             for field in ["agent_id", "run_id", "user_id"]
                             if field in result.__dict__
                         },
-                        **{k: v for k, v in json.loads(extract_json(result["metadata"])).items()},
+                        **{
+                            k: v
+                            for k, v in json.loads(
+                                extract_json(result["metadata"])
+                            ).items()
+                        },
                     },
                 )
                 for result in results.docs

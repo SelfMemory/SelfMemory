@@ -1,7 +1,6 @@
 import json
 import logging
 from datetime import datetime
-from typing import Dict
 
 import numpy as np
 import pytz
@@ -21,24 +20,42 @@ DEFAULT_FIELDS = [
     {"name": "agent_id", "type": "tag"},
     {"name": "run_id", "type": "tag"},
     {"name": "user_id", "type": "tag"},
-    {"name": "memory", "type": "tag"},  # Using TAG instead of TEXT for Valkey compatibility
-    {"name": "metadata", "type": "tag"},  # Using TAG instead of TEXT for Valkey compatibility
+    {
+        "name": "memory",
+        "type": "tag",
+    },  # Using TAG instead of TEXT for Valkey compatibility
+    {
+        "name": "metadata",
+        "type": "tag",
+    },  # Using TAG instead of TEXT for Valkey compatibility
     {"name": "created_at", "type": "numeric"},
     {"name": "updated_at", "type": "numeric"},
     {
         "name": "embedding",
         "type": "vector",
-        "attrs": {"distance_metric": "cosine", "algorithm": "flat", "datatype": "float32"},
+        "attrs": {
+            "distance_metric": "cosine",
+            "algorithm": "flat",
+            "datatype": "float32",
+        },
     },
 ]
 
-excluded_keys = {"user_id", "agent_id", "run_id", "hash", "data", "created_at", "updated_at"}
+excluded_keys = {
+    "user_id",
+    "agent_id",
+    "run_id",
+    "hash",
+    "data",
+    "created_at",
+    "updated_at",
+}
 
 
 class OutputData(BaseModel):
     id: str
     score: float
-    payload: Dict
+    payload: dict
 
 
 class ValkeyDB(VectorStoreBase):
@@ -77,7 +94,9 @@ class ValkeyDB(VectorStoreBase):
 
         # Validate index type
         if self.index_type not in ["hnsw", "flat"]:
-            raise ValueError(f"Invalid index_type: {index_type}. Must be 'hnsw' or 'flat'")
+            raise ValueError(
+                f"Invalid index_type: {index_type}. Must be 'hnsw' or 'flat'"
+            )
 
         # Connect to Valkey
         try:
@@ -90,7 +109,9 @@ class ValkeyDB(VectorStoreBase):
         # Create the index schema
         self._create_index(embedding_model_dims)
 
-    def _build_index_schema(self, collection_name, embedding_dims, distance_metric, prefix):
+    def _build_index_schema(
+        self, collection_name, embedding_dims, distance_metric, prefix
+    ):
         """
         Build the FT.CREATE command for index creation.
 
@@ -138,7 +159,9 @@ class ValkeyDB(VectorStoreBase):
             ]
         else:
             # This should never happen due to constructor validation, but be defensive
-            raise ValueError(f"Unsupported index_type: {self.index_type}. Must be 'hnsw' or 'flat'")
+            raise ValueError(
+                f"Unsupported index_type: {self.index_type}. Must be 'hnsw' or 'flat'"
+            )
 
         # Build the complete command (comma is default separator for TAG fields)
         cmd = [
@@ -194,9 +217,8 @@ class ValkeyDB(VectorStoreBase):
                     "The search module can be loaded using the --loadmodule option with the valkey-search library. "
                     "For installation and setup instructions, refer to the Valkey Search documentation."
                 )
-            else:
-                logger.exception(f"Error checking search module: {e}")
-                raise
+            logger.exception(f"Error checking search module: {e}")
+            raise
 
         # Check if the index already exists
         try:
@@ -217,7 +239,9 @@ class ValkeyDB(VectorStoreBase):
 
         try:
             self.client.execute_command(*cmd)
-            logger.info(f"Successfully created {self.index_type.upper()} index {self.collection_name}")
+            logger.info(
+                f"Successfully created {self.index_type.upper()} index {self.collection_name}"
+            )
         except Exception as e:
             logger.exception(f"Error creating index {self.collection_name}: {e}")
             raise
@@ -253,7 +277,9 @@ class ValkeyDB(VectorStoreBase):
 
         try:
             self.client.execute_command(*cmd)
-            logger.info(f"Successfully created {self.index_type.upper()} index {collection_name}")
+            logger.info(
+                f"Successfully created {self.index_type.upper()} index {collection_name}"
+            )
 
             # Update instance attributes if creating a new collection
             if name:
@@ -274,7 +300,7 @@ class ValkeyDB(VectorStoreBase):
             payloads (list, optional): List of payloads corresponding to the vectors.
             ids (list, optional): List of IDs for the vectors.
         """
-        for vector, payload, id in zip(vectors, payloads, ids):
+        for vector, payload, id in zip(vectors, payloads, ids, strict=False):
             try:
                 # Create the key for the hash
                 key = f"{self.prefix}:{id}"
@@ -286,14 +312,22 @@ class ValkeyDB(VectorStoreBase):
 
                 # Ensure created_at is present
                 if "created_at" not in payload:
-                    payload["created_at"] = datetime.now(pytz.timezone(self.timezone)).isoformat()
+                    payload["created_at"] = datetime.now(
+                        pytz.timezone(self.timezone)
+                    ).isoformat()
 
                 # Prepare the hash data
                 hash_data = {
                     "memory_id": id,
-                    "hash": payload.get("hash", f"hash_{id}"),  # Use a default hash if not provided
-                    "memory": payload.get("data", f"data_{id}"),  # Use a default data if not provided
-                    "created_at": int(datetime.fromisoformat(payload["created_at"]).timestamp()),
+                    "hash": payload.get(
+                        "hash", f"hash_{id}"
+                    ),  # Use a default hash if not provided
+                    "memory": payload.get(
+                        "data", f"data_{id}"
+                    ),  # Use a default data if not provided
+                    "created_at": int(
+                        datetime.fromisoformat(payload["created_at"]).timestamp()
+                    ),
                     "embedding": np.array(vector, dtype=np.float32).tobytes(),
                 }
 
@@ -303,13 +337,17 @@ class ValkeyDB(VectorStoreBase):
                         hash_data[field] = payload[field]
 
                 # Add metadata
-                hash_data["metadata"] = json.dumps({k: v for k, v in payload.items() if k not in excluded_keys})
+                hash_data["metadata"] = json.dumps(
+                    {k: v for k, v in payload.items() if k not in excluded_keys}
+                )
 
                 # Store in Valkey
                 self.client.hset(key, mapping=hash_data)
                 logger.debug(f"Successfully inserted vector with ID {id}")
             except KeyError as e:
-                logger.error(f"Error inserting vector with ID {id}: Missing required field {e}")
+                logger.error(
+                    f"Error inserting vector with ID {id}: Missing required field {e}"
+                )
             except Exception as e:
                 logger.exception(f"Error inserting vector with ID {id}: {e}")
                 raise
@@ -361,7 +399,9 @@ class ValkeyDB(VectorStoreBase):
             The search results.
         """
         try:
-            return self.client.ft(self.collection_name).search(query, query_params=params)
+            return self.client.ft(self.collection_name).search(
+                query, query_params=params
+            )
         except ResponseError as e:
             logger.error(f"Search failed with query '{query}': {e}")
             raise
@@ -385,12 +425,16 @@ class ValkeyDB(VectorStoreBase):
             payload = {
                 "hash": doc.hash,
                 "data": doc.memory,
-                "created_at": self._format_timestamp(int(doc.created_at), self.timezone),
+                "created_at": self._format_timestamp(
+                    int(doc.created_at), self.timezone
+                ),
             }
 
             # Add updated_at if available
             if hasattr(doc, "updated_at"):
-                payload["updated_at"] = self._format_timestamp(int(doc.updated_at), self.timezone)
+                payload["updated_at"] = self._format_timestamp(
+                    int(doc.updated_at), self.timezone
+                )
 
             # Add optional fields
             for field in ["agent_id", "run_id", "user_id"]:
@@ -406,11 +450,20 @@ class ValkeyDB(VectorStoreBase):
                     logger.warning(f"Failed to parse metadata: {e}")
 
             # Create the result
-            memory_results.append(OutputData(id=doc.memory_id, score=score, payload=payload))
+            memory_results.append(
+                OutputData(id=doc.memory_id, score=score, payload=payload)
+            )
 
         return memory_results
 
-    def search(self, query: str, vectors: list, limit: int = 5, filters: dict = None, ef_runtime: int = None):
+    def search(
+        self,
+        query: str,
+        vectors: list,
+        limit: int = 5,
+        filters: dict = None,
+        ef_runtime: int = None,
+    ):
         """
         Search for similar vectors in the index.
 
@@ -483,20 +536,30 @@ class ValkeyDB(VectorStoreBase):
 
             # Ensure created_at is present
             if "created_at" not in payload:
-                payload["created_at"] = datetime.now(pytz.timezone(self.timezone)).isoformat()
+                payload["created_at"] = datetime.now(
+                    pytz.timezone(self.timezone)
+                ).isoformat()
 
             # Prepare the hash data
             hash_data = {
                 "memory_id": vector_id,
-                "hash": payload.get("hash", f"hash_{vector_id}"),  # Use a default hash if not provided
-                "memory": payload.get("data", f"data_{vector_id}"),  # Use a default data if not provided
-                "created_at": int(datetime.fromisoformat(payload["created_at"]).timestamp()),
+                "hash": payload.get(
+                    "hash", f"hash_{vector_id}"
+                ),  # Use a default hash if not provided
+                "memory": payload.get(
+                    "data", f"data_{vector_id}"
+                ),  # Use a default data if not provided
+                "created_at": int(
+                    datetime.fromisoformat(payload["created_at"]).timestamp()
+                ),
                 "embedding": np.array(vector, dtype=np.float32).tobytes(),
             }
 
             # Add updated_at if available
             if "updated_at" in payload:
-                hash_data["updated_at"] = int(datetime.fromisoformat(payload["updated_at"]).timestamp())
+                hash_data["updated_at"] = int(
+                    datetime.fromisoformat(payload["updated_at"]).timestamp()
+                )
 
             # Add optional fields
             for field in ["agent_id", "run_id", "user_id"]:
@@ -504,13 +567,17 @@ class ValkeyDB(VectorStoreBase):
                     hash_data[field] = payload[field]
 
             # Add metadata
-            hash_data["metadata"] = json.dumps({k: v for k, v in payload.items() if k not in excluded_keys})
+            hash_data["metadata"] = json.dumps(
+                {k: v for k, v in payload.items() if k not in excluded_keys}
+            )
 
             # Update in Valkey
             self.client.hset(key, mapping=hash_data)
             logger.debug(f"Successfully updated vector with ID {vector_id}")
         except KeyError as e:
-            logger.error(f"Error updating vector with ID {vector_id}: Missing required field {e}")
+            logger.error(
+                f"Error updating vector with ID {vector_id}: Missing required field {e}"
+            )
         except Exception as e:
             logger.exception(f"Error updating vector with ID {vector_id}: {e}")
             raise
@@ -528,7 +595,9 @@ class ValkeyDB(VectorStoreBase):
         """
         # Use UTC as default timezone if not specified
         tz = pytz.timezone(timezone or "UTC")
-        return datetime.fromtimestamp(timestamp, tz=tz).isoformat(timespec="microseconds")
+        return datetime.fromtimestamp(timestamp, tz=tz).isoformat(
+            timespec="microseconds"
+        )
 
     def _process_document_fields(self, result, vector_id):
         """
@@ -560,20 +629,21 @@ class ValkeyDB(VectorStoreBase):
             if field in result:
                 if field == "created_at":
                     try:
-                        payload[field] = self._format_timestamp(int(result[field]), self.timezone)
+                        payload[field] = self._format_timestamp(
+                            int(result[field]), self.timezone
+                        )
                     except (ValueError, TypeError):
                         payload[field] = result[field]
                 else:
                     payload[field] = result[field]
             else:
                 # Use default values for missing fields
-                if field == "hash":
-                    payload[field] = "unknown"
-                elif field == "memory":
+                if field == "hash" or field == "memory":
                     payload[field] = "unknown"
                 elif field == "created_at":
                     payload[field] = self._format_timestamp(
-                        int(datetime.now(tz=pytz.timezone(self.timezone)).timestamp()), self.timezone
+                        int(datetime.now(tz=pytz.timezone(self.timezone)).timestamp()),
+                        self.timezone,
                     )
 
         # Rename memory to data for consistency
@@ -583,7 +653,9 @@ class ValkeyDB(VectorStoreBase):
         # Add updated_at if available
         if "updated_at" in result:
             try:
-                payload["updated_at"] = self._format_timestamp(int(result["updated_at"]), self.timezone)
+                payload["updated_at"] = self._format_timestamp(
+                    int(result["updated_at"]), self.timezone
+                )
             except (ValueError, TypeError):
                 payload["updated_at"] = result["updated_at"]
 
@@ -613,7 +685,10 @@ class ValkeyDB(VectorStoreBase):
             except UnicodeDecodeError:
                 return data
         if isinstance(data, dict):
-            return {self._convert_bytes(key): self._convert_bytes(value) for key, value in data.items()}
+            return {
+                self._convert_bytes(key): self._convert_bytes(value)
+                for key, value in data.items()
+            }
         if isinstance(data, list):
             return [self._convert_bytes(item) for item in data]
         if isinstance(data, tuple):
@@ -684,12 +759,13 @@ class ValkeyDB(VectorStoreBase):
                 if log_level == "silent":
                     pass  # No logging in situations where this is expected such as initial index creation
                 elif log_level == "info":
-                    logger.info(f"Index {collection_name} doesn't exist, skipping deletion")
+                    logger.info(
+                        f"Index {collection_name} doesn't exist, skipping deletion"
+                    )
                 return False
-            else:
-                # Real error - always log and raise
-                logger.error(f"Error deleting index {collection_name}: {e}")
-                raise
+            # Real error - always log and raise
+            logger.error(f"Error deleting index {collection_name}: {e}")
+            raise
         except Exception as e:
             # Non-ResponseError exceptions - always log and raise
             logger.error(f"Error deleting index {collection_name}: {e}")
@@ -715,7 +791,9 @@ class ValkeyDB(VectorStoreBase):
             collection_name = name or self.collection_name
             return self.client.ft(collection_name).info()
         except Exception as e:
-            logger.exception(f"Error getting collection info for {collection_name}: {e}")
+            logger.exception(
+                f"Error getting collection info for {collection_name}: {e}"
+            )
             raise
 
     def reset(self):
@@ -789,7 +867,9 @@ class ValkeyDB(VectorStoreBase):
             search_limit = limit if limit is not None else 1000  # Large default
 
             # Use the existing search method which handles filters properly
-            search_results = self.search("", dummy_vector, limit=search_limit, filters=filters)
+            search_results = self.search(
+                "", dummy_vector, limit=search_limit, filters=filters
+            )
 
             # Convert search results to list format (match Redis format)
             class MemoryResult:

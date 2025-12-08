@@ -1,5 +1,4 @@
 import logging
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -16,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class OutputData(BaseModel):
-    id: Optional[str]  # memory id
-    score: Optional[float]  # distance
-    payload: Optional[Dict]  # metadata
+    id: str | None  # memory id
+    score: float | None  # distance
+    payload: dict | None  # metadata
 
 
 class Langchain(VectorStoreBase):
@@ -26,7 +25,7 @@ class Langchain(VectorStoreBase):
         self.client = client
         self.collection_name = collection_name
 
-    def _parse_output(self, data: Dict) -> List[OutputData]:
+    def _parse_output(self, data: dict) -> list[OutputData]:
         """
         Parse the output data.
 
@@ -37,7 +36,9 @@ class Langchain(VectorStoreBase):
             List[OutputData]: Parsed output data.
         """
         # Check if input is a list of Document objects
-        if isinstance(data, list) and all(hasattr(doc, "metadata") for doc in data if hasattr(doc, "__dict__")):
+        if isinstance(data, list) and all(
+            hasattr(doc, "metadata") for doc in data if hasattr(doc, "__dict__")
+        ):
             result = []
             for doc in data:
                 entry = OutputData(
@@ -59,14 +60,24 @@ class Langchain(VectorStoreBase):
             values.append(value)
 
         ids, distances, metadatas = values
-        max_length = max(len(v) for v in values if isinstance(v, list) and v is not None)
+        max_length = max(
+            len(v) for v in values if isinstance(v, list) and v is not None
+        )
 
         result = []
         for i in range(max_length):
             entry = OutputData(
                 id=ids[i] if isinstance(ids, list) and ids and i < len(ids) else None,
-                score=(distances[i] if isinstance(distances, list) and distances and i < len(distances) else None),
-                payload=(metadatas[i] if isinstance(metadatas, list) and metadatas and i < len(metadatas) else None),
+                score=(
+                    distances[i]
+                    if isinstance(distances, list) and distances and i < len(distances)
+                    else None
+                ),
+                payload=(
+                    metadatas[i]
+                    if isinstance(metadatas, list) and metadatas and i < len(metadatas)
+                    else None
+                ),
             )
             result.append(entry)
 
@@ -77,7 +88,10 @@ class Langchain(VectorStoreBase):
         return self.client
 
     def insert(
-        self, vectors: List[List[float]], payloads: Optional[List[Dict]] = None, ids: Optional[List[str]] = None
+        self,
+        vectors: list[list[float]],
+        payloads: list[dict] | None = None,
+        ids: list[str] | None = None,
     ):
         """
         Insert vectors into the LangChain vectorstore.
@@ -88,18 +102,32 @@ class Langchain(VectorStoreBase):
             self.client.add_embeddings(embeddings=vectors, metadatas=payloads, ids=ids)
         else:
             # Fallback to add_texts method
-            texts = [payload.get("data", "") for payload in payloads] if payloads else [""] * len(vectors)
+            texts = (
+                [payload.get("data", "") for payload in payloads]
+                if payloads
+                else [""] * len(vectors)
+            )
             self.client.add_texts(texts=texts, metadatas=payloads, ids=ids)
 
-    def search(self, query: str, vectors: List[List[float]], limit: int = 5, filters: Optional[Dict] = None):
+    def search(
+        self,
+        query: str,
+        vectors: list[list[float]],
+        limit: int = 5,
+        filters: dict | None = None,
+    ):
         """
         Search for similar vectors in LangChain.
         """
         # For each vector, perform a similarity search
         if filters:
-            results = self.client.similarity_search_by_vector(embedding=vectors, k=limit, filter=filters)
+            results = self.client.similarity_search_by_vector(
+                embedding=vectors, k=limit, filter=filters
+            )
         else:
-            results = self.client.similarity_search_by_vector(embedding=vectors, k=limit)
+            results = self.client.similarity_search_by_vector(
+                embedding=vectors, k=limit
+            )
 
         final_results = self._parse_output(results)
         return final_results
@@ -157,7 +185,9 @@ class Langchain(VectorStoreBase):
         List all vectors in a collection.
         """
         try:
-            if hasattr(self.client, "_collection") and hasattr(self.client._collection, "get"):
+            if hasattr(self.client, "_collection") and hasattr(
+                self.client._collection, "get"
+            ):
                 # Convert mem0 filters to Chroma where clause if needed
                 where_clause = None
                 if filters:

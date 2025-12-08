@@ -1,4 +1,5 @@
-from typing import Any, Callable, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from selfmemory.configs.llms.base import BaseLlmConfig
 
@@ -12,25 +13,25 @@ class OpenAIConfig(BaseLlmConfig):
     def __init__(
         self,
         # Base parameters
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.1,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         max_tokens: int = 2000,
         top_p: float = 0.1,
         top_k: int = 1,
         enable_vision: bool = False,
-        vision_details: Optional[str] = "auto",
-        http_client_proxies: Optional[dict] = None,
+        vision_details: str | None = "auto",
+        http_client_proxies: dict | None = None,
         # OpenAI-specific parameters
-        openai_base_url: Optional[str] = None,
-        models: Optional[List[str]] = None,
-        route: Optional[str] = "fallback",
-        openrouter_base_url: Optional[str] = None,
-        site_url: Optional[str] = None,
-        app_name: Optional[str] = None,
+        openai_base_url: str | None = None,
+        models: list[str] | None = None,
+        route: str | None = "fallback",
+        openrouter_base_url: str | None = None,
+        site_url: str | None = None,
+        app_name: str | None = None,
         store: bool = False,
         # Response monitoring callback
-        response_callback: Optional[Callable[[Any, dict, dict], None]] = None,
+        response_callback: Callable[[Any, dict, dict], None] | None = None,
     ):
         """
         Initialize OpenAI configuration.

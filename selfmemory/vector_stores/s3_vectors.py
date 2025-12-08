@@ -1,6 +1,5 @@
 import json
 import logging
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -10,15 +9,17 @@ try:
     import boto3
     from botocore.exceptions import ClientError
 except ImportError:
-    raise ImportError("The 'boto3' library is required. Please install it using 'pip install boto3'.")
+    raise ImportError(
+        "The 'boto3' library is required. Please install it using 'pip install boto3'."
+    )
 
 logger = logging.getLogger(__name__)
 
 
 class OutputData(BaseModel):
-    id: Optional[str]
-    score: Optional[float]
-    payload: Optional[Dict]
+    id: str | None
+    score: float | None
+    payload: dict | None
 
 
 class S3Vectors(VectorStoreBase):
@@ -28,7 +29,7 @@ class S3Vectors(VectorStoreBase):
         collection_name: str,
         embedding_model_dims: int,
         distance_metric: str = "cosine",
-        region_name: Optional[str] = None,
+        region_name: str | None = None,
     ):
         self.client = boto3.client("s3vectors", region_name=region_name)
         self.vector_bucket_name = vector_bucket_name
@@ -37,7 +38,9 @@ class S3Vectors(VectorStoreBase):
         self.distance_metric = distance_metric
 
         self._ensure_bucket_exists()
-        self.create_col(self.collection_name, self.embedding_model_dims, self.distance_metric)
+        self.create_col(
+            self.collection_name, self.embedding_model_dims, self.distance_metric
+        )
 
     def _ensure_bucket_exists(self):
         try:
@@ -45,19 +48,29 @@ class S3Vectors(VectorStoreBase):
             logger.info(f"Vector bucket '{self.vector_bucket_name}' already exists.")
         except ClientError as e:
             if e.response["Error"]["Code"] == "NotFoundException":
-                logger.info(f"Vector bucket '{self.vector_bucket_name}' not found. Creating it.")
-                self.client.create_vector_bucket(vectorBucketName=self.vector_bucket_name)
+                logger.info(
+                    f"Vector bucket '{self.vector_bucket_name}' not found. Creating it."
+                )
+                self.client.create_vector_bucket(
+                    vectorBucketName=self.vector_bucket_name
+                )
                 logger.info(f"Vector bucket '{self.vector_bucket_name}' created.")
             else:
                 raise
 
     def create_col(self, name, vector_size, distance="cosine"):
         try:
-            self.client.get_index(vectorBucketName=self.vector_bucket_name, indexName=name)
-            logger.info(f"Index '{name}' already exists in bucket '{self.vector_bucket_name}'.")
+            self.client.get_index(
+                vectorBucketName=self.vector_bucket_name, indexName=name
+            )
+            logger.info(
+                f"Index '{name}' already exists in bucket '{self.vector_bucket_name}'."
+            )
         except ClientError as e:
             if e.response["Error"]["Code"] == "NotFoundException":
-                logger.info(f"Index '{name}' not found in bucket '{self.vector_bucket_name}'. Creating it.")
+                logger.info(
+                    f"Index '{name}' not found in bucket '{self.vector_bucket_name}'. Creating it."
+                )
                 self.client.create_index(
                     vectorBucketName=self.vector_bucket_name,
                     indexName=name,
@@ -69,7 +82,7 @@ class S3Vectors(VectorStoreBase):
             else:
                 raise
 
-    def _parse_output(self, vectors: List[Dict]) -> List[OutputData]:
+    def _parse_output(self, vectors: list[dict]) -> list[OutputData]:
         results = []
         for v in vectors:
             payload = v.get("metadata", {})
@@ -80,7 +93,9 @@ class S3Vectors(VectorStoreBase):
                 except json.JSONDecodeError:
                     logger.warning(f"Failed to parse metadata for key {v.get('key')}")
                     payload = {}
-            results.append(OutputData(id=v.get("key"), score=v.get("distance"), payload=payload))
+            results.append(
+                OutputData(id=v.get("key"), score=v.get("distance"), payload=payload)
+            )
         return results
 
     def insert(self, vectors, payloads=None, ids=None):
@@ -125,7 +140,7 @@ class S3Vectors(VectorStoreBase):
         # S3 Vectors uses put_vectors for updates (overwrite)
         self.insert(vectors=[vector], payloads=[payload], ids=[vector_id])
 
-    def get(self, vector_id) -> Optional[OutputData]:
+    def get(self, vector_id) -> OutputData | None:
         response = self.client.get_vectors(
             vectorBucketName=self.vector_bucket_name,
             indexName=self.collection_name,
@@ -143,16 +158,22 @@ class S3Vectors(VectorStoreBase):
         return [idx["indexName"] for idx in response.get("indexes", [])]
 
     def delete_col(self):
-        self.client.delete_index(vectorBucketName=self.vector_bucket_name, indexName=self.collection_name)
+        self.client.delete_index(
+            vectorBucketName=self.vector_bucket_name, indexName=self.collection_name
+        )
 
     def col_info(self):
-        response = self.client.get_index(vectorBucketName=self.vector_bucket_name, indexName=self.collection_name)
+        response = self.client.get_index(
+            vectorBucketName=self.vector_bucket_name, indexName=self.collection_name
+        )
         return response.get("index", {})
 
     def list(self, filters=None, limit=None):
         # Note: list_vectors does not support metadata filtering.
         if filters:
-            logger.warning("S3 Vectors `list` does not support metadata filtering. Ignoring filters.")
+            logger.warning(
+                "S3 Vectors `list` does not support metadata filtering. Ignoring filters."
+            )
 
         params = {
             "vectorBucketName": self.vector_bucket_name,
@@ -173,4 +194,6 @@ class S3Vectors(VectorStoreBase):
     def reset(self):
         logger.warning(f"Resetting index {self.collection_name}...")
         self.delete_col()
-        self.create_col(self.collection_name, self.embedding_model_dims, self.distance_metric)
+        self.create_col(
+            self.collection_name, self.embedding_model_dims, self.distance_metric
+        )

@@ -1,11 +1,13 @@
-from typing import Optional
-
 from pydantic import BaseModel, Field, field_validator
 
 
 class LlmConfig(BaseModel):
-    provider: str = Field(description="Provider of the LLM (e.g., 'ollama', 'openai')", default="openai")
-    config: Optional[dict] = Field(description="Configuration for the specific LLM", default={})
+    provider: str = Field(
+        description="Provider of the LLM (e.g., 'ollama', 'openai')", default="openai"
+    )
+    config: dict | None = Field(
+        description="Configuration for the specific LLM", default={}
+    )
 
     @field_validator("config")
     def validate_config(cls, v, values):
@@ -30,5 +32,4 @@ class LlmConfig(BaseModel):
             "langchain",
         ):
             return v
-        else:
-            raise ValueError(f"Unsupported LLM provider: {provider}")
+        raise ValueError(f"Unsupported LLM provider: {provider}")

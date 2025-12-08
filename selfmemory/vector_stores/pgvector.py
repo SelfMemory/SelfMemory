@@ -1,7 +1,7 @@
 import json
 import logging
 from contextlib import contextmanager
-from typing import Any, List, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -9,16 +9,22 @@ from pydantic import BaseModel
 try:
     from psycopg.types.json import Json
     from psycopg_pool import ConnectionPool
+
     PSYCOPG_VERSION = 3
     logger = logging.getLogger(__name__)
-    logger.info("Using psycopg (psycopg3) with ConnectionPool for PostgreSQL connections")
+    logger.info(
+        "Using psycopg (psycopg3) with ConnectionPool for PostgreSQL connections"
+    )
 except ImportError:
     try:
         from psycopg2.extras import Json, execute_values
         from psycopg2.pool import ThreadedConnectionPool as ConnectionPool
+
         PSYCOPG_VERSION = 2
         logger = logging.getLogger(__name__)
-        logger.info("Using psycopg2 with ThreadedConnectionPool for PostgreSQL connections")
+        logger.info(
+            "Using psycopg2 with ThreadedConnectionPool for PostgreSQL connections"
+        )
     except ImportError:
         raise ImportError(
             "Neither 'psycopg' nor 'psycopg2' library is available. "
@@ -31,9 +37,9 @@ logger = logging.getLogger(__name__)
 
 
 class OutputData(BaseModel):
-    id: Optional[str]
-    score: Optional[float]
-    payload: Optional[dict]
+    id: str | None
+    score: float | None
+    payload: dict | None
 
 
 class PGVector(VectorStoreBase):
@@ -86,10 +92,13 @@ class PGVector(VectorStoreBase):
         elif connection_string:
             if sslmode:
                 # Append sslmode to connection string if provided
-                if 'sslmode=' in connection_string:
+                if "sslmode=" in connection_string:
                     # Replace existing sslmode
                     import re
-                    connection_string = re.sub(r'sslmode=[^ ]*', f'sslmode={sslmode}', connection_string)
+
+                    connection_string = re.sub(
+                        r"sslmode=[^ ]*", f"sslmode={sslmode}", connection_string
+                    )
                 else:
                     # Add sslmode to connection string
                     connection_string = f"{connection_string} sslmode={sslmode}"
@@ -97,14 +106,21 @@ class PGVector(VectorStoreBase):
             connection_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
             if sslmode:
                 connection_string = f"{connection_string} sslmode={sslmode}"
-        
+
         if self.connection_pool is None:
             if PSYCOPG_VERSION == 3:
                 # psycopg3 ConnectionPool
-                self.connection_pool = ConnectionPool(conninfo=connection_string, min_size=minconn, max_size=maxconn, open=True)
+                self.connection_pool = ConnectionPool(
+                    conninfo=connection_string,
+                    min_size=minconn,
+                    max_size=maxconn,
+                    open=True,
+                )
             else:
                 # psycopg2 ThreadedConnectionPool
-                self.connection_pool = ConnectionPool(minconn=minconn, maxconn=maxconn, dsn=connection_string)
+                self.connection_pool = ConnectionPool(
+                    minconn=minconn, maxconn=maxconn, dsn=connection_string
+                )
 
         collections = self.list_cols()
         if collection_name not in collections:
@@ -126,7 +142,9 @@ class PGVector(VectorStoreBase):
                             conn.commit()
                     except Exception:
                         conn.rollback()
-                        logger.error("Error in cursor context (psycopg3)", exc_info=True)
+                        logger.error(
+                            "Error in cursor context (psycopg3)", exc_info=True
+                        )
                         raise
         else:
             # psycopg2 manual getconn/putconn
@@ -181,10 +199,15 @@ class PGVector(VectorStoreBase):
                 )
 
     def insert(self, vectors: list[list[float]], payloads=None, ids=None) -> None:
-        logger.info(f"Inserting {len(vectors)} vectors into collection {self.collection_name}")
+        logger.info(
+            f"Inserting {len(vectors)} vectors into collection {self.collection_name}"
+        )
         json_payloads = [json.dumps(payload) for payload in payloads]
 
-        data = [(id, vector, payload) for id, vector, payload in zip(ids, vectors, json_payloads)]
+        data = [
+            (id, vector, payload)
+            for id, vector, payload in zip(ids, vectors, json_payloads, strict=False)
+        ]
         if PSYCOPG_VERSION == 3:
             with self._get_cursor(commit=True) as cur:
                 cur.executemany(
@@ -203,9 +226,9 @@ class PGVector(VectorStoreBase):
         self,
         query: str,
         vectors: list[float],
-        limit: Optional[int] = 5,
-        filters: Optional[dict] = None,
-    ) -> List[OutputData]:
+        limit: int | None = 5,
+        filters: dict | None = None,
+    ) -> list[OutputData]:
         """
         Search for similar vectors.
 
@@ -226,7 +249,9 @@ class PGVector(VectorStoreBase):
                 filter_conditions.append("payload->>%s = %s")
                 filter_params.extend([k, str(v)])
 
-        filter_clause = "WHERE " + " AND ".join(filter_conditions) if filter_conditions else ""
+        filter_clause = (
+            "WHERE " + " AND ".join(filter_conditions) if filter_conditions else ""
+        )
 
         with self._get_cursor() as cur:
             cur.execute(
@@ -241,7 +266,9 @@ class PGVector(VectorStoreBase):
             )
 
             results = cur.fetchall()
-        return [OutputData(id=str(r[0]), score=float(r[1]), payload=r[2]) for r in results]
+        return [
+            OutputData(id=str(r[0]), score=float(r[1]), payload=r[2]) for r in results
+        ]
 
     def delete(self, vector_id: str) -> None:
         """
@@ -251,13 +278,15 @@ class PGVector(VectorStoreBase):
             vector_id (str): ID of the vector to delete.
         """
         with self._get_cursor(commit=True) as cur:
-            cur.execute(f"DELETE FROM {self.collection_name} WHERE id = %s", (vector_id,))
+            cur.execute(
+                f"DELETE FROM {self.collection_name} WHERE id = %s", (vector_id,)
+            )
 
     def update(
         self,
         vector_id: str,
-        vector: Optional[list[float]] = None,
-        payload: Optional[dict] = None,
+        vector: list[float] | None = None,
+        payload: dict | None = None,
     ) -> None:
         """
         Update a vector and its payload.
@@ -269,7 +298,7 @@ class PGVector(VectorStoreBase):
         """
         with self._get_cursor(commit=True) as cur:
             if vector:
-               cur.execute(
+                cur.execute(
                     f"UPDATE {self.collection_name} SET vector = %s WHERE id = %s",
                     (vector, vector_id),
                 )
@@ -287,7 +316,6 @@ class PGVector(VectorStoreBase):
                         f"UPDATE {self.collection_name} SET payload = %s WHERE id = %s",
                         (Json(payload), vector_id),
                     )
-
 
     def get(self, vector_id: str) -> OutputData:
         """
@@ -309,7 +337,7 @@ class PGVector(VectorStoreBase):
                 return None
             return OutputData(id=str(result[0]), score=None, payload=result[2])
 
-    def list_cols(self) -> List[str]:
+    def list_cols(self) -> list[str]:
         """
         List all collections.
 
@@ -317,7 +345,9 @@ class PGVector(VectorStoreBase):
             List[str]: List of collection names.
         """
         with self._get_cursor() as cur:
-            cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+            cur.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+            )
             return [row[0] for row in cur.fetchall()]
 
     def delete_col(self) -> None:
@@ -348,10 +378,8 @@ class PGVector(VectorStoreBase):
         return {"name": result[0], "count": result[1], "size": result[2]}
 
     def list(
-        self,
-        filters: Optional[dict] = None,
-        limit: Optional[int] = 100
-    ) -> List[OutputData]:
+        self, filters: dict | None = None, limit: int | None = 100
+    ) -> list[OutputData]:
         """
         List all vectors in a collection.
 
@@ -370,7 +398,9 @@ class PGVector(VectorStoreBase):
                 filter_conditions.append("payload->>%s = %s")
                 filter_params.extend([k, str(v)])
 
-        filter_clause = "WHERE " + " AND ".join(filter_conditions) if filter_conditions else ""
+        filter_clause = (
+            "WHERE " + " AND ".join(filter_conditions) if filter_conditions else ""
+        )
 
         query = f"""
             SELECT id, vector, payload

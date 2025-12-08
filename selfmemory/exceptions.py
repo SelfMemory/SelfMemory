@@ -8,16 +8,16 @@ and recovery in SelfMemory applications.
 Adapted from mem0's exception system for SelfMemory's multi-tenant architecture.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class SelfMemoryError(Exception):
     """Base exception for all SelfMemory-related errors.
-    
+
     This is the base class for all SelfMemory-specific exceptions. It provides a structured
     approach to error handling with error codes, contextual details, suggestions for
     resolution, and debug information.
-    
+
     Attributes:
         message (str): Human-readable error message.
         error_code (str): Unique error identifier for programmatic handling.
@@ -25,17 +25,17 @@ class SelfMemoryError(Exception):
         suggestion (str): User-friendly suggestion for resolving the error.
         debug_info (dict): Technical debugging information.
     """
-    
+
     def __init__(
         self,
         message: str,
         error_code: str,
-        details: Optional[Dict[str, Any]] = None,
-        suggestion: Optional[str] = None,
-        debug_info: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
+        suggestion: str | None = None,
+        debug_info: dict[str, Any] | None = None,
     ):
         """Initialize a SelfMemoryError.
-        
+
         Args:
             message: Human-readable error message.
             error_code: Unique error identifier.
@@ -49,7 +49,7 @@ class SelfMemoryError(Exception):
         self.suggestion = suggestion
         self.debug_info = debug_info or {}
         super().__init__(self.message)
-    
+
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}("
@@ -63,10 +63,10 @@ class SelfMemoryError(Exception):
 
 class AuthenticationError(SelfMemoryError):
     """Raised when authentication fails in SelfMemory.
-    
+
     This exception is raised when Ory Kratos/Hydra authentication fails,
     API key validation fails, or authentication credentials are invalid.
-    
+
     Common scenarios:
         - Invalid Ory Kratos session
         - Expired Hydra OAuth token
@@ -74,15 +74,16 @@ class AuthenticationError(SelfMemoryError):
         - Missing authentication headers
         - Insufficient permissions
     """
+
     pass
 
 
 class ValidationError(SelfMemoryError):
     """Raised when input validation fails in SelfMemory.
-    
+
     This exception is raised when request parameters, memory content,
     or configuration values fail validation checks.
-    
+
     Common scenarios:
         - Invalid user_id, project_id, or organization_id format
         - Missing required fields
@@ -90,139 +91,182 @@ class ValidationError(SelfMemoryError):
         - Invalid metadata format
         - Malformed multi-tenant context
     """
+
     pass
 
 
 class IsolationError(SelfMemoryError):
     """Raised when multi-tenant isolation is violated.
-    
+
     This SelfMemory-specific exception is raised when operations attempt
     to access memories across tenant boundaries or violate isolation rules.
-    
+
     Common scenarios:
         - User accessing another organization's memories
         - Project accessing memories from different organization
         - Missing project_id when organization_id is provided
         - Cross-tenant data leakage attempt
     """
-    
-    def __init__(self, message: str, error_code: str = "ISOLATION_001", details: dict = None, 
-                 suggestion: str = "Please check your user_id, project_id, and organization_id", 
-                 debug_info: dict = None):
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "ISOLATION_001",
+        details: dict = None,
+        suggestion: str = "Please check your user_id, project_id, and organization_id",
+        debug_info: dict = None,
+    ):
         super().__init__(message, error_code, details, suggestion, debug_info)
 
 
 class MemoryNotFoundError(SelfMemoryError):
     """Raised when a memory is not found or not accessible."""
+
     pass
 
 
 class NetworkError(SelfMemoryError):
     """Raised when network connectivity issues occur."""
+
     pass
 
 
 class ConfigurationError(SelfMemoryError):
     """Raised when client configuration is invalid."""
+
     pass
 
 
 class MemoryQuotaExceededError(SelfMemoryError):
     """Raised when user's memory quota is exceeded."""
+
     pass
 
 
 class MemoryCorruptionError(SelfMemoryError):
     """Raised when memory data is corrupted."""
+
     pass
 
 
 class VectorSearchError(SelfMemoryError):
     """Raised when vector search operations fail."""
+
     pass
 
 
 class CacheError(SelfMemoryError):
     """Raised when caching operations fail."""
+
     pass
 
 
 # SelfMemory-specific exception classes
 class VectorStoreError(SelfMemoryError):
     """Raised when vector store operations fail.
-    
+
     This exception is raised when Qdrant, ChromaDB, or other vector store
     operations fail in SelfMemory.
     """
-    
-    def __init__(self, message: str, error_code: str = "VECTOR_001", details: dict = None, 
-                 suggestion: str = "Please check your vector store configuration and connection", 
-                 debug_info: dict = None):
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "VECTOR_001",
+        details: dict = None,
+        suggestion: str = "Please check your vector store configuration and connection",
+        debug_info: dict = None,
+    ):
         super().__init__(message, error_code, details, suggestion, debug_info)
 
 
 class EmbeddingError(SelfMemoryError):
     """Raised when embedding operations fail.
-    
+
     This exception is raised when Ollama or other embedding providers
     fail in SelfMemory.
     """
-    
-    def __init__(self, message: str, error_code: str = "EMBED_001", details: dict = None, 
-                 suggestion: str = "Please check your embedding model configuration", 
-                 debug_info: dict = None):
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "EMBED_001",
+        details: dict = None,
+        suggestion: str = "Please check your embedding model configuration",
+        debug_info: dict = None,
+    ):
         super().__init__(message, error_code, details, suggestion, debug_info)
 
 
 class LLMError(SelfMemoryError):
     """Raised when LLM operations fail.
-    
+
     This exception is raised when LLM operations for fact extraction
     and memory processing fail in SelfMemory.
     """
-    
-    def __init__(self, message: str, error_code: str = "LLM_001", details: dict = None, 
-                 suggestion: str = "Please check your LLM configuration and API key", 
-                 debug_info: dict = None):
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "LLM_001",
+        details: dict = None,
+        suggestion: str = "Please check your LLM configuration and API key",
+        debug_info: dict = None,
+    ):
         super().__init__(message, error_code, details, suggestion, debug_info)
 
 
 class DatabaseError(SelfMemoryError):
     """Raised when database operations fail.
-    
+
     This exception is raised when MongoDB or other database operations
     fail in SelfMemory.
     """
-    
-    def __init__(self, message: str, error_code: str = "DB_001", details: dict = None, 
-                 suggestion: str = "Please check your database configuration and connection", 
-                 debug_info: dict = None):
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "DB_001",
+        details: dict = None,
+        suggestion: str = "Please check your database configuration and connection",
+        debug_info: dict = None,
+    ):
         super().__init__(message, error_code, details, suggestion, debug_info)
 
 
 class ProjectError(SelfMemoryError):
     """Raised when project-related operations fail.
-    
+
     This SelfMemory-specific exception is raised when project operations
     fail, such as project creation, access, or management.
     """
-    
-    def __init__(self, message: str, error_code: str = "PROJECT_001", details: dict = None, 
-                 suggestion: str = "Please check your project configuration and permissions", 
-                 debug_info: dict = None):
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "PROJECT_001",
+        details: dict = None,
+        suggestion: str = "Please check your project configuration and permissions",
+        debug_info: dict = None,
+    ):
         super().__init__(message, error_code, details, suggestion, debug_info)
 
 
 class OrganizationError(SelfMemoryError):
     """Raised when organization-related operations fail.
-    
+
     This SelfMemory-specific exception is raised when organization operations
     fail, such as organization access or management.
     """
-    
-    def __init__(self, message: str, error_code: str = "ORG_001", details: dict = None, 
-                 suggestion: str = "Please check your organization configuration and permissions", 
-                 debug_info: dict = None):
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "ORG_001",
+        details: dict = None,
+        suggestion: str = "Please check your organization configuration and permissions",
+        debug_info: dict = None,
+    ):
         super().__init__(message, error_code, details, suggestion, debug_info)
 
 
@@ -246,27 +290,27 @@ HTTP_STATUS_TO_EXCEPTION = {
 def create_exception_from_response(
     status_code: int,
     response_text: str,
-    error_code: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
-    debug_info: Optional[Dict[str, Any]] = None,
+    error_code: str | None = None,
+    details: dict[str, Any] | None = None,
+    debug_info: dict[str, Any] | None = None,
 ) -> SelfMemoryError:
     """Create an appropriate exception based on HTTP response.
-    
+
     Args:
         status_code: HTTP status code from the response.
         response_text: Response body text.
         error_code: Optional specific error code.
         details: Additional error context.
         debug_info: Debug information.
-    
+
     Returns:
         An instance of the appropriate SelfMemoryError subclass.
     """
     exception_class = HTTP_STATUS_TO_EXCEPTION.get(status_code, SelfMemoryError)
-    
+
     if not error_code:
         error_code = f"HTTP_{status_code}"
-    
+
     suggestions = {
         400: "Please check your request parameters and try again",
         401: "Please check your authentication credentials",
@@ -281,9 +325,9 @@ def create_exception_from_response(
         503: "Service unavailable. Please try again later",
         504: "Gateway timeout. Please try again later",
     }
-    
+
     suggestion = suggestions.get(status_code, "Please try again later")
-    
+
     return exception_class(
         message=response_text or f"HTTP {status_code} error",
         error_code=error_code,
