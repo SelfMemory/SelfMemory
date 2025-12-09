@@ -789,7 +789,7 @@ class SelfMemory(MemoryBase):
 
         except Exception as e:
             logger.error(f"_add_with_llm failed: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "An internal error occurred."}
 
     def _create_memory_with_embedding(
         self,
