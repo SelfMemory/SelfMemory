@@ -36,21 +36,36 @@ dependencies = [
     "chromadb>=0.4.0", # Primary vector database (zero-setup)
     "qdrant-client>=1.6.0", # Vector database (enterprise)
     "pydantic>=2.0.0,<3.0.0", # Data validation
+    "email-validator>=2.0.0", # Email validation for Pydantic
     "python-dotenv>=1.0.0", # Environment variables
     "cryptography>=40.0.0", # Security
     "httpx>=0.25.0", # HTTP client
     # Server capabilities (FastAPI + Uvicorn)
     "fastapi>=0.100.0", # API server
+    "fastapi-csrf-protect>=0.3.0", # CSRF protection for FastAPI
     "uvicorn>=0.20.0", # ASGI server
     "starlette>=0.27.0", # Web framework
     "psutil>=5.9.0", # System and process utilities for health checks
     "pymongo>=4.0.0", # MongoDB backend for multi-tenant server
+    # Ory authentication clients
+    "ory-hydra-client>=2.0.0", # Ory Hydra OAuth2 client
+    "ory-kratos-client>=1.0.0", # Ory Kratos identity client
+    # Security and authentication
+    "argon2-cffi>=23.1.0", # Argon2 password hashing
     # Embedding providers
     "ollama>=0.1.0", # Ollama embeddings
     "openai>=1.0.0", # OpenAI embeddings
     # Configuration support
     "pyyaml>=6.0.0", # YAML config files
     "mcp[cli]>=1.13.0",
+    # OpenTelemetry (Observability)
+    "opentelemetry-api>=1.20.0", # OTel API
+    "opentelemetry-sdk>=1.20.0", # OTel SDK
+    "opentelemetry-exporter-otlp>=1.20.0", # OTLP exporter for SigNoz
+    "opentelemetry-instrumentation-fastapi>=0.41b0", # FastAPI auto-instrumentation
+    "opentelemetry-instrumentation-httpx>=0.41b0", # HTTP client instrumentation
+    "opentelemetry-instrumentation-pymongo>=0.41b0", # MongoDB instrumentation
+    "opentelemetry-instrumentation-logging>=0.41b0", # Logging instrumentation
 ]
 
 [project.urls]

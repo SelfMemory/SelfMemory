@@ -18,7 +18,9 @@ from .config import config
 from .dependencies import AuthContext, authenticate_api_key, mongo_db
 from .health import is_alive, is_ready, perform_health_checks
 from .mcp_auth import get_protected_resource_metadata
+from .telemetry import initialize_telemetry
 from .routes.api_keys import router as api_keys_router
+from .routes.chat import router as chat_router
 from .routes.hydra_proxy import router as hydra_proxy_router
 from .routes.invitations import router as invitations_router
 from .routes.notifications import router as notifications_router
@@ -103,6 +105,9 @@ app = FastAPI(
     title="SelfMemory APIs",
 )
 
+# Initialize OpenTelemetry (production only)
+initialize_telemetry(app)
+
 # Add rate limiting to app state
 app.state.limiter = limiter
 
@@ -122,9 +127,18 @@ async def add_request_id_middleware(request: Request, call_next):
 
 
 # CORS middleware
+# NOTE: Cannot use allow_origins=["*"] with allow_credentials=True
+# Browsers block credentials with wildcard origins for security
+# NOTE: Must include BOTH localhost and 127.0.0.1 as browsers treat them as different origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",      # Dashboard (localhost)
+        "http://127.0.0.1:3000",      # Dashboard (127.0.0.1)
+        "http://localhost:8081",      # Backend API (localhost)
+        "http://127.0.0.1:8081",      # Backend API (127.0.0.1)
+        config.app.FRONTEND_URL,      # Dynamic frontend URL from config
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -196,6 +210,7 @@ async def get_csrf_token(
 
 # Include routers
 app.include_router(api_keys_router)
+app.include_router(chat_router)
 app.include_router(hydra_proxy_router)
 app.include_router(invitations_router)
 app.include_router(notifications_router)

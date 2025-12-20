@@ -97,7 +97,7 @@ def validate_session(session_cookie: str) -> KratosSession:
     try:
         # Validate session with Kratos using Cookie header (not x-session-token)
         # This matches how the dashboard validates sessions successfully
-        from ory_kratos_client.api_client import ApiClient
+        from ory_kratos_client import ApiClient
 
         logger.info(f"Validating Kratos session (cookie length: {len(session_cookie)})")
 
