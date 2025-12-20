@@ -254,6 +254,30 @@ class MCPConfig:
     )
 
 
+class OTelConfig:
+    """Configuration for OpenTelemetry observability (production only)."""
+
+    # Whether OpenTelemetry is enabled
+    ENABLED: bool = os.getenv("OTEL_ENABLED", "false").lower() == "true"
+
+    # Service name for identification in SigNoz
+    SERVICE_NAME: str = os.getenv("OTEL_SERVICE_NAME", "selfmemory-api")
+
+    # OTLP exporter endpoint (SigNoz gRPC endpoint)
+    OTLP_ENDPOINT: str = os.getenv(
+        "OTEL_EXPORTER_OTLP_ENDPOINT", "http://192.168.1.41:4317"
+    )
+
+    # Protocol: grpc or http/protobuf
+    PROTOCOL: str = os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
+
+    # Trace sampling configuration
+    TRACES_SAMPLER: str = os.getenv(
+        "OTEL_TRACES_SAMPLER", "parentbased_traceidratio"
+    )
+    TRACES_SAMPLER_ARG: float = float(os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0"))
+
+
 # Main configuration object
 class Config:
     """Main configuration class that aggregates all config sections."""
@@ -275,6 +299,7 @@ class Config:
     metrics = MetricsConfig()
     logging = LoggingConfig()
     mcp = MCPConfig()
+    otel = OTelConfig()
 
     @classmethod
     def validate(cls) -> list[str]:
