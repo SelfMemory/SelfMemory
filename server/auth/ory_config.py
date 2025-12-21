@@ -8,13 +8,13 @@ No fallbacks - fail fast if configuration is missing.
 import logging
 import os
 
+from ory_hydra_client import ApiClient as HydraApiClient
 from ory_hydra_client import Configuration as HydraConfiguration
-from ory_hydra_client.api_client import ApiClient as HydraApiClient
-from ory_hydra_client.apis import OAuth2Api as HydraOAuth2Api
+from ory_hydra_client import OAuth2Api as HydraOAuth2Api
+from ory_kratos_client import ApiClient as KratosApiClient
 from ory_kratos_client import Configuration as KratosConfiguration
 from ory_kratos_client import FrontendApi as KratosFrontendApi
 from ory_kratos_client import IdentityApi as KratosIdentityApi
-from ory_kratos_client.api_client import ApiClient as KratosApiClient
 
 logger = logging.getLogger(__name__)
 

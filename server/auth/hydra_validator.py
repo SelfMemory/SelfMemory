@@ -6,6 +6,7 @@ No fallbacks - fail fast with clear errors.
 """
 
 import logging
+import os
 
 from ory_hydra_client.exceptions import ApiException
 
@@ -137,6 +138,12 @@ def validate_token(access_token: str) -> HydraToken:
 
         expected_resource = config.mcp.SERVER_URL.rstrip("/")
 
+        # DIAGNOSTIC: Log audience validation details
+        logger.info("🔍 AUDIENCE VALIDATION:")
+        logger.info(f"   Expected: {expected_resource}")
+        logger.info(f"   Received: {audiences}")
+        logger.info(f"   MCP_SERVER_URL env: {os.getenv('MCP_SERVER_URL', 'NOT SET')}")
+
         # Validate token was issued for THIS MCP server
         is_valid_audience = any(
             audience.rstrip("/") == expected_resource for audience in audiences
@@ -148,12 +155,25 @@ def validate_token(access_token: str) -> HydraToken:
                 f"got {audiences}"
             )
             logger.error(f"{error_msg}, subject={subject}, client={client_id}")
+            logger.error(
+                f"💡 FIX: Set MCP_SERVER_URL={expected_resource} and ensure consent flow includes this as grant_access_token_audience"
+            )
             raise ValueError(error_msg)
 
         logger.info(f"✅ Token audience validated: {audiences}, subject={subject}")
 
-        # Extract scopes
-        scopes = introspection.scope.split() if introspection.scope else []
+        # Extract scopes - handle missing scope attribute gracefully
+        try:
+            scope_str = introspection.scope if hasattr(introspection, "scope") else None
+            scopes = scope_str.split() if scope_str else []
+        except (AttributeError, ApiException):
+            # If scope is not available, check the raw response
+            scopes = []
+            if hasattr(introspection, "_data_store"):
+                scope_value = introspection._data_store.get("scope")
+                if scope_value:
+                    scopes = scope_value.split() if isinstance(scope_value, str) else []
+            logger.warning(f"⚠️  Scope not directly accessible, extracted: {scopes}")
 
         # Extract custom claims (ext contains custom claims)
         ext = introspection.ext or {}
