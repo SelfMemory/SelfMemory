@@ -221,11 +221,14 @@ Always search memories first when questions reference past information. Provide 
                                                         f"[Tool Call Stream] #{index} accumulated args: {tool_call_accumulator[index]['function']['arguments'][:100]}..."
                                                     )
 
-                                    # Collect content
+                                    # Collect content and stream it immediately
                                     content = delta.get("content", "")
                                     if content:
                                         full_response += content
-                                        # Don't yield yet - need to check for XML tool calls
+                                        # CRITICAL FIX: Yield content immediately for streaming
+                                        # We still accumulate in full_response for tool call detection later
+                                        yield content
+                                        print(f"[STREAMING] ✓ Yielded chunk (length={len(content)})")
 
                             except json.JSONDecodeError:
                                 continue
@@ -248,17 +251,13 @@ Always search memories first when questions reference past information. Provide 
                     )
                     has_tool_calls = True
                     tool_calls = xml_tool_calls
-
-                    # Remove tool call XML from response text
-                    clean_response = remove_tool_call_xml(full_response)
-
-                    # If there's text before tool calls, yield it
-                    if clean_response.strip():
-                        yield clean_response
+                    # Note: Content was already streamed above during iteration
+                    # We don't need to yield again here to avoid duplication
                 else:
-                    # No tool calls found, yield the full response
-                    if full_response:
-                        yield full_response
+                    # No tool calls found
+                    # Content was already streamed above during iteration
+                    # No need to yield full_response again
+                    pass
 
                 # If model made tool calls, execute them and generate final response
                 if has_tool_calls:
