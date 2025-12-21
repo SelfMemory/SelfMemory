@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Literal
 
-from selfmemory.embeddings.configs import BaseEmbedderConfig
+from selfmemory.configs.embeddings.base import BaseEmbedderConfig
 
 
 class EmbeddingBase(ABC):

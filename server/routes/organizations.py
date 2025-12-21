@@ -12,7 +12,7 @@ import logging
 from datetime import timedelta
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 from pymongo.database import Database
 
@@ -108,6 +108,7 @@ def invite_user_to_organization(
     request: Request,
     org_id: str,
     invite: OrganizationInvite,
+    background_tasks: BackgroundTasks,
     auth: AuthContext = Depends(authenticate_api_key),
 ):
     """
@@ -267,22 +268,20 @@ def invite_user_to_organization(
     inviter = mongo_db.users.find_one({"_id": user_obj_id})
     inviter_email = inviter.get("email") if inviter else "Unknown"
 
-    # Attempt to send invitation email (non-blocking)
-    try:
-        send_invitation_email(
-            email=invite.email,
-            organization_name=organization["name"],
-            project_name=None,  # Org-level invitation
-            role=invite.role,
-            invited_by_email=inviter_email,
-            invitation_token=invitation_token,
-        )
-    except Exception as email_error:
-        # Log email failure but don't break invitation creation
-        logger.error(
-            f"❌ Failed to send invitation email: invitation_id={invitation_id}, "
-            f"email={invite.email}, error={type(email_error).__name__}: {email_error}"
-        )
+    # Send invitation email in background (non-blocking)
+    background_tasks.add_task(
+        send_invitation_email,
+        email=invite.email,
+        organization_name=organization["name"],
+        project_name=None,  # Org-level invitation
+        role=invite.role,
+        invited_by_email=inviter_email,
+        invitation_token=invitation_token,
+    )
+
+    logger.info(
+        f"✅ Invitation email queued for {invite.email} (will send in background)"
+    )
 
     return {
         "invitation_id": invitation_id,
@@ -338,10 +337,54 @@ def list_organization_members(
         ).sort("joinedAt", 1)
     )
 
+    # IMPORTANT: Ensure owner appears in members list even if not in organization_members table
+    # This handles legacy organizations where owner wasn't added to organization_members
+    owner_id = organization.get("ownerId")
+    owner_in_members = any(str(m["userId"]) == str(owner_id) for m in members)
+
+    if not owner_in_members:
+        # Add owner to members list for display (and optionally persist to DB)
+        owner_member_doc = {
+            "organizationId": org_obj_id,
+            "userId": owner_id,
+            "role": "owner",
+            "joinedAt": organization.get("createdAt", utc_now()),
+            "status": "active",
+            "invitedBy": None,
+        }
+
+        # Add to in-memory list for this response
+        members.insert(0, owner_member_doc)
+
+        # Optionally persist to database to fix legacy data
+        try:
+            mongo_db.organization_members.insert_one(owner_member_doc.copy())
+            logger.info(
+                f"✅ Added missing owner to organization_members: org={org_id}, owner={owner_id}"
+            )
+        except Exception as e:
+            # Ignore duplicates or errors - owner is already in response
+            logger.debug(f"Could not persist owner to organization_members: {e}")
+
+    logger.info(
+        f"🔍 Listing members: org={org_id}, owner={owner_id}, "
+        f"owner_in_members={owner_in_members}, total_members={len(members)}"
+    )
+
     # Enrich member data with user information and project count
     enriched_members = []
     for member in members:
-        user = mongo_db.users.find_one({"_id": member["userId"]})
+        # Handle both ObjectId and Kratos ID string formats for userId
+        member_user_id = member["userId"]
+        user = mongo_db.users.find_one(
+            {
+                "$or": [
+                    {"_id": member_user_id},  # MongoDB ObjectId
+                    {"kratosId": member_user_id},  # Kratos ID string
+                ]
+            }
+        )
+
         if user:
             # Count projects this member has access to in this organization
             projects_count = mongo_db.project_members.count_documents(
@@ -452,7 +495,6 @@ def update_organization_member_role(
     )
 
     org_obj_id = validate_object_id(org_id, "org_id")
-    requester_obj_id = validate_object_id(auth.user_id, "user_id")
     target_user_obj_id = validate_object_id(user_id, "user_id")
 
     # Verify organization exists
@@ -460,7 +502,7 @@ def update_organization_member_role(
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    # Verify requester is admin or owner
+    # Verify requester is admin or owner (get MongoDB ObjectId from Kratos ID)
     try:
         requester_user = get_user_by_kratos_id(mongo_db, auth.user_id)
     except ValueError as e:
@@ -534,7 +576,6 @@ def remove_user_from_organization(
     - Cascades: removes from all projects, deactivates all API keys
     """
     org_obj_id = validate_object_id(org_id, "org_id")
-    requester_obj_id = validate_object_id(auth.user_id, "user_id")
     target_user_obj_id = validate_object_id(user_id, "user_id")
 
     # Verify organization exists
@@ -542,7 +583,7 @@ def remove_user_from_organization(
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    # Verify requester is admin
+    # Verify requester is admin (get MongoDB ObjectId from Kratos ID)
     try:
         requester_user = get_user_by_kratos_id(mongo_db, auth.user_id)
     except ValueError as e:
@@ -550,10 +591,22 @@ def remove_user_from_organization(
 
     requester_obj_id = requester_user["_id"]
 
-    if not is_organization_admin(mongo_db, org_obj_id, requester_obj_id, auth.user_id):
+    # Check if requester is admin OR removing themselves
+    is_admin = is_organization_admin(
+        mongo_db, org_obj_id, requester_obj_id, auth.user_id
+    )
+    is_self_removal = str(requester_obj_id) == user_id or auth.user_id == user_id
+
+    logger.info(
+        f"🔍 Organization member removal check: org={org_id}, target={user_id}, "
+        f"requester_obj_id={str(requester_obj_id)}, requester_kratos_id={auth.user_id}, "
+        f"is_admin={is_admin}, is_self_removal={is_self_removal}"
+    )
+
+    if not is_admin and not is_self_removal:
         raise HTTPException(
             status_code=403,
-            detail="Only organization admins can remove members",
+            detail="Only organization admins can remove other members",
         )
 
     # Verify target user is a member
@@ -565,16 +618,33 @@ def remove_user_from_organization(
         )
 
     # Cannot remove organization owner
-    if str(organization["ownerId"]) == user_id:
+    is_owner = str(organization["ownerId"]) == user_id
+    if is_owner:
         raise HTTPException(
             status_code=400,
             detail="Cannot remove organization owner. Transfer ownership first.",
         )
 
     # Check if this would remove the last admin
-    if target_member["role"] in ["owner", "admin"]:
+    # Allow removal if user is removing themselves (self-removal) since owner still has admin rights
+    # IMPORTANT: The organization owner has implicit admin rights even if not in organization_members
+    if target_member["role"] in ["owner", "admin"] and not is_self_removal:
         admin_count = count_organization_admins(mongo_db, org_obj_id)
-        if admin_count <= 1:
+
+        # Check if organization owner would remain after removal (owner has implicit admin rights)
+        org_owner_id = organization["ownerId"]
+        owner_is_being_removed = str(org_owner_id) == user_id
+
+        # DEBUG: Log admin count and owner status
+        logger.info(
+            f"🔍 Admin removal check: org={org_id}, target={user_id}, "
+            f"admin_count={admin_count}, org_owner={str(org_owner_id)}, "
+            f"owner_is_being_removed={owner_is_being_removed}"
+        )
+
+        # Only block if we're removing the last admin AND the owner is also being removed
+        # If owner remains (and they're not being removed), they retain implicit admin rights
+        if admin_count <= 1 and owner_is_being_removed:
             raise HTTPException(
                 status_code=400,
                 detail="Cannot remove the last admin. Promote another member first.",
@@ -640,14 +710,13 @@ def cancel_organization_invitation(
     """
     org_obj_id = validate_object_id(org_id, "org_id")
     invitation_obj_id = validate_object_id(invitation_id, "invitation_id")
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
 
     # Verify organization exists
     organization = mongo_db.organizations.find_one({"_id": org_obj_id})
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    # Verify requester is admin
+    # Verify requester is admin (get user MongoDB ObjectId from Kratos ID)
     try:
         user = get_user_by_kratos_id(mongo_db, auth.user_id)
     except ValueError as e:
@@ -711,13 +780,20 @@ def transfer_organization_ownership(
     - Current owner remains as admin after transfer
     """
     org_obj_id = validate_object_id(org_id, "org_id")
-    current_owner_obj_id = validate_object_id(auth.user_id, "user_id")
     new_owner_obj_id = validate_object_id(transfer.new_owner_id, "new_owner_id")
 
     # Verify organization exists
     organization = mongo_db.organizations.find_one({"_id": org_obj_id})
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Get current owner's ObjectId
+    try:
+        current_owner = get_user_by_kratos_id(mongo_db, auth.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+
+    current_owner_obj_id = current_owner["_id"]
 
     # Verify requester is current owner
     if str(organization["ownerId"]) != auth.user_id:
@@ -796,7 +872,6 @@ def delete_organization(
     - Requires confirmation (this is destructive and affects all projects)
     """
     org_obj_id = validate_object_id(org_id, "org_id")
-    user_obj_id = validate_object_id(auth.user_id, "user_id")
 
     # Verify organization exists
     organization = mongo_db.organizations.find_one({"_id": org_obj_id})
@@ -834,7 +909,6 @@ def delete_organization(
                 "$set": {
                     "isActive": False,
                     "deactivatedAt": utc_now(),
-                    "deactivatedBy": user_obj_id,
                     "deactivatedReason": "organization_deleted",
                 }
             },

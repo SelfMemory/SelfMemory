@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -34,8 +35,17 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import Context, FastMCP
+from opentelemetry import trace
+from telemetry import init_telemetry
 
 load_dotenv()
+
+
+init_telemetry(service_name="selfmemory-mcp")
+
+# Get tracer for tool instrumentation
+tracer = trace.get_tracer(__name__)
+
 
 # Add project root to path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -48,7 +58,7 @@ from middleware import UnifiedAuthMiddleware, current_token_context  # noqa: E40
 from oauth.metadata import get_protected_resource_metadata  # noqa: E402
 from tools.fetch import format_fetch_result  # noqa: E402
 from tools.search import format_search_results  # noqa: E402
-from utils import create_tool_success, handle_tool_errors  # noqa: E402
+from utils import handle_tool_errors  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -63,7 +73,7 @@ CORE_SERVER_HOST = config.server.selfmemory_api_host
 mcp = FastMCP(
     name="SelfMemory",
     instructions="Memory management server with unified authentication (OAuth 2.1 + API key)",
-    stateless_http=True,
+    stateless_http=False,
     json_response=True,
 )
 
@@ -119,6 +129,41 @@ async def log_requests(request: Request, call_next):
 
 
 # ============================================================================
+# Trailing Slash Handler for MCP (Prevents 307 Redirects)
+# ============================================================================
+
+
+@app.middleware("http")
+async def handle_trailing_slash(request: Request, call_next):
+    """Handle trailing slash for MCP endpoints without 307 redirect.
+
+    This ensures both /mcp and /mcp/ work seamlessly for SSE clients.
+    FastAPI automatically adds trailing slashes and returns 307 redirects,
+    which breaks SSE streaming. This middleware rewrites the path internally
+    instead of redirecting the client.
+    """
+    path = request.url.path
+
+    # If path is /mcp (no slash), rewrite it to /mcp/ internally
+    if path == "/mcp" or path.startswith("/mcp?"):
+        # Create new scope with updated path
+        scope = request.scope.copy()
+        scope["path"] = "/mcp/"
+        scope["raw_path"] = b"/mcp/"
+
+        # Preserve query string if present
+        if "?" in path:
+            query = path.split("?", 1)[1]
+            scope["query_string"] = query.encode()
+
+        # Create new request with updated scope
+        request = Request(scope, request.receive)
+
+    response = await call_next(request)
+    return response
+
+
+# ============================================================================
 # OAuth Discovery Endpoints (For OAuth Clients)
 # ============================================================================
 
@@ -140,6 +185,9 @@ async def oauth_authorization_server(request: Request):
     VS Code and other OAuth clients discover the authorization server
     by fetching this endpoint. We proxy to Hydra's OIDC discovery and
     inject the registration_endpoint for Dynamic Client Registration.
+
+    IMPORTANT: Points authorization_endpoint to our backend proxy to enable
+    scope injection for Docker MCP Toolkit compatibility.
     """
     hydra_url = f"{config.hydra.public_url}/.well-known/openid-configuration"
 
@@ -157,6 +205,7 @@ async def oauth_authorization_server(request: Request):
             logger.info(
                 f"✅ Proxied OAuth authorization server metadata with DCR: {base_url}/register"
             )
+
             return Response(
                 content=json.dumps(config_data),
                 status_code=200,
@@ -190,6 +239,9 @@ async def openid_configuration(request: Request):
             # Inject registration endpoint
             base_url = f"{request.url.scheme}://{request.url.netloc}"
             config_data["registration_endpoint"] = f"{base_url}/register"
+
+            # Note: authorization_endpoint stays as Hydra's (not modified)
+            # Scope handling is done via consent-level fallback, not authorization proxy
 
             logger.info(
                 f"✅ Proxied OpenID Connect discovery with DCR: {base_url}/register"
@@ -227,7 +279,16 @@ async def dynamic_client_registration(request: Request):
         body_bytes = await request.body()
         registration_data = json.loads(body_bytes)
 
-        logger.info(f"📝 Client: {registration_data.get('client_name', 'Unknown')}")
+        client_name = registration_data.get("client_name", "Unknown")
+        logger.info(f"📝 Client: {client_name}")
+
+        # DIAGNOSTIC: Log audience configuration
+        logger.info("🔍 DCR AUDIENCE CONFIG:")
+        logger.info(f"   MCP_SERVER_URL from config: {config.hydra.mcp_server_url}")
+        logger.info(
+            f"   MCP_SERVER_URL from env: {os.getenv('MCP_SERVER_URL', 'NOT SET')}"
+        )
+        logger.info(f"   Request base URL: {request.url.scheme}://{request.url.netloc}")
 
         # Sanitize invalid URL fields (Hydra rejects null/empty URLs)
         url_fields = ["client_uri", "logo_uri", "tos_uri", "policy_uri"]
@@ -248,12 +309,17 @@ async def dynamic_client_registration(request: Request):
                 logger.info(f"🧹 Removing invalid contacts: {repr(contacts)}")
                 del registration_data["contacts"]
 
-        # Inject memory scopes
+        # === SCOPE-AGNOSTIC HANDLING ===
+        # Accept whatever scopes the client sends, and ensure our required scopes are included
+        # This makes the server work with ANY OAuth client (Docker, Windsurf, ChatGPT, etc.)
+
         current_scopes = registration_data.get("scope", "openid offline_access")
         if isinstance(current_scopes, str):
             current_scopes = current_scopes.split()
         elif not isinstance(current_scopes, list):
             current_scopes = ["openid", "offline_access"]
+
+        logger.info(f"📥 Client requested scopes: {' '.join(current_scopes)}")
 
         # Fix offline scope (accept both offline and offline_access)
         has_offline = "offline" in current_scopes or "offline_access" in current_scopes
@@ -263,13 +329,16 @@ async def dynamic_client_registration(request: Request):
         if has_offline:
             current_scopes.extend(["offline", "offline_access"])
 
-        # Add memory scopes
-        for scope in ["memories:read", "memories:write"]:
+        # Always ensure our core memory scopes are included (required for tools to work)
+        required_scopes = ["memories:read", "memories:write"]
+        for scope in required_scopes:
             if scope not in current_scopes:
                 current_scopes.append(scope)
+                logger.info(f"➕ Added required scope: {scope}")
 
+        # Keep any client-specific scopes (mcp.read, mcp.write, etc.) - we're scope-agnostic
         registration_data["scope"] = " ".join(current_scopes)
-        logger.info(f"✨ Scopes: {registration_data['scope']}")
+        logger.info(f"✨ Final scopes: {registration_data['scope']}")
 
         # Forward to Hydra
         async with httpx.AsyncClient(follow_redirects=True) as client:
@@ -314,6 +383,41 @@ async def dynamic_client_registration(request: Request):
         )
 
 
+# Helper function to get auth context
+def get_auth_from_context(ctx: Context) -> dict:
+    """Extract authentication context from FastMCP Context.
+
+    Uses two methods in order of preference:
+    1. request.scope['auth_context'] - Standard ASGI scope (set by UnifiedAuthMiddleware)
+    2. ContextVar - Thread-safe context variable (set by UnifiedAuthMiddleware)
+
+    MCP requests are sequential per session, making this approach safe.
+    """
+    # Priority 1: Access request.scope['auth_context'] via request_context
+    # This is where UnifiedAuthMiddleware injects the auth context (propagates to mounted apps)
+    if hasattr(ctx, "request_context") and ctx.request_context:
+        logger.debug("🔍 Accessing request_context from FastMCP Context")
+        try:
+            request = ctx.request_context.request
+            if hasattr(request, "scope"):
+                auth_context = request.scope.get("auth_context")
+                if auth_context:
+                    logger.debug("✅ Got auth from request.scope['auth_context']")
+                    return auth_context
+        except Exception as e:
+            logger.warning(f"⚠️  Error accessing request_context: {e}")
+
+    # Priority 2: Try ContextVar (set by UnifiedAuthMiddleware)
+    token_context = current_token_context.get()
+    if token_context:
+        logger.debug("✅ Got auth from ContextVar")
+        return token_context
+
+    # No auth context found - this should not happen if middleware is working
+    logger.error("❌ No auth context available from any source")
+    raise ValueError("Authentication context not available")
+
+
 # Mount MCP server
 mcp.settings.streamable_http_path = "/"
 app.mount("/mcp", mcp.streamable_http_app())
@@ -346,32 +450,57 @@ async def search(query: str, ctx: Context) -> dict:
     Returns:
         Search results with memory IDs, titles, and URLs
     """
-    logger.info(f"🔍 Search: '{query}'")
+    with tracer.start_as_current_span("mcp_tool.search") as span:
+        span.set_attribute("tool.name", "search")
+        span.set_attribute("query.length", len(query))
 
-    # Get token context from ContextVar (set by middleware)
-    token_context = current_token_context.get()
+        tool_start = time.time()
+        logger.info(f"🔍 Search: '{query}'")
 
-    if not token_context:
-        logger.error("❌ No token context available")
-        raise ValueError("No authentication context available")
+        # Get token context from MCP Context (set by middleware)
+        with tracer.start_as_current_span("get_token_context"):
+            token_context = get_auth_from_context(ctx)
 
-    logger.info(
-        f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
-    )
+            if not token_context:
+                logger.error("❌ No token context available in search tool")
+                raise ValueError("No authentication context available")
 
-    # Verify required scopes
-    if "memories:read" not in token_context["scopes"]:
-        raise ValueError("Token missing required scope: memories:read")
+            logger.info(
+                f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
+            )
 
-    project_id = token_context["project_id"]
-    oauth_token = token_context["raw_token"]
+            span.set_attribute("auth.type", token_context.get("auth_type"))
+            span.set_attribute("user.id", token_context.get("user_id"))
+            span.set_attribute("project.id", token_context.get("project_id", ""))
 
-    # Create client (works with both OAuth tokens and API keys)
-    client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
-    result = client.search(query=query, limit=10)
-    client.close()
+        # Verify required scopes
+        with tracer.start_as_current_span("verify_scopes"):
+            if "memories:read" not in token_context["scopes"]:
+                raise ValueError("Token missing required scope: memories:read")
 
-    return format_search_results(result.get("results", []))
+        project_id = token_context["project_id"]
+        oauth_token = token_context["raw_token"]
+
+        # Create client and execute search (works with both OAuth tokens and API keys)
+        with tracer.start_as_current_span("execute_search") as search_span:
+            search_start = time.time()
+            client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
+            result = client.search(query=query, limit=10)
+            # Don't close cached clients - let cache manage lifecycle
+
+            search_duration = time.time() - search_start
+            search_span.set_attribute("search.duration_ms", search_duration * 1000)
+            search_span.set_attribute("results.count", len(result.get("results", [])))
+
+            if search_duration > 5.0:
+                logger.warning(f"⚠️  Slow search execution: {search_duration:.2f}s")
+                search_span.add_event("slow_search_warning", {"threshold_ms": 5000})
+
+        tool_duration = time.time() - tool_start
+        span.set_attribute("tool.duration_ms", tool_duration * 1000)
+        logger.info(f"✅ Search completed in {tool_duration:.3f}s")
+
+        return format_search_results(result.get("results", []))
 
 
 @mcp.tool(
@@ -396,42 +525,81 @@ async def add(content: str, ctx: Context) -> dict:
     Returns:
         Confirmation with memory ID and status
     """
-    logger.info(f"➕ Add: {content[:50]}...")
+    with tracer.start_as_current_span("mcp_tool.add") as span:
+        span.set_attribute("tool.name", "add")
+        span.set_attribute("content.length", len(content))
 
-    # Get token context from ContextVar
-    token_context = current_token_context.get()
+        tool_start = time.time()
+        logger.info(f"➕ Add: {content[:50]}...")
 
-    if not token_context:
-        logger.error("❌ No token context available")
-        raise ValueError("No authentication context available")
+        # Get token context from MCP Context
+        with tracer.start_as_current_span("get_token_context"):
+            token_context = get_auth_from_context(ctx)
 
-    logger.info(
-        f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
-    )
+            if not token_context:
+                logger.error("❌ No token context available in add tool")
+                raise ValueError("No authentication context available")
 
-    # Verify required scopes
-    if "memories:write" not in token_context["scopes"]:
-        raise ValueError("Token missing required scope: memories:write")
+            logger.info(
+                f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
+            )
 
-    project_id = token_context["project_id"]
-    oauth_token = token_context["raw_token"]
+            span.set_attribute("auth.type", token_context.get("auth_type"))
+            span.set_attribute("user.id", token_context.get("user_id"))
+            span.set_attribute("project.id", token_context.get("project_id", ""))
 
-    client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
+        # Verify required scopes
+        with tracer.start_as_current_span("verify_scopes"):
+            if "memories:write" not in token_context["scopes"]:
+                raise ValueError("Token missing required scope: memories:write")
 
-    memory_data = {
-        "messages": [{"role": "user", "content": content}],
-        "metadata": {"source": "mcp_unified", "project_id": project_id},
-    }
+        project_id = token_context["project_id"]
+        oauth_token = token_context["raw_token"]
 
-    response = client.client.post("/api/memories", json=memory_data)
-    response.raise_for_status()
-    result = response.json()
-    client.close()
+        # Create client and store memory
+        with tracer.start_as_current_span("store_memory") as store_span:
+            store_start = time.time()
+            client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
 
-    memory_id = result.get("id")
-    return create_tool_success(
-        {"status": "success", "id": memory_id, "message": "Memory stored successfully"}
-    )
+            # Parse content format (simple string or JSON array)
+            import json
+
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, list):
+                    messages = parsed
+                else:
+                    messages = [{"role": "user", "content": content}]
+            except (json.JSONDecodeError, ValueError):
+                messages = [{"role": "user", "content": content}]
+
+            memory_data = {
+                "messages": messages,
+                "metadata": {"source": "mcp_unified", "project_id": project_id},
+            }
+
+            response = client.client.post("/api/memories", json=memory_data)
+            response.raise_for_status()
+            result = response.json()
+            # Don't close cached clients - let cache manage lifecycle
+
+            store_duration = time.time() - store_start
+            store_span.set_attribute("store.duration_ms", store_duration * 1000)
+            store_span.set_attribute(
+                "memory.id", result.get("memory_id", result.get("id", ""))
+            )
+
+            if store_duration > 3.0:
+                logger.warning(f"⚠️  Slow memory storage: {store_duration:.2f}s")
+                store_span.add_event("slow_store_warning", {"threshold_ms": 3000})
+
+        tool_duration = time.time() - tool_start
+        span.set_attribute("tool.duration_ms", tool_duration * 1000)
+        logger.info(f"✅ Add completed in {tool_duration:.3f}s")
+
+        # Return full API response (includes operations!)
+        # This matches OpenMemory's approach and provides LLM operation details
+        return result
 
 
 @mcp.tool(
@@ -456,35 +624,62 @@ async def fetch(id: str, ctx: Context) -> dict:
     Returns:
         Complete memory document with content and metadata
     """
-    logger.info(f"📥 Fetch: id={id}")
+    with tracer.start_as_current_span("mcp_tool.fetch") as span:
+        span.set_attribute("tool.name", "fetch")
+        span.set_attribute("memory.id", id)
 
-    # Get token context from ContextVar
-    token_context = current_token_context.get()
+        tool_start = time.time()
+        logger.info(f"📥 Fetch: id={id}")
 
-    if not token_context:
-        logger.error("❌ No token context available")
-        raise ValueError("No authentication context available")
+        # Get token context from MCP Context
+        with tracer.start_as_current_span("get_token_context"):
+            token_context = get_auth_from_context(ctx)
 
-    logger.info(
-        f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
-    )
+            if not token_context:
+                logger.error("❌ No token context available in fetch tool")
+                raise ValueError("No authentication context available")
 
-    # Verify required scopes
-    if "memories:read" not in token_context["scopes"]:
-        raise ValueError("Token missing required scope: memories:read")
+            logger.info(
+                f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
+            )
 
-    project_id = token_context["project_id"]
-    oauth_token = token_context["raw_token"]
+            span.set_attribute("auth.type", token_context.get("auth_type"))
+            span.set_attribute("user.id", token_context.get("user_id"))
+            span.set_attribute("project.id", token_context.get("project_id", ""))
 
-    client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
-    result = client.search(query=id, limit=1)
-    client.close()
+        # Verify required scopes
+        with tracer.start_as_current_span("verify_scopes"):
+            if "memories:read" not in token_context["scopes"]:
+                raise ValueError("Token missing required scope: memories:read")
 
-    results = result.get("results", [])
-    if not results:
-        raise ValueError(f"Memory not found: {id}")
+        project_id = token_context["project_id"]
+        oauth_token = token_context["raw_token"]
 
-    return format_fetch_result(results[0])
+        # Fetch memory
+        with tracer.start_as_current_span("fetch_memory") as fetch_span:
+            fetch_start = time.time()
+            client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
+            result = client.search(query=id, limit=1)
+            # Don't close cached clients - let cache manage lifecycle
+
+            fetch_duration = time.time() - fetch_start
+            fetch_span.set_attribute("fetch.duration_ms", fetch_duration * 1000)
+
+            if fetch_duration > 3.0:
+                logger.warning(f"⚠️  Slow memory fetch: {fetch_duration:.2f}s")
+                fetch_span.add_event("slow_fetch_warning", {"threshold_ms": 3000})
+
+        results = result.get("results", [])
+        if not results:
+            span.set_attribute("fetch.status", "not_found")
+            raise ValueError(f"Memory not found: {id}")
+
+        span.set_attribute("fetch.status", "found")
+        tool_duration = time.time() - tool_start
+        span.set_attribute("tool.duration_ms", tool_duration * 1000)
+        logger.info(f"✅ Fetch completed in {tool_duration:.3f}s")
+
+        return format_fetch_result(results[0])
 
 
 # ============================================================================

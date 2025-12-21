@@ -1,7 +1,7 @@
 import datetime
 import os
 
-from app.mcp_server import setup_mcp_server
+from app.mcp_server import lifespan, setup_mcp_server
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -9,7 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 USER_ID = os.getenv("USER_ID", "default")
 DEFAULT_APP_ID = os.getenv("DEFAULT_APP_ID", "selfmemory")
 
-app = FastAPI(title="SelfMemory API")
+# Initialize FastAPI app with lifespan for MCP session management
+app = FastAPI(
+    title="SelfMemory API",
+    description="Memory operations API with MCP protocol support",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
