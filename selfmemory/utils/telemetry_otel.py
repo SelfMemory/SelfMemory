@@ -4,7 +4,6 @@ This module provides centralized OTel configuration for production environments.
 """
 
 import logging
-from typing import Optional
 
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
@@ -23,7 +22,7 @@ def setup_opentelemetry(
     service_name: str,
     otlp_endpoint: str,
     environment: str = "production",
-    service_version: Optional[str] = None,
+    service_version: str | None = None,
     insecure: bool = True,
 ) -> None:
     """
@@ -60,7 +59,9 @@ def setup_opentelemetry(
 
     # Setup Metrics
     metric_exporter = OTLPMetricExporter(endpoint=otlp_endpoint, insecure=insecure)
-    metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=60000)
+    metric_reader = PeriodicExportingMetricReader(
+        metric_exporter, export_interval_millis=60000
+    )
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
 

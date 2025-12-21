@@ -272,9 +272,7 @@ class OTelConfig:
     PROTOCOL: str = os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
 
     # Trace sampling configuration
-    TRACES_SAMPLER: str = os.getenv(
-        "OTEL_TRACES_SAMPLER", "parentbased_traceidratio"
-    )
+    TRACES_SAMPLER: str = os.getenv("OTEL_TRACES_SAMPLER", "parentbased_traceidratio")
     TRACES_SAMPLER_ARG: float = float(os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0"))
 
 
