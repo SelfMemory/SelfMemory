@@ -12,22 +12,23 @@ We welcome contributions to SelfMemory! This document provides guidelines for co
    ```
 3. **Set up development environment**:
    ```bash
-   # Create virtual environment
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   # Install UV (if not already installed)
+   curl -LsSf https://astral.sh/uv/install.sh | sh
 
-   # Install development dependencies
-   pip install -e .[dev,test]
+   # Install with all development dependencies
+   make install-dev
+   # Or manually: uv pip install -e ".[dev]"
 
    # Install pre-commit hooks
-   pre-commit install
+   uv run pre-commit install
    ```
 
 ## 📋 Development Guidelines
 
 ### Code Standards
 
-- **Python Version**: Python 3.12+
+- **Python Version**: Python 3.10+
+- **Package Manager**: UV (faster, more reliable than pip)
 - **Code Style**: We use `ruff` for linting and formatting
 - **Type Hints**: Use type hints for all public APIs
 - **Documentation**: Docstrings required for all public functions and classes
@@ -36,40 +37,46 @@ We welcome contributions to SelfMemory! This document provides guidelines for co
 
 ```bash
 # Format code
-ruff format .
+make format
+# Or: uv run ruff format .
 
 # Lint code
-ruff check .
+make lint
+# Or: uv run ruff check .
 
 # Fix auto-fixable issues
-ruff check --fix .
+make lint-fix
+# Or: uv run ruff check --fix .
+
+# Run all quality checks
+make quality
 
 # Run pre-commit hooks manually
-pre-commit run --all-files
+uv run pre-commit run --all-files
 ```
 
 ### Testing
 
-We maintain comprehensive test coverage across three levels:
+We maintain comprehensive test coverage:
 
 ```bash
 # Run all tests
-pytest
+make test
+# Or: uv run pytest
 
-# Run specific test categories
-pytest tests/unit/          # Unit tests
-pytest tests/integration/   # Integration tests
-pytest tests/examples/      # README example validation
+# Run with coverage report
+make coverage
+# Or: uv run pytest --cov=selfmemory --cov-report=html
 
-# Run with coverage
-pytest --cov=selfmemory --cov-report=html
+# Run specific test markers
+uv run pytest -m unit          # Unit tests only
+uv run pytest -m integration   # Integration tests only
 ```
 
 **Test Requirements:**
 - All new features must include tests
-- Maintain >90% test coverage
+- Maintain good test coverage
 - Integration tests for end-to-end workflows
-- Example tests to validate README code samples
 
 ## 🛠️ Development Workflow
 
