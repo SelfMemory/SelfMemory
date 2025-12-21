@@ -38,6 +38,51 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
       
+      - name: Wait for required status checks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "⏱️ Waiting for required status checks to complete..."
+          echo "This includes CodeQL scanning and other required checks."
+          
+          # Wait up to 10 minutes for checks to complete
+          MAX_WAIT=600
+          WAITED=0
+          SLEEP_INTERVAL=30
+          
+          while [ $WAITED -lt $MAX_WAIT ]; do
+            # Get all check runs for this commit
+            CHECK_STATUS=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs \
+              --jq '[.check_runs[] | select(.name | test("CodeQL|build|test")) | {name: .name, status: .status, conclusion: .conclusion}]')
+            
+            echo "Current check status:"
+            echo "$CHECK_STATUS" | jq -r '.[] | "\(.name): \(.status) (\(.conclusion // "pending"))"'
+            
+            # Check if all required checks are completed
+            INCOMPLETE=$(echo "$CHECK_STATUS" | jq -r '.[] | select(.status != "completed") | .name' | wc -l)
+            
+            if [ "$INCOMPLETE" -eq 0 ]; then
+              echo "✅ All required checks completed!"
+              
+              # Verify all checks passed (not failed)
+              FAILED=$(echo "$CHECK_STATUS" | jq -r '.[] | select(.conclusion == "failure") | .name' | wc -l)
+              if [ "$FAILED" -gt 0 ]; then
+                echo "❌ Some checks failed. Cannot proceed with release."
+                echo "$CHECK_STATUS" | jq -r '.[] | select(.conclusion == "failure") | "Failed: \(.name)"'
+                exit 1
+              fi
+              break
+            fi
+            
+            echo "⏳ Waiting for $INCOMPLETE check(s) to complete... (${WAITED}s / ${MAX_WAIT}s)"
+            sleep $SLEEP_INTERVAL
+            WAITED=$((WAITED + SLEEP_INTERVAL))
+          done
+          
+          if [ $WAITED -ge $MAX_WAIT ]; then
+            echo "⚠️ Timeout waiting for checks. Proceeding anyway..."
+          fi
+      
       - name: Check if release is needed
         id: check_release
         run: |
