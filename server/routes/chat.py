@@ -308,9 +308,7 @@ Always search memories first when questions reference past information. Provide 
                             search_query = function_args.get("query", "").strip()
                             search_limit = function_args.get("limit", 5)
 
-                            print(
-                                "[Tool Call - Memory Search] ===== QUERY DEBUG ====="
-                            )
+                            print("[Tool Call - Memory Search] ===== QUERY DEBUG =====")
                             print(
                                 f"[Tool Call - Memory Search] Raw function_args: {function_args}"
                             )
