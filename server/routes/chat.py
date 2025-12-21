@@ -516,7 +516,8 @@ Always search memories first when questions reference past information. Provide 
 
             print(f"[Chat] Streaming error: {str(e)}")
             print(f"[Chat] Traceback: {traceback.format_exc()}")
-            yield f"Error: {str(e)}\n"
+            # Return a generic error message to avoid exposing internal details
+            yield "Error: An internal server error occurred.\n"
 
     return StreamingResponse(
         generate(),
