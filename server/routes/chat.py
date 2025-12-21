@@ -228,7 +228,9 @@ Always search memories first when questions reference past information. Provide 
                                         # CRITICAL FIX: Yield content immediately for streaming
                                         # We still accumulate in full_response for tool call detection later
                                         yield content
-                                        print(f"[STREAMING] ✓ Yielded chunk (length={len(content)})")
+                                        print(
+                                            f"[STREAMING] ✓ Yielded chunk (length={len(content)})"
+                                        )
 
                             except json.JSONDecodeError:
                                 continue
