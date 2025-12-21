@@ -18,7 +18,6 @@ from .config import config
 from .dependencies import AuthContext, authenticate_api_key, mongo_db
 from .health import is_alive, is_ready, perform_health_checks
 from .mcp_auth import get_protected_resource_metadata
-from .telemetry import initialize_telemetry
 from .routes.api_keys import router as api_keys_router
 from .routes.chat import router as chat_router
 from .routes.hydra_proxy import router as hydra_proxy_router
@@ -27,6 +26,7 @@ from .routes.notifications import router as notifications_router
 from .routes.organizations import router as organizations_router
 from .routes.projects import router as projects_router
 from .routes.users import router as users_router
+from .telemetry import initialize_telemetry
 from .utils.datetime_helpers import utc_now
 from .utils.error_handlers import ErrorCode, create_error_response, get_request_id
 from .utils.permission_helpers import get_user_object_id_from_kratos_id
@@ -133,11 +133,11 @@ async def add_request_id_middleware(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",      # Dashboard (localhost)
-        "http://127.0.0.1:3000",      # Dashboard (127.0.0.1)
-        "http://localhost:8081",      # Backend API (localhost)
-        "http://127.0.0.1:8081",      # Backend API (127.0.0.1)
-        config.app.FRONTEND_URL,      # Dynamic frontend URL from config
+        "http://localhost:3000",  # Dashboard (localhost)
+        "http://127.0.0.1:3000",  # Dashboard (127.0.0.1)
+        "http://localhost:8081",  # Backend API (localhost)
+        "http://127.0.0.1:8081",  # Backend API (127.0.0.1)
+        config.app.FRONTEND_URL,  # Dynamic frontend URL from config
     ],
     allow_credentials=True,
     allow_methods=["*"],

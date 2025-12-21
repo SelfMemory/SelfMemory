@@ -3,37 +3,40 @@ Chat tool definitions for LLM function calling
 
 CHAT-201: Define search_memories Tool Schema
 """
-from typing import List, Optional, Dict, Any
+
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
 class SearchMemoriesParams(BaseModel):
     """Parameters for the search_memories tool"""
+
     query: str = Field(
         ...,
-        description="The search query to find relevant memories. Use natural language based on what the user is asking about."
+        description="The search query to find relevant memories. Use natural language based on what the user is asking about.",
     )
     limit: int = Field(
         default=5,
         description="Maximum number of memories to return. Default is 5.",
         ge=1,
-        le=20
+        le=20,
     )
 
 
 class AddMemoryParams(BaseModel):
     """Parameters for the add_memory tool (Phase 3)"""
+
     content: str = Field(
-        ...,
-        description="The information to save as a memory. Be concise but complete."
+        ..., description="The information to save as a memory. Be concise but complete."
     )
-    tags: Optional[List[str]] = Field(
+    tags: list[str] | None = Field(
         default=None,
-        description='Relevant tags for categorizing the memory (e.g., "marketing", "q2", "feature-request")'
+        description='Relevant tags for categorizing the memory (e.g., "marketing", "q2", "feature-request")',
     )
-    metadata: Optional[Dict[str, Any]] = Field(
+    metadata: dict[str, Any] | None = Field(
         default=None,
-        description="Additional metadata like category and people mentioned"
+        description="Additional metadata like category and people mentioned",
     )
 
 
@@ -52,19 +55,19 @@ SEARCH_MEMORIES_TOOL = {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The search query to find relevant memories. Use natural language based on what the user is asking about."
+                    "description": "The search query to find relevant memories. Use natural language based on what the user is asking about.",
                 },
                 "limit": {
                     "type": "integer",
                     "description": "Maximum number of memories to return. Default is 5.",
                     "default": 5,
                     "minimum": 1,
-                    "maximum": 20
-                }
+                    "maximum": 20,
+                },
             },
-            "required": ["query"]
-        }
-    }
+            "required": ["query"],
+        },
+    },
 }
 
 ADD_MEMORY_TOOL = {
@@ -81,12 +84,12 @@ ADD_MEMORY_TOOL = {
             "properties": {
                 "content": {
                     "type": "string",
-                    "description": "The information to save as a memory. Be concise but complete."
+                    "description": "The information to save as a memory. Be concise but complete.",
                 },
                 "tags": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": 'Relevant tags for categorizing the memory (e.g., "marketing", "q2", "feature-request")'
+                    "description": 'Relevant tags for categorizing the memory (e.g., "marketing", "q2", "feature-request")',
                 },
                 "metadata": {
                     "type": "object",
@@ -94,19 +97,19 @@ ADD_MEMORY_TOOL = {
                     "properties": {
                         "category": {
                             "type": "string",
-                            "description": 'Category like "meeting", "decision", "preference", "idea", "fact"'
+                            "description": 'Category like "meeting", "decision", "preference", "idea", "fact"',
                         },
                         "people": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Names of people mentioned in the memory"
-                        }
-                    }
-                }
+                            "description": "Names of people mentioned in the memory",
+                        },
+                    },
+                },
             },
-            "required": ["content"]
-        }
-    }
+            "required": ["content"],
+        },
+    },
 }
 
 # All available tools

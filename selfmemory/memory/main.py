@@ -10,6 +10,7 @@ import hashlib
 import logging
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from selfmemory.configs.base import SelfMemoryConfig
@@ -679,7 +680,7 @@ class SelfMemory(MemoryBase):
                     )
 
                     # Save full response to file for debugging
-                    with open("/tmp/llm_response_debug.txt", "w") as f:
+                    with Path("/tmp/llm_response_debug.txt").open("w") as f:
                         f.write(f"Full response:\n{response}\n")
                         f.write(
                             f"Response length: {len(response) if response else 0}\n"

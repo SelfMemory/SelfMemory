@@ -7,8 +7,14 @@ responsibility and clear separation of concerns.
 """
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
+
+from selfmemory.configs.prompts import (
+    AGENT_MEMORY_EXTRACTION_PROMPT,
+    USER_MEMORY_EXTRACTION_PROMPT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -283,12 +289,7 @@ def build_search_filters(
     return effective_filters
 
 
-import re
-
-from selfmemory.configs.prompts import (
-    AGENT_MEMORY_EXTRACTION_PROMPT,
-    USER_MEMORY_EXTRACTION_PROMPT,
-)
+# Removed as these imports are now at the top of the file
 
 
 def get_fact_retrieval_messages(message, is_agent_memory=False):
@@ -352,10 +353,7 @@ def extract_json(text):
     """
     text = text.strip()
     match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
-    if match:
-        json_str = match.group(1)
-    else:
-        json_str = text  # assume it's raw JSON
+    json_str = match.group(1) if match else text  # assume it's raw JSON
     return json_str
 
 

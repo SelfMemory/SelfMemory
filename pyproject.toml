@@ -143,6 +143,10 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
+    "selfmemory/vector_stores",
+    "selfmemory/llms",
+    "selfmemory/configs",
+    "selfmemory/configs/embeddings",
 ]
 
 # Same as Black.
