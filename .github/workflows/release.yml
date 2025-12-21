@@ -97,21 +97,31 @@ jobs:
             echo "::notice::New version will be: ${NEW_VERSION}"
           fi
       
-      - name: Create release with Python Semantic Release
+      - name: Create Git Tag
+        if: steps.check_release.outputs.should_release == 'true'
+        run: |
+          echo "Creating git tag for version ${{ steps.check_release.outputs.new_version }}"
+          git tag "v${{ steps.check_release.outputs.new_version }}"
+      
+      - name: Generate Changelog
+        if: steps.check_release.outputs.should_release == 'true'
+        run: |
+          echo "Generating changelog..."
+          semantic-release changelog || echo "Changelog generation skipped"
+      
+      - name: Push Tag and Create GitHub Release
         if: steps.check_release.outputs.should_release == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Standard token for releases
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Creating release for version ${{ steps.check_release.outputs.new_version }}"
+          echo "Pushing tag to GitHub..."
+          git push origin "v${{ steps.check_release.outputs.new_version }}"
           
-          # NO-COMMIT MODE: Run semantic-release to:
-          # 1. Create git tag (e.g., v0.4.0)
-          # 2. Create GitHub release with notes
-          # 3. Generate CHANGELOG (no push needed)
-          # Note: Does NOT commit version changes back to master
-          semantic-release version
-          semantic-release changelog
-          semantic-release publish
+          echo "Creating GitHub release..."
+          gh release create "v${{ steps.check_release.outputs.new_version }}" \
+            --title "v${{ steps.check_release.outputs.new_version }}" \
+            --notes "Release v${{ steps.check_release.outputs.new_version }}" \
+            --latest
       
       - name: Build Python package
         if: steps.check_release.outputs.should_release == 'true'
