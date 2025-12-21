@@ -32,40 +32,15 @@ classifiers = [
 ]
 
 dependencies = [
-    # Core dependencies for zero-setup Memory class
-    "chromadb>=0.4.0", # Primary vector database (zero-setup)
-    "qdrant-client>=1.6.0", # Vector database (enterprise)
-    "pydantic>=2.0.0,<3.0.0", # Data validation
-    "email-validator>=2.0.0", # Email validation for Pydantic
-    "python-dotenv>=1.0.0", # Environment variables
-    "cryptography>=40.0.0", # Security
-    "httpx>=0.25.0", # HTTP client
-    # Server capabilities (FastAPI + Uvicorn)
-    "fastapi>=0.100.0", # API server
-    "fastapi-csrf-protect>=0.3.0", # CSRF protection for FastAPI
-    "uvicorn>=0.20.0", # ASGI server
-    "starlette>=0.27.0", # Web framework
-    "psutil>=5.9.0", # System and process utilities for health checks
-    "pymongo>=4.0.0", # MongoDB backend for multi-tenant server
-    # Ory authentication clients
-    "ory-hydra-client>=2.0.0", # Ory Hydra OAuth2 client
-    "ory-kratos-client>=1.0.0", # Ory Kratos identity client
-    # Security and authentication
-    "argon2-cffi>=23.1.0", # Argon2 password hashing
-    # Embedding providers
-    "ollama>=0.1.0", # Ollama embeddings
-    "openai>=1.0.0", # OpenAI embeddings
-    # Configuration support
-    "pyyaml>=6.0.0", # YAML config files
-    "mcp[cli]>=1.13.0",
-    # OpenTelemetry (Observability)
-    "opentelemetry-api>=1.20.0", # OTel API
-    "opentelemetry-sdk>=1.20.0", # OTel SDK
-    "opentelemetry-exporter-otlp>=1.20.0", # OTLP exporter for SigNoz
-    "opentelemetry-instrumentation-fastapi>=0.41b0", # FastAPI auto-instrumentation
-    "opentelemetry-instrumentation-httpx>=0.41b0", # HTTP client instrumentation
-    "opentelemetry-instrumentation-pymongo>=0.41b0", # MongoDB instrumentation
-    "opentelemetry-instrumentation-logging>=0.41b0", # Logging instrumentation
+    # Minimal core dependencies for basic Memory class usage
+    "chromadb>=0.4.0",              # Zero-setup vector database
+    "qdrant-client>=1.6.0",         # Enterprise vector database
+    "pydantic>=2.0.0,<3.0.0",       # Data validation and settings
+    "email-validator>=2.0.0",       # Required by Pydantic
+    "python-dotenv>=1.0.0",         # Environment variable management
+    "cryptography>=40.0.0",         # Encryption and security
+    "httpx>=0.25.0",                # HTTP client
+    "pyyaml>=6.0.0",                # YAML configuration support
 ]
 
 [project.urls]
@@ -76,23 +51,49 @@ Issues = "https://github.com/selfmemory/selfmemory/issues"
 Changelog = "https://github.com/selfmemory/selfmemory/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-# Enterprise features (MongoDB + OAuth + Multi-user + MCP)
-enterprise = [
-    "pymongo>=4.0.0",  # MongoDB backend
-    "authlib>=1.2.0",  # OAuth authentication
-    "google-auth>=2.15.0",  # Google OAuth
-    "mcp[cli]>=1.0.0; python_version>='3.10'",  # MCP server support
-    "fastmcp>=2.0.0; python_version>='3.10'"  # FastMCP
-]
-
-# Testing dependencies
-test = [
-    "pytest>=7.0.0", # Modern version with Python 3.10+ support
-    "pytest-asyncio>=0.21.0", # Modern version with Python 3.10+ support
-    "pytest-mock>=3.10.0", # Modern version with Python 3.10+ support
-    "pytest-cov>=4.0.0", # Code coverage reporting
-    "responses>=0.23.0", # Mock HTTP responses for client testing
-    "httpx>=0.25.0", # HTTP client for testing (already in main deps)
+# Development dependencies: everything needed for contributing
+dev = [
+    # Testing frameworks
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.10.0",
+    "pytest-cov>=4.0.0",
+    "responses>=0.23.0",
+    # Code quality tools
+    "ruff>=0.14.8",
+    "pre-commit>=4.3.0",
+    # Build and release tools
+    "build>=1.3.0",
+    "twine>=6.1.0",
+    "python-semantic-release>=9.0.0",
+    # Server components (for local development/testing)
+    "fastapi>=0.100.0",
+    "fastapi-csrf-protect>=0.3.0",
+    "uvicorn>=0.20.0",
+    "starlette>=0.27.0",
+    "psutil>=5.9.0",
+    # Database backends (for local development/testing)
+    "pymongo>=4.0.0",
+    # Authentication libraries (for local development/testing)
+    "ory-hydra-client>=2.0.0",
+    "ory-kratos-client>=1.0.0",
+    "argon2-cffi>=23.1.0",
+    "authlib>=1.2.0",
+    "google-auth>=2.15.0",
+    # MCP server support (for local development/testing)
+    "mcp[cli]>=1.13.0",
+    "fastmcp>=2.0.0",
+    # Embedding providers (for local development/testing)
+    "ollama>=0.1.0",
+    "openai>=1.0.0",
+    # Observability (for local development/testing)
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
+    "opentelemetry-instrumentation-fastapi>=0.41b0",
+    "opentelemetry-instrumentation-httpx>=0.41b0",
+    "opentelemetry-instrumentation-pymongo>=0.41b0",
+    "opentelemetry-instrumentation-logging>=0.41b0",
 ]
 
 [project.scripts]
@@ -208,14 +209,6 @@ docstring-code-format = false
 # Set the line length limit used by the formatter.
 docstring-code-line-length = "dynamic"
 
-[dependency-groups]
-dev = [
-    "build>=1.3.0",
-    "pre-commit>=4.3.0",
-    "ruff>=0.14.8",
-    "twine>=6.1.0",
-    "python-semantic-release>=9.0.0",
-]
 
 # Pytest configuration for test discovery and execution
 [tool.pytest.ini_options]
