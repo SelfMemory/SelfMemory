@@ -101,7 +101,9 @@ app = FastAPI(
 if config.server.environment == "production":
     logger.info("🔒 SECURITY: MCP API documentation endpoints disabled in production")
 else:
-    logger.info("📚 DEV MODE: MCP API documentation available at /docs, /redoc, /openapi.json")
+    logger.info(
+        "📚 DEV MODE: MCP API documentation available at /docs, /redoc, /openapi.json"
+    )
 
 logger.info("SelfMemory MCP Server initialized with unified authentication")
 
