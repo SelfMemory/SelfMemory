@@ -100,9 +100,21 @@ if config_errors:
 # Log configuration (excluding sensitive values)
 config.log_config()
 
-# FastAPI app
+# Log security status for API documentation
+if config.app.ENVIRONMENT == "production":
+    logging.info("🔒 SECURITY: API documentation endpoints disabled in production")
+else:
+    logging.info(
+        "📚 DEV MODE: API documentation available at /docs, /redoc, /openapi.json"
+    )
+
+# FastAPI app with conditional documentation based on environment
 app = FastAPI(
     title="SelfMemory APIs",
+    # Security: Disable API documentation in production to prevent information disclosure
+    docs_url="/docs" if config.app.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if config.app.ENVIRONMENT != "production" else None,
+    openapi_url="/openapi.json" if config.app.ENVIRONMENT != "production" else None,
 )
 
 # Initialize OpenTelemetry (production only)

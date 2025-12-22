@@ -16,10 +16,10 @@ from selfmemory import SelfMemory
 memory = SelfMemory()
 
 # Add memories
-memory.add("I have a BMW bike.", user_id="demo")
+memory.add("Can you find the nearest BMW car showroom for me.", user_id="user")
 
 # Search memories
-results = memory.search("bike", user_id="demo")
+results = memory.search("Can you find a car washing service near me?", user_id="user")
 print(results)
 ```
 
@@ -28,9 +28,11 @@ print(results)
 **Visit [docs.selfmemory.com](https://docs.selfmemory.com) for complete documentation, guides, and examples.**
 **Changelog**: See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes and updates.
 
+## 🤝 Contributing
+
+We welcome contributions! [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## 🔗 Links
 
-- **Documentation**: [docs.selfmemory.com](https://docs.selfmemory.com)
-- **GitHub**: [github.com/selfmemory/selfmemory](https://github.com/selfmemory/selfmemory)
-- **Discord**: [discord.com/invite/YypBvdUpcc](https://discord.com/invite/YypBvdUpcc)
-- **Brand Assets** (Logos, Slides, etc.): [Google Drive](https://drive.google.com/drive/folders/1paB9DkpPGv58_MC3P5C1el_Bw7lzYh-3?usp=sharing)
+- **Discord**: [discord.com/invite/selfmemory](https://discord.com/invite/YypBvdUpcc)
+- **Brand Assets** (Logos, Slides, etc.): [Storage Link](https://drive.google.com/drive/folders/1paB9DkpPGv58_MC3P5C1el_Bw7lzYh-3?usp=sharing)
