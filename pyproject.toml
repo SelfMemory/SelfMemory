@@ -51,6 +51,15 @@ Issues = "https://github.com/selfmemory/selfmemory/issues"
 Changelog = "https://github.com/selfmemory/selfmemory/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+# Testing dependencies
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.10.0",
+    "pytest-cov>=4.0.0",
+    "responses>=0.23.0",
+]
+
 # Development dependencies: everything needed for contributing
 dev = [
     # Testing frameworks
