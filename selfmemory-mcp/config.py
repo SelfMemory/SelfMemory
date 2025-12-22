@@ -89,6 +89,7 @@ class ServerConfig:
         self.host = get_optional_env("MCP_SERVER_HOST", "0.0.0.0")
         self.port = int(get_optional_env("MCP_SERVER_PORT", "5055"))
         self.selfmemory_api_host = get_required_env("SELFMEMORY_API_HOST")
+        self.environment = get_optional_env("ENVIRONMENT", "production")
 
 
 class Config:
