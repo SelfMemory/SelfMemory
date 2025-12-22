@@ -532,9 +532,13 @@ def main():
 
     # Log documentation security status
     if environment == "production":
-        logger.info("🔒 SECURITY: MCP API documentation endpoints disabled in production")
+        logger.info(
+            "🔒 SECURITY: MCP API documentation endpoints disabled in production"
+        )
     else:
-        logger.info("📚 DEV MODE: MCP API documentation available at /docs, /redoc, /openapi.json")
+        logger.info(
+            "📚 DEV MODE: MCP API documentation available at /docs, /redoc, /openapi.json"
+        )
 
     # Setup MCP server
     setup_mcp_server(app)

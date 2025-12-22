@@ -104,7 +104,9 @@ config.log_config()
 if config.app.ENVIRONMENT == "production":
     logging.info("🔒 SECURITY: API documentation endpoints disabled in production")
 else:
-    logging.info("📚 DEV MODE: API documentation available at /docs, /redoc, /openapi.json")
+    logging.info(
+        "📚 DEV MODE: API documentation available at /docs, /redoc, /openapi.json"
+    )
 
 # FastAPI app with conditional documentation based on environment
 app = FastAPI(
