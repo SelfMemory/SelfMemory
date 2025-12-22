@@ -31,7 +31,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-load_dotenv()  # Load environment variables from .env
+# Load .env from selfmemory-mcp directory (two levels up from app/)
+DOTENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(dotenv_path=DOTENV_PATH)
 
 # Import client cache for performance optimization
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -516,12 +518,23 @@ def main():
     )
     logger.info("=" * 60)
 
-    # Create FastAPI app with lifespan
+    # Create FastAPI app with lifespan and conditional documentation
+    environment = os.getenv("ENVIRONMENT", "development")
     app = FastAPI(
         title="SelfMemory MCP Server",
         description="Memory operations via Model Context Protocol",
         lifespan=lifespan,
+        # Security: Disable API documentation in production to prevent information disclosure
+        docs_url="/docs" if environment != "production" else None,
+        redoc_url="/redoc" if environment != "production" else None,
+        openapi_url="/openapi.json" if environment != "production" else None,
     )
+
+    # Log documentation security status
+    if environment == "production":
+        logger.info("🔒 SECURITY: MCP API documentation endpoints disabled in production")
+    else:
+        logger.info("📚 DEV MODE: MCP API documentation available at /docs, /redoc, /openapi.json")
 
     # Setup MCP server
     setup_mcp_server(app)
