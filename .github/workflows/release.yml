@@ -18,7 +18,7 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Full history required for semantic-release
           token: ${{ secrets.GITHUB_TOKEN }}  # Standard token is sufficient for no-commit mode
@@ -27,11 +27,15 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-          cache: 'pip'
+      
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
       
       - name: Install Python Semantic Release
         run: |
-          pip install python-semantic-release
+          uv pip install --system python-semantic-release
       
       - name: Configure Git
         run: |
@@ -126,8 +130,7 @@ jobs:
       - name: Build Python package
         if: steps.check_release.outputs.should_release == 'true'
         run: |
-          pip install build
-          python -m build
+          uv build
           
           # List built packages
           echo "::group::Built packages"

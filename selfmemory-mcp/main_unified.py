@@ -86,12 +86,24 @@ async def lifespan(app_instance: FastAPI):
         yield
 
 
-# Initialize FastAPI app with lifespan
+# Initialize FastAPI app with lifespan and conditional documentation
 app = FastAPI(
     title="SelfMemory MCP Server (Unified Auth)",
     description="Supports both OAuth 2.1 and API key authentication",
     lifespan=lifespan,
+    # Security: Disable API documentation in production to prevent information disclosure
+    docs_url="/docs" if config.server.environment != "production" else None,
+    redoc_url="/redoc" if config.server.environment != "production" else None,
+    openapi_url="/openapi.json" if config.server.environment != "production" else None,
 )
+
+# Log documentation security status
+if config.server.environment == "production":
+    logger.info("🔒 SECURITY: MCP API documentation endpoints disabled in production")
+else:
+    logger.info(
+        "📚 DEV MODE: MCP API documentation available at /docs, /redoc, /openapi.json"
+    )
 
 logger.info("SelfMemory MCP Server initialized with unified authentication")
 
