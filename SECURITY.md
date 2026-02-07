@@ -78,6 +78,7 @@ SelfMemory handles sensitive memory data and implements several security measure
 - Rate limiting on sensitive endpoints
 - Input validation and sanitization
 - Secure headers and CORS policies
+- API documentation disabled in production environments
 
 ### Configuration Security
 
@@ -92,6 +93,24 @@ SelfMemory handles sensitive memory data and implements several security measure
 - Automatic detection of credential exposure
 
 ## Security Best Practices
+
+### Production Deployment
+
+**Environment Configuration:**
+```bash
+# Set production environment to enable security features
+export ENVIRONMENT=production
+
+# This automatically:
+# - Disables API documentation endpoints (/docs, /redoc, /openapi.json)
+# - Enforces stricter security policies
+# - Reduces information disclosure
+```
+
+**Documentation Security:**
+- API documentation is automatically disabled in production
+- Development and staging environments retain documentation access
+- Monitor access logs for attempts to access documentation endpoints
 
 ### For Users
 
@@ -145,6 +164,11 @@ chmod 600 ~/.selfmemory/config.yaml
 
 ## Known Security Considerations
 
+### Security Measures Implemented
+
+1. **API Documentation Security**: FastAPI documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) are automatically disabled in production environments to prevent information disclosure
+2. **Environment-Based Security**: Security policies automatically adjust based on the `ENVIRONMENT` configuration variable
+
 ### Current Limitations
 
 1. **Vector Database Security**: Qdrant security depends on deployment configuration
@@ -154,6 +178,7 @@ chmod 600 ~/.selfmemory/config.yaml
 
 ### Planned Improvements
 
+- [x] API documentation security (automatically disabled in production)
 - [ ] End-to-end encryption for all storage backends
 - [ ] Audit logging for all security events
 - [ ] Integration with external key management systems
@@ -223,5 +248,5 @@ We appreciate the security research community and thank all researchers who resp
 
 ---
 
-**Last Updated**: January 17, 2025
-**Next Review**: April 17, 2025
+**Last Updated**: December 21, 2024
+**Next Review**: March 21, 2025
