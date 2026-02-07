@@ -112,7 +112,7 @@ class AppConfig:
     """General application configuration."""
 
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
+    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8081")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
 
     # Timezone configuration
@@ -124,7 +124,7 @@ class ServerConfig:
     """Configuration for server runtime."""
 
     HOST: str = os.getenv("SELFMEMORY_SERVER_HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("SELFMEMORY_SERVER_PORT", "8000"))
+    PORT: int = int(os.getenv("SELFMEMORY_SERVER_PORT", "8081"))
 
 
 class VectorStoreConfig:

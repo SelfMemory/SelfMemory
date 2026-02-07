@@ -1,7 +1,7 @@
 [project]
 name = "selfmemory"
 dynamic = ["version"]  # Version will be determined from git tags
-description = "Enhanced Memory Management for AI Agents with zero-setup simplicity"
+description = "Enhanced Memory Management for AI Agents"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
@@ -46,7 +46,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://selfmemory.com"
 Repository = "https://github.com/selfmemory/selfmemory"
-Documentation = "https://github.com/selfmemory/selfmemory/wiki"
+Documentation = "https://docs.selfmemory.com"
 Issues = "https://github.com/selfmemory/selfmemory/issues"
 Changelog = "https://github.com/selfmemory/selfmemory/blob/main/CHANGELOG.md"
 

@@ -19,7 +19,10 @@ from pymongo.database import Database
 from ..config import config
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import utc_now
-from ..utils.permission_helpers import get_user_by_kratos_id
+from ..utils.permission_helpers import (
+    get_user_by_kratos_id,
+    get_user_object_id_from_kratos_id,
+)
 from ..utils.rate_limiter import limiter
 from ..utils.validators import validate_object_id
 from .invitations import generate_invitation_token, send_invitation_email
@@ -102,6 +105,109 @@ def get_user_by_email(db: Database, email: str) -> dict | None:
 
 
 # API Endpoints
+@router.get("", summary="List user's organizations")
+def list_organizations(auth: AuthContext = Depends(authenticate_api_key)):
+    """List all organizations the user has access to (owned + member)."""
+    try:
+        mongo_user_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
+
+        # Get organizations where user is owner (check BOTH ownerId formats)
+        owned_orgs = list(
+            mongo_db.organizations.find(
+                {
+                    "$or": [
+                        {"ownerId": mongo_user_id},
+                        {"ownerId": auth.user_id},
+                    ]
+                }
+            )
+        )
+
+        # Get organizations where user is a member
+        member_records = list(
+            mongo_db.organization_members.find({"userId": mongo_user_id})
+        )
+        member_org_ids = [record["organizationId"] for record in member_records]
+
+        member_orgs = []
+        if member_org_ids:
+            member_orgs = list(
+                mongo_db.organizations.find({"_id": {"$in": member_org_ids}})
+            )
+
+        role_map = {
+            str(record["organizationId"]): record["role"] for record in member_records
+        }
+
+        # Merge and deduplicate
+        all_orgs = {}
+
+        for org in owned_orgs:
+            org_id = str(org["_id"])
+            org["_id"] = org_id
+            org["ownerId"] = str(org["ownerId"])
+            org["role"] = "owner"
+            all_orgs[org_id] = org
+
+        for org in member_orgs:
+            org_id = str(org["_id"])
+            if org_id not in all_orgs:
+                org["_id"] = org_id
+                org["ownerId"] = str(org["ownerId"])
+                org["role"] = role_map.get(org_id, "member")
+                all_orgs[org_id] = org
+
+        orgs_list = list(all_orgs.values())
+
+        logger.info(
+            f"Retrieved {len(orgs_list)} organizations for user {auth.user_id}"
+        )
+
+        return {"organizations": orgs_list}
+
+    except Exception as e:
+        logger.exception("Error in list_organizations:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/{org_id}/projects", summary="List projects in organization")
+def list_organization_projects(
+    org_id: str, auth: AuthContext = Depends(authenticate_api_key)
+):
+    """List all projects in a specific organization."""
+    try:
+        org_obj_id = validate_object_id(org_id, "org_id")
+
+        # Verify user owns the organization
+        organization = mongo_db.organizations.find_one(
+            {"_id": org_obj_id, "ownerId": auth.user_id}
+        )
+
+        if not organization:
+            raise HTTPException(
+                status_code=404, detail="Organization not found or access denied"
+            )
+
+        projects = list(
+            mongo_db.projects.find(
+                {"organizationId": org_obj_id, "ownerId": auth.user_id}
+            )
+        )
+
+        for project in projects:
+            project["_id"] = str(project["_id"])
+            project["ownerId"] = str(project["ownerId"])
+            project["organizationId"] = str(project["organizationId"])
+
+        return {"projects": projects}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error in list_organization_projects:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.post("/{org_id}/invitations", summary="Invite user to organization")
 @limiter.limit(config.rate_limit.INVITATION_CREATE)
 def invite_user_to_organization(

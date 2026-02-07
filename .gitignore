@@ -282,3 +282,9 @@ examples/outputs/
 .git_disabled/
 migration*/
 backup_20251004_171428/
+apis/Add Memory.bru
+apis/bruno.json
+apis/chatlab.bru
+apis/login.bru
+apis/Search Memory.bru
+apis/environments/DEV.bru
