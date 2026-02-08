@@ -5,5 +5,5 @@ description = "Store your Memory"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "mcp[cli]>=1.13.0",
+    "mcp[cli]>=1.23.0",
 ]
