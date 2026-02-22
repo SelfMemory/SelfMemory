@@ -309,6 +309,105 @@ def check_smtp_health() -> HealthCheck | None:
         )
 
 
+def check_ollama_health() -> HealthCheck | None:
+    """
+    Check Ollama embedding service connectivity.
+
+    Returns:
+        Optional[HealthCheck]: Ollama health check result, or None if not configured
+    """
+    if config.embedding.PROVIDER != "ollama":
+        return None
+
+    start_time = datetime.now()
+
+    try:
+        from ollama import Client
+
+        client = Client(host=config.embedding.OLLAMA_BASE_URL)
+        models_response = client.list()
+
+        latency_ms = (datetime.now() - start_time).total_seconds() * 1000
+
+        model_names = [
+            m.get("name") or m.get("model", "")
+            for m in models_response.get("models", [])
+        ]
+
+        return HealthCheck(
+            name="ollama",
+            status=HealthStatus.HEALTHY,
+            latency_ms=latency_ms,
+            details={
+                "url": config.embedding.OLLAMA_BASE_URL,
+                "model": config.embedding.MODEL,
+                "available_models": len(model_names),
+            },
+        )
+
+    except Exception as e:
+        latency_ms = (datetime.now() - start_time).total_seconds() * 1000
+        logger.error(f"Ollama health check failed: {str(e)}")
+
+        return HealthCheck(
+            name="ollama",
+            status=HealthStatus.UNHEALTHY,
+            latency_ms=latency_ms,
+            message="Ollama connection failed",
+            details={"error": "Connection timeout or failure"},
+        )
+
+
+def check_qdrant_health() -> HealthCheck | None:
+    """
+    Check Qdrant vector store connectivity.
+
+    Returns:
+        Optional[HealthCheck]: Qdrant health check result, or None if not configured
+    """
+    if config.vector_store.PROVIDER != "qdrant":
+        return None
+
+    start_time = datetime.now()
+
+    try:
+        from qdrant_client import QdrantClient
+
+        client = QdrantClient(
+            host=config.vector_store.HOST,
+            port=config.vector_store.PORT,
+            timeout=config.health.TIMEOUT_SECONDS,
+        )
+        collections = client.get_collections()
+
+        latency_ms = (datetime.now() - start_time).total_seconds() * 1000
+
+        collection_names = [c.name for c in collections.collections]
+
+        return HealthCheck(
+            name="qdrant",
+            status=HealthStatus.HEALTHY,
+            latency_ms=latency_ms,
+            details={
+                "host": config.vector_store.HOST,
+                "port": config.vector_store.PORT,
+                "collections": len(collection_names),
+            },
+        )
+
+    except Exception as e:
+        latency_ms = (datetime.now() - start_time).total_seconds() * 1000
+        logger.error(f"Qdrant health check failed: {str(e)}")
+
+        return HealthCheck(
+            name="qdrant",
+            status=HealthStatus.UNHEALTHY,
+            latency_ms=latency_ms,
+            message="Qdrant connection failed",
+            details={"error": "Connection timeout or failure"},
+        )
+
+
 def perform_health_checks() -> dict[str, Any]:
     """
     Perform all health checks and return aggregated results.
@@ -327,6 +426,16 @@ def perform_health_checks() -> dict[str, Any]:
     smtp_check = check_smtp_health()
     if smtp_check:
         checks["smtp"] = smtp_check
+
+    # Check Ollama if configured
+    ollama_check = check_ollama_health()
+    if ollama_check:
+        checks["ollama"] = ollama_check
+
+    # Check Qdrant if configured
+    qdrant_check = check_qdrant_health()
+    if qdrant_check:
+        checks["qdrant"] = qdrant_check
 
     # Determine overall health status
     overall_status = HealthStatus.HEALTHY
@@ -376,7 +485,18 @@ def is_ready() -> bool:
     """
     try:
         db_check = check_database_health()
-        return db_check.status != HealthStatus.UNHEALTHY
+        if db_check.status == HealthStatus.UNHEALTHY:
+            return False
+
+        ollama_check = check_ollama_health()
+        if ollama_check and ollama_check.status == HealthStatus.UNHEALTHY:
+            return False
+
+        qdrant_check = check_qdrant_health()
+        if qdrant_check and qdrant_check.status == HealthStatus.UNHEALTHY:
+            return False
+
+        return True
     except Exception as e:
         logger.error(f"Readiness check failed: {str(e)}")
         return False

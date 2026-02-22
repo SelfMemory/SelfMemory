@@ -64,6 +64,26 @@ DEFAULT_CONFIG = {
 # Global Memory instance
 MEMORY_INSTANCE = SelfMemory(config=DEFAULT_CONFIG)
 
+# Validate Ollama connectivity (embedding provider must be reachable)
+if config.embedding.PROVIDER == "ollama":
+    try:
+        from ollama import Client as OllamaClient
+
+        ollama_client = OllamaClient(host=config.embedding.OLLAMA_BASE_URL)
+        ollama_client.list()
+        logging.info(f"✅ Ollama connected at {config.embedding.OLLAMA_BASE_URL}")
+    except Exception as e:
+        logging.error("=" * 50)
+        logging.error("OLLAMA CONNECTION FAILED")
+        logging.error("=" * 50)
+        logging.error(f"  URL: {config.embedding.OLLAMA_BASE_URL}")
+        logging.error(f"  Error: {e}")
+        logging.error("  Please ensure Ollama is running: ollama serve")
+        logging.error("=" * 50)
+        raise RuntimeError(
+            "Ollama is not reachable. Start Ollama before the backend."
+        ) from e
+
 # Validate configuration on startup
 config_errors = config.validate()
 if config_errors:
