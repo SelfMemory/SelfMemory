@@ -51,14 +51,8 @@ class OllamaEmbedding(EmbeddingBase):
         self._model_ready = True
 
     def _ensure_model_exists(self):
-        """Ensure model exists at startup. Defers to first embed() call on failure."""
-        try:
-            self._pull_model_if_missing()
-        except Exception as e:
-            logging.warning(
-                f"Could not connect to Ollama to check model '{self.config.model}': {e}. "
-                f"Will retry on first embed() call."
-            )
+        """Ensure model exists at startup. Raises if Ollama is unreachable."""
+        self._pull_model_if_missing()
 
     def embed(
         self, text, memory_action: Literal["add", "search", "update"] | None = None
