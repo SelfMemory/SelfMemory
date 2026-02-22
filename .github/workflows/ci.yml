@@ -56,8 +56,8 @@ jobs:
         with:
           version: "latest"
 
-      - name: Install dependencies with test extras
-        run: uv sync --extra test
+      - name: Install dependencies with dev extras
+        run: uv sync --extra dev
 
       - name: Run tests with coverage
         run: uv run pytest tests/ -v
