@@ -159,9 +159,7 @@ def list_organizations(auth: AuthContext = Depends(authenticate_api_key)):
 
         orgs_list = list(all_orgs.values())
 
-        logger.info(
-            f"Retrieved {len(orgs_list)} organizations for user {auth.user_id}"
-        )
+        logger.info(f"Retrieved {len(orgs_list)} organizations for user {auth.user_id}")
 
         return {"organizations": orgs_list}
 
