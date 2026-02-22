@@ -316,9 +316,7 @@ class SelfMemory(MemoryBase):
             )
 
             if self._encryption_enabled:
-                storage_metadata = encrypt_payload(
-                    storage_metadata, self._master_key
-                )
+                storage_metadata = encrypt_payload(storage_metadata, self._master_key)
 
             # Generate embedding
             embedding = self.embedding_provider.embed(memory_content)
@@ -844,9 +842,7 @@ class SelfMemory(MemoryBase):
         )
 
         if self._encryption_enabled:
-            storage_metadata = encrypt_payload(
-                storage_metadata, self._master_key
-            )
+            storage_metadata = encrypt_payload(storage_metadata, self._master_key)
 
         # Generate ID and insert
         memory_id = str(uuid.uuid4())
@@ -891,9 +887,7 @@ class SelfMemory(MemoryBase):
                 identifier = _get_identifier(new_metadata)
                 fernet_key = derive_encryption_key(self._master_key, identifier)
                 fernet = Fernet(fernet_key)
-                new_metadata["data"] = fernet.encrypt(
-                    data.encode()
-                ).decode()
+                new_metadata["data"] = fernet.encrypt(data.encode()).decode()
             else:
                 # Legacy unencrypted data — encrypt whole payload on update
                 new_metadata = encrypt_payload(new_metadata, self._master_key)

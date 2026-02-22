@@ -14,14 +14,14 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
-from qdrant_client.models import PointStruct
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from selfmemory.security.encryption import SENSITIVE_FIELDS, encrypt_payload
+from selfmemory.security.encryption import encrypt_payload
 
 load_dotenv()
 
