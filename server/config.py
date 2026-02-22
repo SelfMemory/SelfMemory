@@ -49,14 +49,6 @@ class DatabaseConfig:
 class SecurityConfig:
     """Configuration for security features."""
 
-    # CSRF Protection
-    CSRF_SECRET_KEY: str | None = os.getenv("CSRF_SECRET_KEY")
-    CSRF_COOKIE_SECURE: bool = os.getenv("CSRF_COOKIE_SECURE", "true").lower() == "true"
-    CSRF_COOKIE_SAMESITE: str = os.getenv("CSRF_COOKIE_SAMESITE", "Strict")
-    CSRF_COOKIE_HTTPONLY: bool = True
-    CSRF_HEADER_NAME: str = "X-CSRF-Token"
-    CSRF_COOKIE_NAME: str = "csrf_token"
-
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = (
         os.getenv("RATE_LIMIT_ENABLED", "false").lower() == "true"
@@ -323,12 +315,8 @@ class Config:
             errors.append(f"Invalid ENVIRONMENT: {cls.app.ENVIRONMENT}")
 
         # Security checks for production
-        if cls.app.ENVIRONMENT == "production":
-            if cls.error.EXPOSE_DETAILS:
-                errors.append("ERROR_EXPOSE_DETAILS must be false in production")
-
-            if not cls.security.CSRF_SECRET_KEY:
-                errors.append("CSRF_SECRET_KEY is required in production")
+        if cls.app.ENVIRONMENT == "production" and cls.error.EXPOSE_DETAILS:
+            errors.append("ERROR_EXPOSE_DETAILS must be false in production")
 
         return errors
 

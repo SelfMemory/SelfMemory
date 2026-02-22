@@ -32,75 +32,33 @@ class OllamaEmbedding(EmbeddingBase):
         self.config.embedding_dims = self.config.embedding_dims or 512
 
         self.client = Client(host=self.config.ollama_base_url)
-        
-        # Track model availability status
-        self._model_checked = False
-        self._model_available = False
-        
-        # Try to ensure model exists, but don't fail if Ollama is not available
+        self._model_ready = False
         self._ensure_model_exists()
 
+    def _pull_model_if_missing(self):
+        """Check if model exists locally, pull if missing."""
+        local_models = self.client.list()["models"]
+        model_exists = any(
+            model.get("name") == self.config.model
+            or model.get("model") == self.config.model
+            for model in local_models
+        )
+
+        if not model_exists:
+            logging.info(f"Pulling Ollama model '{self.config.model}'...")
+            self.client.pull(self.config.model)
+
+        self._model_ready = True
+
     def _ensure_model_exists(self):
-        """
-        Ensure the specified model exists locally. If not, pull it from Ollama.
-        Gracefully handles connection failures by deferring model checks.
-        """
+        """Ensure model exists at startup. Defers to first embed() call on failure."""
         try:
-            local_models = self.client.list()["models"]
-            model_exists = any(
-                model.get("name") == self.config.model
-                or model.get("model") == self.config.model
-                for model in local_models
-            )
-            
-            if not model_exists:
-                logging.info(f"Pulling Ollama model '{self.config.model}'...")
-                self.client.pull(self.config.model)
-                logging.info(f"Successfully pulled model '{self.config.model}'")
-            else:
-                logging.info(f"Ollama model '{self.config.model}' is available")
-            
-            self._model_checked = True
-            self._model_available = True
-            
+            self._pull_model_if_missing()
         except Exception as e:
-            # Log warning but don't fail - allow application to start
             logging.warning(
                 f"Could not connect to Ollama to check model '{self.config.model}': {e}. "
-                f"Model availability will be checked when embeddings are first used."
+                f"Will retry on first embed() call."
             )
-            self._model_checked = False
-            self._model_available = False
-
-    def _check_model_on_demand(self):
-        """
-        Check model availability when embedding is first attempted.
-        This is a fallback for when the initial check failed during initialization.
-        """
-        if not self._model_checked:
-            try:
-                local_models = self.client.list()["models"]
-                model_exists = any(
-                    model.get("name") == self.config.model
-                    or model.get("model") == self.config.model
-                    for model in local_models
-                )
-                
-                if not model_exists:
-                    logging.info(f"Pulling required Ollama model '{self.config.model}'...")
-                    self.client.pull(self.config.model)
-                    logging.info(f"Successfully pulled model '{self.config.model}'")
-                
-                self._model_checked = True
-                self._model_available = True
-                logging.info(f"Ollama connection established, model '{self.config.model}' is ready")
-                
-            except Exception as e:
-                logging.error(f"Failed to connect to Ollama or pull model '{self.config.model}': {e}")
-                raise RuntimeError(
-                    f"Ollama is not available or model '{self.config.model}' cannot be accessed. "
-                    f"Please ensure Ollama is running and the model is available."
-                ) from e
 
     def embed(
         self, text, memory_action: Literal["add", "search", "update"] | None = None
@@ -114,17 +72,8 @@ class OllamaEmbedding(EmbeddingBase):
         Returns:
             list: The embedding vector.
         """
-        # Check model availability on first use if initial check failed
-        if not self._model_available:
-            self._check_model_on_demand()
-        
-        try:
-            response = self.client.embeddings(model=self.config.model, prompt=text)
-            return response["embedding"]
-        except Exception as e:
-            # If embedding fails, it might be a connection issue - reset availability flag
-            if "connection" in str(e).lower() or "connect" in str(e).lower():
-                self._model_available = False
-                self._model_checked = False
-                logging.error(f"Lost connection to Ollama during embedding: {e}")
-            raise
+        if not self._model_ready:
+            self._pull_model_if_missing()
+
+        response = self.client.embeddings(model=self.config.model, prompt=text)
+        return response["embedding"]
