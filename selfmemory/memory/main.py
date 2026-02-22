@@ -8,6 +8,7 @@ with a zero-setup API for direct usage without authentication.
 
 import hashlib
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,7 @@ from selfmemory.memory.utils import (
     build_search_filters,
     validate_isolation_context,
 )
+from selfmemory.security.encryption import decrypt_payload, encrypt_payload
 from selfmemory.utils.factory import EmbedderFactory, VectorStoreFactory
 
 logger = logging.getLogger(__name__)
@@ -180,6 +182,9 @@ class SelfMemory(MemoryBase):
                 f"{self.config.embedding.provider} + {self.config.vector_store.provider}"
             )
 
+        self._master_key = os.environ.get("MASTER_ENCRYPTION_KEY", "")
+        self._encryption_enabled = bool(self._master_key)
+
     def add(
         self,
         messages,  # Can be string, dict, or list of dicts
@@ -309,6 +314,11 @@ class SelfMemory(MemoryBase):
                 project_id=project_id,
                 organization_id=organization_id,
             )
+
+            if self._encryption_enabled:
+                storage_metadata = encrypt_payload(
+                    storage_metadata, self._master_key
+                )
 
             # Generate embedding
             embedding = self.embedding_provider.embed(memory_content)
@@ -638,8 +648,11 @@ class SelfMemory(MemoryBase):
                 )
 
                 for mem in existing_memories:
+                    mem_payload = mem.payload
+                    if self._encryption_enabled:
+                        mem_payload = decrypt_payload(mem_payload, self._master_key)
                     retrieved_old_memory.append(
-                        {"id": mem.id, "text": mem.payload.get("data", "")}
+                        {"id": mem.id, "text": mem_payload.get("data", "")}
                     )
 
             # Deduplicate by ID
@@ -830,6 +843,11 @@ class SelfMemory(MemoryBase):
             organization_id=organization_id,
         )
 
+        if self._encryption_enabled:
+            storage_metadata = encrypt_payload(
+                storage_metadata, self._master_key
+            )
+
         # Generate ID and insert
         memory_id = str(uuid.uuid4())
         self.vector_store.insert(
@@ -859,6 +877,26 @@ class SelfMemory(MemoryBase):
         new_metadata["data"] = data
         new_metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
         new_metadata["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        if self._encryption_enabled:
+            if new_metadata.get("encrypted"):
+                # Re-encrypt only the updated data field
+                from cryptography.fernet import Fernet
+
+                from selfmemory.security.encryption import (
+                    _get_identifier,
+                    derive_encryption_key,
+                )
+
+                identifier = _get_identifier(new_metadata)
+                fernet_key = derive_encryption_key(self._master_key, identifier)
+                fernet = Fernet(fernet_key)
+                new_metadata["data"] = fernet.encrypt(
+                    data.encode()
+                ).decode()
+            else:
+                # Legacy unencrypted data — encrypt whole payload on update
+                new_metadata = encrypt_payload(new_metadata, self._master_key)
 
         # Update in vector store
         self.vector_store.update(
@@ -1262,6 +1300,7 @@ class SelfMemory(MemoryBase):
 
         This helper method standardizes result formatting from different vector stores,
         ensuring consistent output format regardless of the underlying storage provider.
+        Decrypts encrypted payloads when encryption is enabled.
 
         Args:
             results: Raw results from vector store operations
@@ -1277,10 +1316,15 @@ class SelfMemory(MemoryBase):
         points = self._extract_points_from_results(results)
 
         for point in points:
+            payload = self._extract_metadata(point)
+
+            if self._encryption_enabled:
+                payload = decrypt_payload(payload, self._master_key)
+
             # Build base result structure
             result = {
                 "id": self._extract_memory_id(point),
-                "content": self._extract_content(point),
+                "content": payload.get("data", ""),
             }
 
             # Add score if requested and available
@@ -1289,7 +1333,7 @@ class SelfMemory(MemoryBase):
 
             # Add metadata if requested
             if include_metadata:
-                result["metadata"] = self._extract_metadata(point)
+                result["metadata"] = payload
 
             formatted_results.append(result)
 
