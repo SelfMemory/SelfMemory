@@ -3,6 +3,7 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 const sidebars: SidebarsConfig = {
   tutorialSidebar: [
     'Home',
+    'getting-started',
     {
       type: 'category',
       label: 'Python SDK',
@@ -19,6 +20,8 @@ const sidebars: SidebarsConfig = {
         'Platform/API Key page',
       ],
     },
+    'api-reference',
+    'sdks',
     {
       type: 'link',
       label: '📋 Changelog',

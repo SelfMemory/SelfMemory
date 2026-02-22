@@ -46,6 +46,16 @@ const config: Config = {
     },
   ],
 
+  plugins: [
+    'docusaurus-plugin-copy-page-button',
+    [
+      'docusaurus-plugin-llms',
+      {
+        generateLLMsFullTxt: true,
+      },
+    ],
+  ],
+
   presets: [
     [
       'classic',
