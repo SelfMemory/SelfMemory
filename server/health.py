@@ -493,10 +493,7 @@ def is_ready() -> bool:
             return False
 
         qdrant_check = check_qdrant_health()
-        if qdrant_check and qdrant_check.status == HealthStatus.UNHEALTHY:
-            return False
-
-        return True
+        return not (qdrant_check and qdrant_check.status == HealthStatus.UNHEALTHY)
     except Exception as e:
         logger.error(f"Readiness check failed: {str(e)}")
         return False
