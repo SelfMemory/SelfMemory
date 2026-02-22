@@ -116,3 +116,7 @@ clean-auth:
 
 restart-auth:
 	cd ory-infrastructure && docker-compose restart
+
+ship:
+	uv lock
+	uv sync --all-extras
