@@ -1,3 +1,4 @@
+import logging
 import subprocess
 import sys
 from typing import Literal
@@ -31,19 +32,27 @@ class OllamaEmbedding(EmbeddingBase):
         self.config.embedding_dims = self.config.embedding_dims or 512
 
         self.client = Client(host=self.config.ollama_base_url)
+        self._model_ready = False
         self._ensure_model_exists()
 
-    def _ensure_model_exists(self):
-        """
-        Ensure the specified model exists locally. If not, pull it from Ollama.
-        """
+    def _pull_model_if_missing(self):
+        """Check if model exists locally, pull if missing."""
         local_models = self.client.list()["models"]
-        if not any(
+        model_exists = any(
             model.get("name") == self.config.model
             or model.get("model") == self.config.model
             for model in local_models
-        ):
+        )
+
+        if not model_exists:
+            logging.info(f"Pulling Ollama model '{self.config.model}'...")
             self.client.pull(self.config.model)
+
+        self._model_ready = True
+
+    def _ensure_model_exists(self):
+        """Ensure model exists at startup. Raises if Ollama is unreachable."""
+        self._pull_model_if_missing()
 
     def embed(
         self, text, memory_action: Literal["add", "search", "update"] | None = None
@@ -57,5 +66,8 @@ class OllamaEmbedding(EmbeddingBase):
         Returns:
             list: The embedding vector.
         """
+        if not self._model_ready:
+            self._pull_model_if_missing()
+
         response = self.client.embeddings(model=self.config.model, prompt=text)
         return response["embedding"]

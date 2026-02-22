@@ -3,14 +3,10 @@ from typing import Any
 
 from bson import ObjectId
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi_csrf_protect import CsrfProtect
-from fastapi_csrf_protect.exceptions import CsrfProtectError
 from pydantic import BaseModel, Field, field_validator
-from pydantic import BaseModel as PydanticBaseModel
-from slowapi.errors import RateLimitExceeded
 
 from selfmemory import SelfMemory
 
@@ -28,31 +24,14 @@ from .routes.projects import router as projects_router
 from .routes.users import router as users_router
 from .telemetry import initialize_telemetry
 from .utils.datetime_helpers import utc_now
-from .utils.error_handlers import ErrorCode, create_error_response, get_request_id
 from .utils.permission_helpers import get_user_object_id_from_kratos_id
-from .utils.rate_limiter import get_rate_limit_key, limiter
+from .utils.rate_limiter import limiter
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 load_dotenv()
-
-
-# CSRF Protection Configuration
-class CsrfSettings(PydanticBaseModel):
-    secret_key: str = config.security.CSRF_SECRET_KEY or ""
-    cookie_name: str = config.security.CSRF_COOKIE_NAME
-    cookie_samesite: str = config.security.CSRF_COOKIE_SAMESITE.lower()
-    cookie_secure: bool = config.security.CSRF_COOKIE_SECURE
-    cookie_httponly: bool = config.security.CSRF_COOKIE_HTTPONLY
-    header_name: str = config.security.CSRF_HEADER_NAME
-
-
-@CsrfProtect.load_config
-def get_csrf_config():
-    return CsrfSettings()
-
 
 DEFAULT_CONFIG = {
     "vector_store": {
@@ -84,6 +63,26 @@ DEFAULT_CONFIG = {
 
 # Global Memory instance
 MEMORY_INSTANCE = SelfMemory(config=DEFAULT_CONFIG)
+
+# Validate Ollama connectivity (embedding provider must be reachable)
+if config.embedding.PROVIDER == "ollama":
+    try:
+        from ollama import Client as OllamaClient
+
+        ollama_client = OllamaClient(host=config.embedding.OLLAMA_BASE_URL)
+        ollama_client.list()
+        logging.info(f"✅ Ollama connected at {config.embedding.OLLAMA_BASE_URL}")
+    except Exception as e:
+        logging.error("=" * 50)
+        logging.error("OLLAMA CONNECTION FAILED")
+        logging.error("=" * 50)
+        logging.error(f"  URL: {config.embedding.OLLAMA_BASE_URL}")
+        logging.error(f"  Error: {e}")
+        logging.error("  Please ensure Ollama is running: ollama serve")
+        logging.error("=" * 50)
+        raise RuntimeError(
+            "Ollama is not reachable. Start Ollama before the backend."
+        ) from e
 
 # Validate configuration on startup
 config_errors = config.validate()
@@ -124,24 +123,7 @@ initialize_telemetry(app)
 app.state.limiter = limiter
 
 
-# Request ID middleware - adds X-Request-ID to all requests
-@app.middleware("http")
-async def add_request_id_middleware(request: Request, call_next):
-    """Add request ID to all requests for tracking and correlation."""
-    request_id = get_request_id(request)
-    # Store in request state for use in handlers
-    request.state.request_id = request_id
-    # Call next middleware/handler
-    response = await call_next(request)
-    # Add to response headers
-    response.headers["X-Request-ID"] = request_id
-    return response
-
-
 # CORS middleware
-# NOTE: Cannot use allow_origins=["*"] with allow_credentials=True
-# Browsers block credentials with wildcard origins for security
-# NOTE: Must include BOTH localhost and 127.0.0.1 as browsers treat them as different origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -157,69 +139,6 @@ app.add_middleware(
 )
 
 
-# Rate Limit Exception Handler
-@app.exception_handler(RateLimitExceeded)
-def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    """Handle rate limit exceeded errors with clear messages and logging."""
-    request_id = get_request_id(request)
-    client_key = get_rate_limit_key(request)
-
-    logging.warning(
-        f"⚠️ RATE LIMIT EXCEEDED: "
-        f"path={request.url.path}, "
-        f"method={request.method}, "
-        f"client={client_key}, "
-        f"limit={exc.detail}, "
-        f"request_id={request_id}"
-    )
-
-    return create_error_response(
-        code=ErrorCode.RATE_LIMIT_EXCEEDED,
-        message="Too many requests. Please slow down and try again later.",
-        status_code=429,
-        request_id=request_id,
-    )
-
-
-# CSRF Exception Handler
-@app.exception_handler(CsrfProtectError)
-def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
-    """Handle CSRF protection errors with clear error messages."""
-    request_id = get_request_id(request)
-
-    logging.warning(
-        f"CSRF validation failed: message={exc.message}, request_id={request_id}"
-    )
-
-    return create_error_response(
-        code=ErrorCode.CSRF_TOKEN_INVALID,
-        message="CSRF token validation failed. Please refresh and try again.",
-        status_code=403,
-        request_id=request_id,
-    )
-
-
-# CSRF Token Endpoint
-@app.get("/api/csrf-token", summary="Get CSRF token")
-async def get_csrf_token(
-    request: Request, response: Response, csrf_protect: CsrfProtect = Depends()
-):
-    """
-    Get CSRF token for subsequent state-changing requests.
-    The token will be set in a cookie and also returned in the response.
-    """
-    # Generate and set CSRF token
-    csrf_token = csrf_protect.generate_csrf()
-    response.set_cookie(
-        key=config.security.CSRF_COOKIE_NAME,
-        value=csrf_token,
-        secure=config.security.CSRF_COOKIE_SECURE,
-        httponly=config.security.CSRF_COOKIE_HTTPONLY,
-        samesite=config.security.CSRF_COOKIE_SAMESITE.lower(),
-    )
-    return {"csrf_token": csrf_token, "message": "CSRF token generated successfully"}
-
-
 # Include routers
 app.include_router(api_keys_router)
 app.include_router(chat_router)
@@ -231,111 +150,8 @@ app.include_router(projects_router)
 app.include_router(users_router)
 
 
-# API Keys endpoint (query parameter version for frontend compatibility)
-@app.get("/api/api-keys", summary="List project API keys (query param version)")
-@limiter.limit(config.rate_limit.MEMORY_READ)
-def list_api_keys_query(
-    request: Request, project_id: str, auth: AuthContext = Depends(authenticate_api_key)
-):
-    """
-    List API keys for a project using query parameter.
-    This is a compatibility endpoint for the frontend.
-    Delegates to the main api_keys route handler.
-    """
-    from .dependencies import check_project_access
-    from .utils.validators import validate_object_id
-
-    logging.info(
-        f"🔍 DEBUG /api/api-keys: user={auth.user_id}, project_id={project_id}"
-    )
-
-    # Get MongoDB ObjectId from Kratos ID
-    user_obj_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
-    project_obj_id = validate_object_id(project_id, "project_id")
-
-    # Verify project exists
-    project = mongo_db.projects.find_one({"_id": project_obj_id})
-    if not project:
-        logging.error(f"❌ Project not found: {project_id}")
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    logging.info(
-        f"🔍 DEBUG project found: owner={project.get('ownerId')}, org={project.get('organizationId')}"
-    )
-
-    # Check organization ownership
-    org = mongo_db.organizations.find_one({"_id": project["organizationId"]})
-    if org:
-        logging.info(
-            f"🔍 DEBUG org found: owner={org.get('ownerId')}, is_org_owner={str(org.get('ownerId')) == auth.user_id}"
-        )
-
-    # Check project ownership
-    logging.info(
-        f"🔍 DEBUG is_project_owner={str(project.get('ownerId')) == auth.user_id}"
-    )
-
-    # Check membership
-    member = mongo_db.project_members.find_one(
-        {"projectId": project_obj_id, "userId": user_obj_id}
-    )
-    logging.info(
-        f"🔍 DEBUG project_member found: {member is not None}, member_data={member}"
-    )
-
-    # Check if user has access to the project (owner or member)
-    has_access = check_project_access(auth.user_id, project_id)
-    logging.info(f"🔍 DEBUG check_project_access result: {has_access}")
-
-    if not has_access:
-        logging.warning(
-            f"❌ User {auth.user_id} attempted to list API keys for project {project_id} without access"
-        )
-        raise HTTPException(
-            status_code=403, detail="You do not have access to this project"
-        )
-
-    # Get ALL API keys for this project (team transparency)
-    api_keys = list(mongo_db.api_keys.find({"projectId": project_obj_id}))
-
-    # Enrich with user information and remove sensitive data
-    result_keys = []
-    for key in api_keys:
-        # Get user info for owner email
-        user = mongo_db.users.find_one({"_id": key["userId"]})
-        owner_email = user.get("email", "Unknown") if user else "Unknown"
-
-        result_keys.append(
-            {
-                "id": str(key["_id"]),
-                "name": key.get("name", "Unnamed Key"),
-                "key_prefix": key.get("keyPrefix", "sk_im_..."),
-                "owner_id": str(key["userId"]),
-                "owner_email": owner_email,
-                "permissions": key.get("permissions", []),
-                "is_active": key.get("isActive", True),
-                "created_at": key.get("createdAt").isoformat()
-                if key.get("createdAt")
-                else None,
-                "last_used": key.get("lastUsed").isoformat()
-                if key.get("lastUsed")
-                else None,
-                "expires_at": key.get("expiresAt").isoformat()
-                if key.get("expiresAt")
-                else None,
-            }
-        )
-
-    logging.info(
-        f"✅ User {auth.user_id} listed {len(result_keys)} API keys for project {project_id}"
-    )
-
-    return {"api_keys": result_keys, "total": len(result_keys)}
-
-
-# Pydantic models (selfmemory style)
 class Message(BaseModel):
-    role: str = Field(..., description="Role of the message (user or assistant).")
+    role: str = Field(..., description="Message role (e.g., 'user', 'assistant').")
     content: str = Field(..., description="Message content.")
 
 
@@ -436,27 +252,71 @@ class ApiKeyCreate(BaseModel):
     )
 
 
-# API Endpoints (enhanced for multi-tenant support)
-@app.get("/api/v1/ping", summary="Ping endpoint for client validation")
-def ping_endpoint(auth: AuthContext = Depends(authenticate_api_key)):
-    """Ping endpoint that returns user info on successful authentication with multi-tenant context."""
-    return {
-        "status": "ok",
-        "user_id": auth.user_id,
-        "project_id": auth.project_id,
-        "organization_id": auth.organization_id,
-        "key_id": "default",
-        "permissions": ["read", "write"],
-        "name": "SelfMemory User",
-    }
+@app.get("/api/memories", summary="List memories with multi-tenant isolation")
+def list_memories(
+    request: Request,
+    auth: AuthContext = Depends(authenticate_api_key),
+    user_id: str | None = None,
+    project_id: str | None = None,
+    organization_id: str | None = None,
+    limit: int = 10,
+    offset: int = 0,
+):
+    """List memories with multi-tenant isolation (supports both API key and Session auth)."""
+    try:
+        # For Session auth, extract and validate project context
+        if auth.project_id is None:
+            requested_project_id = project_id
+            if not requested_project_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="project_id required for session authentication",
+                )
 
+            try:
+                project_obj_id = ObjectId(requested_project_id)
+            except Exception as err:
+                raise HTTPException(
+                    status_code=400, detail="Invalid project_id format"
+                ) from err
 
-@app.post("/configure", summary="Configure SelfMemory")
-def set_config(config: dict[str, Any]):
-    """Set memory configuration (selfmemory style)."""
-    global MEMORY_INSTANCE
-    MEMORY_INSTANCE = SelfMemory(config=config)
-    return {"message": "Configuration set successfully"}
+            from .dependencies import check_project_access
+
+            if not check_project_access(auth.user_id, requested_project_id):
+                raise HTTPException(status_code=403, detail="Access denied to project")
+
+            project = mongo_db.projects.find_one({"_id": project_obj_id})
+            if not project:
+                raise HTTPException(status_code=404, detail="Project not found")
+
+            final_project_id = str(project["_id"])
+        else:
+            final_project_id = auth.project_id
+
+        from .dependencies import has_permission
+
+        if not has_permission(auth.user_id, final_project_id, "read"):
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied - read access required",
+            )
+
+        logging.info(
+            f"📋 Listing memories: project={final_project_id}, requester={auth.user_id}, limit={limit}, offset={offset}"
+        )
+
+        response = MEMORY_INSTANCE.get_all(
+            user_id=final_project_id,
+            limit=limit,
+            offset=offset,
+        )
+
+        return JSONResponse(content=response)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("Error in list_memories:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/memories", summary="Create memories with multi-tenant isolation")
@@ -638,113 +498,6 @@ def add_memory(
         raise
     except Exception as e:
         logging.exception("Error in add_memory:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.get("/api/memories", summary="Get memories with multi-tenant isolation")
-@limiter.limit(config.rate_limit.MEMORY_READ)
-def get_all_memories(
-    request: Request,
-    project_id: str | None = None,
-    organization_id: str | None = None,
-    limit: int = config.pagination.MAX_LIMIT,
-    offset: int = 0,
-    auth: AuthContext = Depends(authenticate_api_key),
-):
-    """Retrieve stored memories with multi-tenant isolation (supports both API key and Session auth)."""
-    try:
-        # For Session auth, extract and validate project context from request
-        if auth.project_id is None:
-            # Session authentication - get project context from query params
-            if not project_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="project_id required for session authentication",
-                )
-
-            # Validate user has access to the project (owner or member)
-            try:
-                project_obj_id = ObjectId(project_id)
-                # user_obj_id = ObjectId(auth.user_id)  # Remove unused assignment
-            except Exception as err:
-                raise HTTPException(
-                    status_code=400, detail="Invalid project_id or user_id format"
-                ) from err
-
-            # Use Phase 6 helper function to check access (not just ownership)
-            from .dependencies import check_project_access
-
-            if not check_project_access(auth.user_id, project_id):
-                logging.warning(
-                    f"❌ Session user {auth.user_id} does not have access to project {project_id}"
-                )
-                raise HTTPException(status_code=403, detail="Access denied to project")
-
-            # Get project details for organization context
-            project = mongo_db.projects.find_one({"_id": project_obj_id})
-            if not project:
-                raise HTTPException(status_code=404, detail="Project not found")
-
-            # Set validated project context
-            final_project_id = str(project["_id"])
-            # final_org_id = str(project["organizationId"])  # Remove unused assignment
-
-            logging.info(
-                f"✅ Session auth project validated: user={auth.user_id}, project={final_project_id}"
-            )
-        else:
-            # API key authentication - use key's scoped context
-            if project_id and project_id != auth.project_id:
-                logging.warning(
-                    f"❌ ISOLATION VIOLATION: User {auth.user_id} attempted to access project {project_id} but API key is scoped to {auth.project_id}"
-                )
-                raise HTTPException(
-                    status_code=403,
-                    detail="API key is not authorized for the requested project",
-                )
-
-            if organization_id and organization_id != auth.organization_id:
-                logging.warning(
-                    f"❌ ISOLATION VIOLATION: User {auth.user_id} attempted to access org {organization_id} but API key is scoped to {auth.organization_id}"
-                )
-                raise HTTPException(
-                    status_code=403,
-                    detail="API key is not authorized for the requested organization",
-                )
-
-            final_project_id = auth.project_id
-
-        # PHASE 7: Check read permission
-        from .dependencies import has_permission
-
-        if not has_permission(auth.user_id, final_project_id, "read"):
-            logging.warning(
-                f"❌ User {auth.user_id} does not have read permission for project {final_project_id}"
-            )
-            raise HTTPException(
-                status_code=403,
-                detail="Permission denied - read access required to retrieve memories",
-            )
-
-        # Project-level memory retrieval: All project members see the same memories
-        logging.info(
-            f"📖 Retrieving memories: project={final_project_id}, requester={auth.user_id}"
-        )
-
-        result = MEMORY_INSTANCE.get_all(
-            user_id=final_project_id,  # Project as session identifier for shared memories
-            limit=limit,
-            offset=offset,
-        )
-
-        logging.info(
-            f"✅ Retrieved {len(result.get('results', []))} memories from project {final_project_id}"
-        )
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.exception("Error in get_all_memories:")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -968,174 +721,6 @@ def delete_all_memories(auth: AuthContext = Depends(authenticate_api_key)):
     except Exception as e:
         logging.exception("Error in delete_all_memories:")
         raise HTTPException(status_code=500, detail="Internal server error") from e
-
-
-# Helper function for ensuring default organization and project
-def ensure_default_org_and_project(user_id: str) -> tuple[str, str]:
-    """
-    Ensure user has default organization and project, creating them if needed.
-
-    Note: user_id is Kratos identity_id (UUID string). We look up the MongoDB user
-    document and use its _id (ObjectId) as ownerId for consistency with dashboard.
-    """
-    try:
-        # Look up MongoDB user document using Kratos identity_id
-        mongo_user_id = get_user_object_id_from_kratos_id(mongo_db, user_id)
-
-        logging.info(
-            f"Ensuring default org/project: kratos_id={user_id}, mongo_id={mongo_user_id}"
-        )
-
-        # Check if user already has a personal organization
-        # CRITICAL: Check BOTH ownerId formats (frontend uses string, backend uses ObjectId)
-        personal_org = mongo_db.organizations.find_one(
-            {
-                "$or": [
-                    {"ownerId": mongo_user_id},  # Backend-created (ObjectId)
-                    {"ownerId": user_id},  # Frontend-created (Kratos ID string)
-                ],
-                "type": "personal",
-            }
-        )
-
-        if not personal_org:
-            # Create personal organization using MongoDB ObjectId
-            org_doc = {
-                "name": "Personal Organization",
-                "ownerId": mongo_user_id,  # MongoDB ObjectId for consistency
-                "type": "personal",
-                "createdAt": utc_now(),
-                "updatedAt": utc_now(),
-            }
-            org_result = mongo_db.organizations.insert_one(org_doc)
-            org_id = org_result.inserted_id
-
-            # IMPORTANT: Add owner to organization_members collection
-            org_member_doc = {
-                "organizationId": org_id,
-                "userId": mongo_user_id,  # MongoDB ObjectId for consistency
-                "role": "owner",
-                "joinedAt": utc_now(),
-                "status": "active",
-                "invitedBy": None,  # Self-created
-            }
-            mongo_db.organization_members.insert_one(org_member_doc)
-
-            logging.info(
-                f"Created personal organization for user {user_id} (mongo_id: {mongo_user_id}) and added owner to organization_members"
-            )
-        else:
-            org_id = personal_org["_id"]
-
-        # Check if default project exists
-        default_project = mongo_db.projects.find_one(
-            {
-                "organizationId": org_id,
-                "ownerId": mongo_user_id,  # MongoDB ObjectId for consistency
-                "name": "Default Project",
-            }
-        )
-
-        if not default_project:
-            # Create default project using MongoDB ObjectId
-            project_doc = {
-                "name": "Default Project",
-                "organizationId": org_id,
-                "ownerId": mongo_user_id,  # MongoDB ObjectId for consistency
-                "createdAt": utc_now(),
-                "updatedAt": utc_now(),
-            }
-            project_result = mongo_db.projects.insert_one(project_doc)
-            project_id = project_result.inserted_id
-            logging.info(
-                f"Created default project for user {user_id} (mongo_id: {mongo_user_id})"
-            )
-        else:
-            project_id = default_project["_id"]
-
-        return str(org_id), str(project_id)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Error ensuring default org/project for user {user_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to create default organization and project"
-        ) from e
-
-
-# Organization Management Endpoints
-@app.get("/api/organizations", summary="List user's organizations")
-def list_organizations(auth: AuthContext = Depends(authenticate_api_key)):
-    """List all organizations the user has access to (owned + member)."""
-    try:
-        # Look up MongoDB user document for consistency
-        mongo_user_id = get_user_object_id_from_kratos_id(mongo_db, auth.user_id)
-
-        # Get organizations where user is owner (check BOTH ownerId formats)
-        owned_orgs = list(
-            mongo_db.organizations.find(
-                {
-                    "$or": [
-                        {"ownerId": mongo_user_id},  # Backend-created (ObjectId)
-                        {
-                            "ownerId": auth.user_id
-                        },  # Frontend-created (Kratos ID string)
-                    ]
-                }
-            )
-        )
-
-        # Get organizations where user is a member (using MongoDB ObjectId)
-        member_records = list(
-            mongo_db.organization_members.find({"userId": mongo_user_id})
-        )
-        member_org_ids = [record["organizationId"] for record in member_records]
-
-        # Get organization details for member orgs
-        member_orgs = []
-        if member_org_ids:
-            member_orgs = list(
-                mongo_db.organizations.find({"_id": {"$in": member_org_ids}})
-            )
-
-        # Create role map for member organizations
-        role_map = {
-            str(record["organizationId"]): record["role"] for record in member_records
-        }
-
-        # Merge and deduplicate organizations
-        all_orgs = {}
-
-        # Add owned organizations with Owner role
-        for org in owned_orgs:
-            org_id = str(org["_id"])
-            org["_id"] = org_id
-            org["ownerId"] = str(org["ownerId"])
-            org["role"] = "owner"
-            all_orgs[org_id] = org
-
-        # Add member organizations with their respective roles
-        for org in member_orgs:
-            org_id = str(org["_id"])
-            if org_id not in all_orgs:  # Avoid duplicates
-                org["_id"] = org_id
-                org["ownerId"] = str(org["ownerId"])
-                org["role"] = role_map.get(org_id, "member")
-                all_orgs[org_id] = org
-
-        # Convert to list
-        orgs_list = list(all_orgs.values())
-
-        logging.info(
-            f"Retrieved {len(orgs_list)} organizations for user {auth.user_id}"
-        )
-
-        return {"organizations": orgs_list}
-
-    except Exception as e:
-        logging.exception("Error in list_organizations:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/organizations", summary="Create new organization")
@@ -1430,135 +1015,6 @@ def get_project(project_id: str, auth: AuthContext = Depends(authenticate_api_ke
 
 
 @app.get(
-    "/api/organizations/{org_id}/projects", summary="List projects in organization"
-)
-def list_organization_projects(
-    org_id: str, auth: AuthContext = Depends(authenticate_api_key)
-):
-    """List all projects in a specific organization."""
-    try:
-        # Note: auth.user_id is Kratos identity_id (string), not ObjectId
-        user_id = auth.user_id
-        org_obj_id = ObjectId(org_id)
-
-        # Verify user owns the organization
-        organization = mongo_db.organizations.find_one(
-            {"_id": org_obj_id, "ownerId": user_id}
-        )
-
-        if not organization:
-            raise HTTPException(
-                status_code=404, detail="Organization not found or access denied"
-            )
-
-        # Get projects in this organization
-        projects = list(
-            mongo_db.projects.find({"organizationId": org_obj_id, "ownerId": user_id})
-        )
-
-        # Convert ObjectId to string for JSON serialization
-        for project in projects:
-            project["_id"] = str(project["_id"])
-            project["ownerId"] = str(project["ownerId"])
-            project["organizationId"] = str(project["organizationId"])
-
-        return {"projects": projects}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.exception("Error in list_organization_projects:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# User Initialization Endpoint
-@app.post("/api/initialize", summary="Initialize new user with Kratos identity sync")
-def initialize_user(auth: AuthContext = Depends(authenticate_api_key)):
-    """
-    Initialize a new user with Kratos identity sync.
-
-    This endpoint:
-    1. Syncs Kratos identity to MongoDB (auth.user_id is Kratos identity_id)
-    2. Creates default personal organization and project
-
-    Note: auth.user_id is now Kratos identity_id, not MongoDB ObjectId
-    """
-    try:
-        from .auth import get_identity_by_id
-
-        # Get Kratos identity details (auth.user_id is Kratos identity_id)
-        kratos_identity_id = auth.user_id
-
-        # Fetch full identity from Kratos
-        try:
-            kratos_session = get_identity_by_id(kratos_identity_id)
-            email = kratos_session.email
-            organization_id_trait = kratos_session.organization_id
-            project_ids_trait = kratos_session.project_ids
-            name = kratos_session.name
-        except Exception as e:
-            logging.error(f"Failed to fetch Kratos identity: {e}")
-            raise HTTPException(
-                status_code=500, detail="Failed to sync user identity from Kratos"
-            ) from e
-
-        # Check if user already exists in MongoDB
-        # User may exist with either:
-        # 1. _id = Kratos identity_id (new format)
-        # 2. kratosId = Kratos identity_id (from ensureUserExists)
-        existing_user = mongo_db.users.find_one(
-            {"$or": [{"_id": kratos_identity_id}, {"kratosId": kratos_identity_id}]}
-        )
-
-        if existing_user:
-            logging.info(f"User already exists in MongoDB: {kratos_identity_id}")
-            # Just update traits, don't create duplicate
-            update_filter = {"_id": existing_user["_id"]}
-            mongo_db.users.update_one(
-                update_filter,
-                {
-                    "$set": {
-                        "email": email,
-                        "name": name,
-                        "organization_id": organization_id_trait,
-                        "project_ids": project_ids_trait,
-                        "updatedAt": utc_now(),
-                    }
-                },
-            )
-            logging.info(f"✅ Updated existing user record: {existing_user['_id']}")
-        else:
-            # This shouldn't happen as ensureUserExists should have created user
-            # But handle it just in case
-            logging.warning(
-                f"No existing user found for {kratos_identity_id}, this is unexpected"
-            )
-
-        # Ensure default organization and project exist
-        # Note: user_id is Kratos identity_id (string), not ObjectId
-        org_id, project_id = ensure_default_org_and_project(kratos_identity_id)
-
-        logging.info(
-            f"✅ Initialized user {kratos_identity_id} ({email}) with default org/project"
-        )
-
-        return {
-            "organization_id": org_id,
-            "project_id": project_id,
-            "message": "User initialized successfully",
-            "kratos_identity_id": kratos_identity_id,
-            "email": email,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.exception("Error in initialize_user:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# MCP (Model Context Protocol) Endpoints
-@app.get(
     "/.well-known/oauth-protected-resource",
     summary="Protected Resource Metadata for MCP",
 )
@@ -1574,7 +1030,7 @@ def mcp_protected_resource_metadata():
     if not config.mcp.ENABLED:
         raise HTTPException(status_code=404, detail="MCP is not enabled")
 
-    logging.info("📋 [MCP] Serving Protected Resource Metadata")
+    logging.info("[MCP] Serving Protected Resource Metadata")
     return get_protected_resource_metadata()
 
 
@@ -1616,15 +1072,7 @@ def health_check():
 
 @app.get("/health/live", summary="Liveness probe")
 def liveness_probe():
-    """
-    Kubernetes-style liveness probe.
-
-    Returns 200 if the application is running.
-    This endpoint should be used to determine if the container should be restarted.
-
-    Returns:
-        - 200: Application is alive
-    """
+    """Kubernetes-style liveness probe. Returns 200 if the application is running."""
     if is_alive():
         return {"status": "alive", "timestamp": utc_now().isoformat()}
 
@@ -1635,16 +1083,7 @@ def liveness_probe():
 
 @app.get("/health/ready", summary="Readiness probe")
 def readiness_probe():
-    """
-    Kubernetes-style readiness probe.
-
-    Returns 200 if the application is ready to serve traffic.
-    This endpoint checks critical dependencies (database) to determine readiness.
-
-    Returns:
-        - 200: Application is ready
-        - 503: Application is not ready
-    """
+    """Kubernetes-style readiness probe. Returns 200 if the application is ready to serve traffic."""
     try:
         if is_ready():
             return {"status": "ready", "timestamp": utc_now().isoformat()}
@@ -1664,23 +1103,6 @@ def readiness_probe():
                 "error": "Readiness check failed",
             },
         )
-
-
-# @app.post("/reset", summary="Reset all memories")
-# def reset_memory():
-#     """Completely reset stored memories (selfmemory style)."""
-#     try:
-#         MEMORY_INSTANCE.reset()
-#         return {"message": "All memories reset"}
-#     except Exception as e:
-#         logging.exception("Error in reset_memory:")
-#         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# @app.get("/", summary="Redirect to docs")
-# def home():
-#     """Redirect to the OpenAPI documentation."""
-#     return RedirectResponse(url="/docs")
 
 
 if __name__ == "__main__":

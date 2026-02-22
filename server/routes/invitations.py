@@ -216,7 +216,7 @@ The SelfMemory Team
                 <li><strong>Role:</strong> {role}</li>
             </ul>
             <p>Click the button below to accept the invitation:</p>
-            <a href="{invitation_link}" class="button">Accept Invitation</a>
+            <a href="{invitation_link}" class="button" style="background-color: #4F46E5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0;">Accept Invitation</a>
             <p style="color: #6b7280; font-size: 14px;">
                 This invitation will expire in 24 hours.
             </p>

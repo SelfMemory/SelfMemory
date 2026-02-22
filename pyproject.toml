@@ -1,7 +1,7 @@
 [project]
 name = "selfmemory"
 dynamic = ["version"]  # Version will be determined from git tags
-description = "Enhanced Memory Management for AI Agents with zero-setup simplicity"
+description = "Enhanced Memory Management for AI Agents"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
@@ -33,76 +33,77 @@ classifiers = [
 
 dependencies = [
     # Minimal core dependencies for basic Memory class usage
-    "chromadb>=0.4.0",              # Zero-setup vector database
-    "qdrant-client>=1.6.0",         # Enterprise vector database
-    "pydantic>=2.0.0,<3.0.0",       # Data validation and settings
+    "chromadb>=1.0.0",              # Zero-setup vector database
+    "qdrant-client>=1.12.0",        # Enterprise vector database
+    "pydantic>=2.10.0,<3.0.0",      # Data validation and settings
     "email-validator>=2.0.0",       # Required by Pydantic
     "python-dotenv>=1.0.0",         # Environment variable management
-    "cryptography>=40.0.0",         # Encryption and security
-    "httpx>=0.25.0",                # HTTP client
+    "cryptography>=44.0.0",         # Encryption and security
+    "httpx>=0.27.0",                # HTTP client
     "pyyaml>=6.0.0",                # YAML configuration support
 ]
 
 [project.urls]
 Homepage = "https://selfmemory.com"
 Repository = "https://github.com/selfmemory/selfmemory"
-Documentation = "https://github.com/selfmemory/selfmemory/wiki"
+Documentation = "https://docs.selfmemory.com"
 Issues = "https://github.com/selfmemory/selfmemory/issues"
 Changelog = "https://github.com/selfmemory/selfmemory/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # Testing dependencies
 test = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-mock>=3.10.0",
-    "pytest-cov>=4.0.0",
-    "responses>=0.23.0",
+    "pytest>=9.0.0",
+    "pytest-asyncio>=1.0.0",
+    "pytest-mock>=3.14.0",
+    "pytest-cov>=6.0.0",
+    "responses>=0.25.0",
 ]
 
 # Development dependencies: everything needed for contributing
 dev = [
     # Testing frameworks
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-mock>=3.10.0",
-    "pytest-cov>=4.0.0",
-    "responses>=0.23.0",
+    "pytest>=9.0.0",
+    "pytest-asyncio>=1.0.0",
+    "pytest-mock>=3.14.0",
+    "pytest-cov>=6.0.0",
+    "responses>=0.25.0",
     # Code quality tools
-    "ruff>=0.14.8",
+    "ruff>=0.14.0",
     "pre-commit>=4.3.0",
     # Build and release tools
     "build>=1.3.0",
     "twine>=6.1.0",
-    "python-semantic-release>=9.0.0",
+    "python-semantic-release>=10.0.0",
     # Server components (for local development/testing)
-    "fastapi>=0.100.0",
-    "fastapi-csrf-protect>=0.3.0",
-    "uvicorn>=0.20.0",
-    "starlette>=0.27.0",
-    "psutil>=5.9.0",
+    "fastapi>=0.115.0",
+    "fastapi-csrf-protect>=1.0.0",
+    "uvicorn>=0.30.0",
+    "starlette>=0.50.0",
+    "slowapi>=0.1.9",
+    "psutil>=7.0.0",
     # Database backends (for local development/testing)
-    "pymongo>=4.0.0",
+    "pymongo>=4.10.0",
     # Authentication libraries (for local development/testing)
-    "ory-hydra-client>=2.0.0",
-    "ory-kratos-client>=1.0.0",
-    "argon2-cffi>=23.1.0",
-    "authlib>=1.2.0",
-    "google-auth>=2.15.0",
+    "ory-hydra-client>=25.4.0",
+    "ory-kratos-client>=25.4.0",
+    "argon2-cffi>=25.1.0",
+    "authlib>=1.6.5",
+    "google-auth>=2.40.0",
     # MCP server support (for local development/testing)
-    "mcp[cli]>=1.13.0",
-    "fastmcp>=2.0.0",
+    "mcp[cli]>=1.23.0",
+    "fastmcp>=3.0.0",
     # Embedding providers (for local development/testing)
-    "ollama>=0.1.0",
-    "openai>=1.0.0",
+    "ollama>=0.5.0",
+    "openai>=2.0.0",
     # Observability (for local development/testing)
-    "opentelemetry-api>=1.20.0",
-    "opentelemetry-sdk>=1.20.0",
-    "opentelemetry-exporter-otlp>=1.20.0",
-    "opentelemetry-instrumentation-fastapi>=0.41b0",
-    "opentelemetry-instrumentation-httpx>=0.41b0",
-    "opentelemetry-instrumentation-pymongo>=0.41b0",
-    "opentelemetry-instrumentation-logging>=0.41b0",
+    "opentelemetry-api>=1.30.0",
+    "opentelemetry-sdk>=1.30.0",
+    "opentelemetry-exporter-otlp>=1.30.0",
+    "opentelemetry-instrumentation-fastapi>=0.50b0",
+    "opentelemetry-instrumentation-httpx>=0.50b0",
+    "opentelemetry-instrumentation-pymongo>=0.50b0",
+    "opentelemetry-instrumentation-logging>=0.50b0",
 ]
 
 [project.scripts]

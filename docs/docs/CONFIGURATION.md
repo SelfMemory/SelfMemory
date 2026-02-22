@@ -67,10 +67,6 @@ SELFMEMORY_SERVER_HOST=0.0.0.0
 SELFMEMORY_SERVER_PORT=8081
 ```
 
-**Defaults:**
-- Host: `0.0.0.0`
-- Port: `8000`
-
 ---
 
 ### Application Configuration
@@ -85,7 +81,7 @@ ENVIRONMENT=development
 FRONTEND_URL=http://localhost:3000
 
 # Backend URL (for API references)
-BACKEND_URL=http://localhost:8000
+BACKEND_URL=http://localhost:8081
 
 # Timezone settings
 TIMEZONE=UTC
@@ -95,7 +91,7 @@ DEFAULT_DISPLAY_TIMEZONE=UTC
 **Defaults:**
 - Environment: `development`
 - Frontend URL: `http://localhost:3000`
-- Backend URL: `http://localhost:8000`
+- Backend URL: `http://localhost:8081`
 - Timezone: `UTC`
 
 **Important:** Set `ENVIRONMENT=production` in production to enable security validations.

@@ -214,10 +214,10 @@ def validate_api_key(token: str, core_server_host: str) -> TokenContext:
             # Validate API key by making a test request to Core server
             import httpx
 
-            # Use /api/v1/ping endpoint to validate API key and get user context
-            with tracer.start_as_current_span("api_key_ping_request"):
+            # Use /health endpoint to validate API key and get user context
+            with tracer.start_as_current_span("api_key_health_request"):
                 response = httpx.get(
-                    f"{core_server_host}/api/v1/ping",
+                    f"{core_server_host}/health",
                     headers={"Authorization": f"Bearer {token}"},
                     timeout=10.0,
                 )

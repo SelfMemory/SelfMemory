@@ -49,14 +49,6 @@ class DatabaseConfig:
 class SecurityConfig:
     """Configuration for security features."""
 
-    # CSRF Protection
-    CSRF_SECRET_KEY: str | None = os.getenv("CSRF_SECRET_KEY")
-    CSRF_COOKIE_SECURE: bool = os.getenv("CSRF_COOKIE_SECURE", "true").lower() == "true"
-    CSRF_COOKIE_SAMESITE: str = os.getenv("CSRF_COOKIE_SAMESITE", "Strict")
-    CSRF_COOKIE_HTTPONLY: bool = True
-    CSRF_HEADER_NAME: str = "X-CSRF-Token"
-    CSRF_COOKIE_NAME: str = "csrf_token"
-
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = (
         os.getenv("RATE_LIMIT_ENABLED", "false").lower() == "true"
@@ -112,7 +104,7 @@ class AppConfig:
     """General application configuration."""
 
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
+    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8081")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
 
     # Timezone configuration
@@ -124,7 +116,7 @@ class ServerConfig:
     """Configuration for server runtime."""
 
     HOST: str = os.getenv("SELFMEMORY_SERVER_HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("SELFMEMORY_SERVER_PORT", "8000"))
+    PORT: int = int(os.getenv("SELFMEMORY_SERVER_PORT", "8081"))
 
 
 class VectorStoreConfig:
@@ -323,12 +315,8 @@ class Config:
             errors.append(f"Invalid ENVIRONMENT: {cls.app.ENVIRONMENT}")
 
         # Security checks for production
-        if cls.app.ENVIRONMENT == "production":
-            if cls.error.EXPOSE_DETAILS:
-                errors.append("ERROR_EXPOSE_DETAILS must be false in production")
-
-            if not cls.security.CSRF_SECRET_KEY:
-                errors.append("CSRF_SECRET_KEY is required in production")
+        if cls.app.ENVIRONMENT == "production" and cls.error.EXPOSE_DETAILS:
+            errors.append("ERROR_EXPOSE_DETAILS must be false in production")
 
         return errors
 
