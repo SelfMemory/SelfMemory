@@ -12,19 +12,20 @@ Following Uncle Bob's Clean Code principles:
 """
 
 import logging
+import os
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
+from cryptography.fernet import Fernet, InvalidToken
 
 logger = logging.getLogger(__name__)
 
-# Use argon2-cffi's secure defaults:
-# - time_cost=2 (number of iterations)
-# - memory_cost=65536 (64 MiB memory usage)
-# - parallelism=1 (number of parallel threads)
-# - hash_len=32 (32 bytes output)
-# - salt_len=16 (16 bytes salt)
+# Argon2 hasher for one-way hashing (auth verification)
 _password_hasher = PasswordHasher()
+
+# Fernet for reversible encryption (API key storage)
+_encryption_key = os.getenv("MASTER_ENCRYPTION_KEY")
+_fernet = Fernet(_encryption_key.encode()) if _encryption_key else None
 
 
 def hash_api_key(api_key: str) -> str:
@@ -82,3 +83,21 @@ def verify_api_key(api_key: str, stored_hash: str) -> bool:
     except Exception as e:
         logger.error("Failed to verify API key")
         raise ValueError("Failed to verify API key") from e
+
+
+def encrypt_api_key(api_key: str) -> str | None:
+    """Encrypt an API key for reversible storage. Returns None if encryption is not configured."""
+    if not _fernet:
+        return None
+    return _fernet.encrypt(api_key.encode()).decode()
+
+
+def decrypt_api_key(encrypted_key: str) -> str | None:
+    """Decrypt a stored API key. Returns None if decryption fails or is not configured."""
+    if not _fernet or not encrypted_key:
+        return None
+    try:
+        return _fernet.decrypt(encrypted_key.encode()).decode()
+    except InvalidToken:
+        logger.error("Failed to decrypt API key - invalid token or wrong key")
+        return None

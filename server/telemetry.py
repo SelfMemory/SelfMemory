@@ -29,16 +29,14 @@ def initialize_telemetry(app) -> None:
     Args:
         app: FastAPI application instance
     """
-    # Only initialize in production
     if config.app.ENVIRONMENT != "production":
         logger.info(
-            f"🔭 OpenTelemetry disabled (environment={config.app.ENVIRONMENT}, production only)"
+            f"OpenTelemetry disabled (environment={config.app.ENVIRONMENT}, production only)"
         )
         return
 
-    # Check if OpenTelemetry is enabled
     if not config.otel.ENABLED:
-        logger.info("🔭 OpenTelemetry disabled (OTEL_ENABLED=false)")
+        logger.info("OpenTelemetry disabled (OTEL_ENABLED=false)")
         return
 
     logger.info("🔭 Initializing OpenTelemetry for production environment...")

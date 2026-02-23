@@ -57,6 +57,7 @@ test = [
     "pytest-asyncio>=1.0.0",
     "pytest-mock>=3.14.0",
     "pytest-cov>=6.0.0",
+    "pytest-timeout>=2.0.0",
     "responses>=0.25.0",
 ]
 
