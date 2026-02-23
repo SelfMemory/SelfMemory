@@ -59,7 +59,9 @@ def memory_instance(mock_embedder, mock_vector_store):
 
 
 class TestSelfMemoryAdd:
-    def test_add_calls_embed_and_insert(self, memory_instance, mock_embedder, mock_vector_store):
+    def test_add_calls_embed_and_insert(
+        self, memory_instance, mock_embedder, mock_vector_store
+    ):
         result = memory_instance.add("I have a BMW bike.", user_id="demo")
 
         assert result["success"] is True
@@ -105,7 +107,9 @@ class TestSelfMemoryAdd:
 
 
 class TestSelfMemorySearch:
-    def test_search_calls_embed_and_query(self, memory_instance, mock_embedder, mock_vector_store):
+    def test_search_calls_embed_and_query(
+        self, memory_instance, mock_embedder, mock_vector_store
+    ):
         mock_vector_store.search.return_value = []
 
         memory_instance.search("bike", user_id="demo")

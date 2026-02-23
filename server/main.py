@@ -372,9 +372,7 @@ def get_memory_stats(
 
         project_filter = Filter(
             must=[
-                FieldCondition(
-                    key="user_id", match=MatchValue(value=final_project_id)
-                )
+                FieldCondition(key="user_id", match=MatchValue(value=final_project_id))
             ]
         )
         total = qdrant_client.count(
