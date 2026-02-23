@@ -65,7 +65,9 @@ class TestClientAdd:
 
         payload = call_args[1]["json"]
         assert "messages" in payload
-        assert payload["messages"] == [{"role": "user", "content": "I have a BMW bike."}]
+        assert payload["messages"] == [
+            {"role": "user", "content": "I have a BMW bike."}
+        ]
         assert "memory_content" not in payload
         assert result["success"] is True
 
@@ -200,7 +202,10 @@ class TestClientDelete:
 
     def test_delete_all(self, client, mock_http_client):
         mock_response = MagicMock()
-        mock_response.json.return_value = {"message": "All memories deleted", "deleted_count": 5}
+        mock_response.json.return_value = {
+            "message": "All memories deleted",
+            "deleted_count": 5,
+        }
         mock_response.raise_for_status.return_value = None
         mock_http_client.delete.return_value = mock_response
 
