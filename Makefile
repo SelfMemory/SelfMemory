@@ -1,6 +1,6 @@
 # Makefile for SelfMemory - UV-based workflow
 
-.PHONY: help install install-dev sync test test-unit test-integration coverage run run-prod run-mcp clean lint format quality build
+.PHONY: help install install-dev sync test test-unit test-sdk test-client coverage run run-prod run-mcp clean lint format quality build
 
 # Default target - show help
 help:
@@ -19,6 +19,8 @@ help:
 	@echo "Testing:"
 	@echo "  make test          - Run all tests"
 	@echo "  make test-unit     - Run unit tests only"
+	@echo "  make test-sdk      - Run SDK memory tests"
+	@echo "  make test-client   - Run client API tests"
 	@echo "  make coverage      - Run tests with coverage report"
 	@echo ""
 	@echo "Code Quality:"
@@ -51,9 +53,13 @@ test:
 test-unit:
 	uv run pytest tests/ -m unit -v
 
-# Run integration tests only
-test-integration:
-	uv run pytest tests/ -m integration -v
+# Run SDK memory tests
+test-sdk:
+	uv run pytest tests/test_sdk_memory.py -v
+
+# Run client API tests
+test-client:
+	uv run pytest tests/test_client.py -v
 
 # Run tests with coverage report
 coverage:

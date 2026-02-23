@@ -109,11 +109,13 @@ class SelfMemoryClient:
         """
         try:
             payload = {
-                "memory_content": memory_content,
-                "tags": tags or "",
-                "people_mentioned": people_mentioned or "",
-                "topic_category": topic_category or "",
-                "metadata": metadata or {},
+                "messages": [{"role": "user", "content": memory_content}],
+                "metadata": {
+                    "tags": tags or "",
+                    "people_mentioned": people_mentioned or "",
+                    "topic_category": topic_category or "",
+                    **(metadata or {}),
+                },
             }
 
             response = self.client.post("/api/memories", json=payload)
@@ -171,17 +173,24 @@ class SelfMemoryClient:
             >>> results = selfmemory.search("meetings", tags=["work"], limit=5)
         """
         try:
-            payload = {
-                "query": query,
-                "limit": limit,
-                "tags": ",".join(tags) if tags else "",
-                "people_mentioned": ",".join(people_mentioned)
-                if people_mentioned
-                else "",
-                "topic_category": topic_category or "",
-                "temporal_filter": temporal_filter or "",
-                "threshold": threshold or 0.0,
-            }
+            payload = {"query": query}
+
+            filters = {}
+            if limit != 10:
+                filters["limit"] = limit
+            if tags:
+                filters["tags"] = tags
+            if people_mentioned:
+                payload["people_mentioned"] = ",".join(people_mentioned)
+            if topic_category:
+                filters["topic_category"] = topic_category
+            if temporal_filter:
+                filters["temporal_filter"] = temporal_filter
+            if threshold is not None:
+                filters["threshold"] = threshold
+
+            if filters:
+                payload["filters"] = filters
 
             response = self.client.post("/api/memories/search", json=payload)
             response.raise_for_status()

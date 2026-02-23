@@ -319,6 +319,115 @@ def list_memories(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@app.get("/api/memories/stats", summary="Get memory statistics for a project")
+def get_memory_stats(
+    request: Request,
+    auth: AuthContext = Depends(authenticate_api_key),
+    project_id: str | None = None,
+):
+    """Get memory count stats without fetching full content."""
+    try:
+        if auth.project_id is None:
+            requested_project_id = project_id
+            if not requested_project_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="project_id required for session authentication",
+                )
+
+            try:
+                project_obj_id = ObjectId(requested_project_id)
+            except Exception as err:
+                raise HTTPException(
+                    status_code=400, detail="Invalid project_id format"
+                ) from err
+
+            from .dependencies import check_project_access
+
+            if not check_project_access(auth.user_id, requested_project_id):
+                raise HTTPException(status_code=403, detail="Access denied to project")
+
+            project = mongo_db.projects.find_one({"_id": project_obj_id})
+            if not project:
+                raise HTTPException(status_code=404, detail="Project not found")
+
+            final_project_id = str(project["_id"])
+        else:
+            final_project_id = auth.project_id
+
+        from .dependencies import has_permission
+
+        if not has_permission(auth.user_id, final_project_id, "read"):
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied - read access required",
+            )
+
+        from datetime import datetime, timedelta, timezone
+
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        qdrant_client = MEMORY_INSTANCE.vector_store.client
+        collection_name = MEMORY_INSTANCE.vector_store.collection_name
+
+        project_filter = Filter(
+            must=[
+                FieldCondition(
+                    key="user_id", match=MatchValue(value=final_project_id)
+                )
+            ]
+        )
+        total = qdrant_client.count(
+            collection_name=collection_name,
+            count_filter=project_filter,
+            exact=True,
+        ).count
+
+        # Scroll with minimal payload to compute this_week and tags in Python
+        # (Qdrant Range filter only works with numeric fields, not date strings)
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        this_week = 0
+        tag_set = set()
+        scroll_result = qdrant_client.scroll(
+            collection_name=collection_name,
+            scroll_filter=project_filter,
+            limit=500,
+            with_payload=["tags", "created_at"],
+            with_vectors=False,
+        )
+        for point in scroll_result[0]:
+            created_at_str = point.payload.get("created_at", "")
+            if created_at_str:
+                try:
+                    created_at = datetime.fromisoformat(created_at_str)
+                    if created_at.tzinfo is None:
+                        created_at = created_at.replace(tzinfo=timezone.utc)
+                    if created_at >= seven_days_ago:
+                        this_week += 1
+                except (ValueError, TypeError):
+                    pass
+
+            tags_str = point.payload.get("tags", "")
+            if tags_str:
+                for tag in tags_str.split(","):
+                    tag = tag.strip()
+                    if tag:
+                        tag_set.add(tag)
+
+        return JSONResponse(
+            content={
+                "total": total,
+                "this_week": this_week,
+                "tag_count": len(tag_set),
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("Error in get_memory_stats:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @app.post("/api/memories", summary="Create memories with multi-tenant isolation")
 @limiter.limit(config.rate_limit.MEMORY_CREATE)
 def add_memory(
