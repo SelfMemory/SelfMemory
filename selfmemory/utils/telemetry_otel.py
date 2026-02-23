@@ -74,7 +74,9 @@ def setup_opentelemetry(
     # Auto-correlate logs with traces
     LoggingInstrumentor().instrument(set_logging_format=True)
 
-    logger.info(f"OpenTelemetry initialized: service={service_name}, endpoint={otlp_endpoint}")
+    logger.info(
+        f"OpenTelemetry initialized: service={service_name}, endpoint={otlp_endpoint}"
+    )
 
 
 def get_tracer(name: str):
