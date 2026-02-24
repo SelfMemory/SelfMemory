@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v0.8.3 (2026-02-24)
+
+### Bug Fixes
+
+- **ci**: Add issue templates for bug reports and feature requests, configure CI workflows, and
+  enhance README with badges
+  ([`8ae2de3`](https://github.com/SelfMemory/SelfMemory/commit/8ae2de3a7797ee74ea2612415c1e7d38ac4583c1))
+
+### Chores
+
+- Remove CodeQL workflow configuration
+  ([`7a250a4`](https://github.com/SelfMemory/SelfMemory/commit/7a250a473548c6b70a3cfc6f104d1a1c2514f398))
+
+
 ## v0.8.2 (2026-02-24)
 
 ### Bug Fixes
