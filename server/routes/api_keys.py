@@ -30,7 +30,7 @@ from ..dependencies import (
     check_project_access,
     mongo_db,
 )
-from ..utils.crypto import decrypt_api_key, encrypt_api_key, hash_api_key
+from ..utils.crypto import encrypt_api_key, hash_api_key
 from ..utils.datetime_helpers import utc_now
 from ..utils.permission_helpers import (
     get_project_member,
@@ -53,20 +53,6 @@ class ApiKeyCreate(BaseModel):
     expires_in_days: int | None = Field(
         default=None, description="API key expiration in days (optional)."
     )
-
-
-# Helper Functions
-# Note: get_project_member and is_project_admin now imported from utils.permission_helpers
-
-
-def get_user_project_permissions(project_id: ObjectId, user_id: ObjectId) -> dict:
-    """Get user's permissions for a project."""
-    member = get_project_member(project_id, user_id)
-    if not member:
-        raise HTTPException(
-            status_code=403, detail="User does not have access to this project"
-        )
-    return member.get("permissions", {})
 
 
 def generate_api_key() -> tuple[str, str, str]:
@@ -255,28 +241,25 @@ def list_project_api_keys(
             status_code=403, detail="You do not have access to this project"
         )
 
-    # Get ALL API keys for this project (team transparency)
-    api_keys = list(mongo_db.api_keys.find({"projectId": project_obj_id}))
+    # Get active API keys for this project (team transparency)
+    api_keys = list(
+        mongo_db.api_keys.find({"projectId": project_obj_id, "isActive": True})
+    )
 
-    # Enrich with user information and remove sensitive data
     result_keys = []
     for key in api_keys:
-        # Get user info for owner email - userId is now Kratos ID
         user = mongo_db.users.find_one({"kratosId": key["userId"]})
         owner_email = user.get("email", "Unknown") if user else "Unknown"
-
-        full_key = decrypt_api_key(key.get("encryptedKey", ""))
 
         result_keys.append(
             {
                 "id": str(key["_id"]),
                 "name": key.get("name", "Unnamed Key"),
                 "key_prefix": key.get("keyPrefix", "sk_im_..."),
-                "api_key": full_key,
-                "owner_id": key["userId"],  # Kratos ID (string)
+                "owner_id": key["userId"],
                 "owner_email": owner_email,
                 "permissions": key.get("permissions", []),
-                "is_active": key.get("isActive", True),
+                "is_active": True,
                 "created_at": key.get("createdAt").isoformat()
                 if key.get("createdAt")
                 else None,
