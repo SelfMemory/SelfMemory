@@ -71,6 +71,12 @@ jobs:
             coverage.xml
           retention-days: 30
 
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+
   build:
     name: Build Package
     runs-on: ubuntu-latest

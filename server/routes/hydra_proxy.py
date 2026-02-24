@@ -331,7 +331,10 @@ async def accept_consent_request(
             "remember_for": body.remember_for,
         }
 
-        async with httpx.AsyncClient() as client:
+        # CRITICAL: follow_redirects=False — Hydra returns a redirect_to URL with a
+        # one-time consent_verifier. If httpx follows the redirect, it consumes the
+        # verifier server-side, and the browser can't use it ("verifier already used").
+        async with httpx.AsyncClient(follow_redirects=False) as client:
             response = await client.put(
                 f"{HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent/accept",
                 params={"consent_challenge": body.consent_challenge},
@@ -521,7 +524,7 @@ async def accept_login_request(
             },
         }
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=False) as client:
             response = await client.put(
                 f"{HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/login/accept",
                 params={"login_challenge": body.login_challenge},
