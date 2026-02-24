@@ -1,6 +1,6 @@
 # Makefile for SelfMemory - UV-based workflow
 
-.PHONY: help install install-dev sync test test-unit test-sdk test-client coverage run run-prod run-mcp clean lint format quality build
+.PHONY: help install install-dev sync test test-unit test-sdk test-client coverage run run-prod run-mcp run-mcp-prod clean lint format quality build
 
 # Default target - show help
 help:
@@ -14,7 +14,8 @@ help:
 	@echo "Development:"
 	@echo "  make run           - Run FastAPI server in dev mode (with reload)"
 	@echo "  make run-prod      - Run FastAPI server in production mode"
-	@echo "  make run-mcp       - Run MCP server"
+	@echo "  make run-mcp       - Run MCP server in dev mode (with reload)"
+	@echo "  make run-mcp-prod  - Run MCP server in production mode"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test          - Run all tests"
@@ -73,9 +74,13 @@ run:
 run-prod:
 	uv run uvicorn server.main:app --host 0.0.0.0 --port 8081
 
-# Run MCP server
+# Run MCP server in development mode with auto-reload
 run-mcp:
-	cd selfmemory-mcp && uv run python main.py
+	cd selfmemory-mcp && MCP_DEV_MODE=true uv run python main_unified.py
+
+# Run MCP server in production mode
+run-mcp-prod:
+	cd selfmemory-mcp && uv run python main_unified.py
 
 # Clean build artifacts and caches
 clean:
