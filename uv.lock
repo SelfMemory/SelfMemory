@@ -3087,6 +3087,7 @@ wheels = [
 
 [[package]]
 name = "selfmemory"
+version = "0.8.5"
 source = { editable = "." }
 dependencies = [
     { name = "chromadb" },

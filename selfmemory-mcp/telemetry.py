@@ -127,7 +127,9 @@ def init_telemetry(service_name: str = "selfmemory-mcp") -> trace.Tracer | None:
         HTTPXClientInstrumentor().instrument()
 
         tracer = trace.get_tracer(__name__)
-        print(f"OpenTelemetry initialized: service={service_name}, endpoint={otlp_endpoint}")
+        print(
+            f"OpenTelemetry initialized: service={service_name}, endpoint={otlp_endpoint}"
+        )
         return tracer
 
     except Exception as e:
