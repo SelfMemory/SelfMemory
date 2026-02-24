@@ -19,8 +19,7 @@ updates:
       - "python"
       - "core"
     commit-message:
-      prefix: "deps"
-      include: "scope"
+      prefix: "chore(deps)"
     groups:
       # Core framework dependencies (every 2 days via cooldown)
       core-framework:
@@ -112,8 +111,7 @@ updates:
       - "uv-lockfile"
       - "core"
     commit-message:
-      prefix: "deps(uv)"
-      include: "scope"
+      prefix: "chore(deps-uv)"
     cooldown:
       default-days: 2  # Every 2 days
 
@@ -131,8 +129,7 @@ updates:
       - "python"
       - "mcp"
     commit-message:
-      prefix: "deps(mcp)"
-      include: "scope"
+      prefix: "chore(deps-mcp)"
     groups:
       # MCP and server dependencies
       mcp-server:
@@ -204,8 +201,7 @@ updates:
       - "dependencies"
       - "docker"
     commit-message:
-      prefix: "docker"
-      include: "scope"
+      prefix: "build(docker)"
     ignore:
       # Only allow patch and minor updates for base images
       - dependency-name: "*"
