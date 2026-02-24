@@ -27,6 +27,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 
@@ -35,6 +36,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from opentelemetry import trace
 from telemetry import init_telemetry
 
@@ -70,12 +72,23 @@ logger = logging.getLogger(__name__)
 # Configuration
 CORE_SERVER_HOST = config.server.selfmemory_api_host
 
+# Derive allowed host from MCP_SERVER_URL for DNS rebinding protection
+_parsed_mcp_url = urlparse(config.hydra.mcp_server_url)
+_mcp_host = _parsed_mcp_url.hostname
+_allowed_hosts = [_mcp_host, "127.0.0.1:*", "localhost:*"]
+if _parsed_mcp_url.port:
+    _allowed_hosts.insert(1, f"{_mcp_host}:{_parsed_mcp_url.port}")
+
 # Initialize MCP server
 mcp = FastMCP(
     name="SelfMemory",
     instructions="Memory management server with unified authentication (OAuth 2.1 + API key)",
     stateless_http=False,
     json_response=True,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=_allowed_hosts,
+    ),
 )
 
 
