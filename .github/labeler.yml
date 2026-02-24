@@ -1,0 +1,35 @@
+core:
+  - changed-files:
+      - any-glob-to-any-file: "selfmemory/**"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: "tests/**"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "*.md"
+
+ci-cd:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+
+mcp:
+  - changed-files:
+      - any-glob-to-any-file: "selfmemory-mcp/**"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pyproject.toml"
+          - "uv.lock"
+
+api:
+  - changed-files:
+      - any-glob-to-any-file: "selfmemory/api/**"
+
+security:
+  - changed-files:
+      - any-glob-to-any-file: "selfmemory/security/**"
