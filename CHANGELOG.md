@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v0.9.0 (2026-02-24)
+
+### Bug Fixes
+
+- Suppress E402 lint errors for intentional late imports in MCP server
+  ([`1d56eeb`](https://github.com/SelfMemory/SelfMemory/commit/1d56eeb4fb39cb1dddc2a15e24e7dc9829a057cd))
+
+- Update environment variable loading paths and remove deprecated .env.example file
+  ([`ece5edb`](https://github.com/SelfMemory/SelfMemory/commit/ece5edb6e73882b19ed4ab3ca50664a0a0f227a5))
+
+- Update OpenTelemetry initialization print statement for better readability
+  ([`94242b0`](https://github.com/SelfMemory/SelfMemory/commit/94242b095fdbf35989be87f0fafa58604167caeb))
+
+### Features
+
+- Add @selfmemory/sdk TypeScript SDK with tests
+  ([`a8be806`](https://github.com/SelfMemory/SelfMemory/commit/a8be8065da6ef822645020200ce2e0a251ae3956))
+
+
 ## v0.8.5 (2026-02-24)
 
 ### Bug Fixes
