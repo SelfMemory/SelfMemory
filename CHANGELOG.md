@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.9.1 (2026-02-24)
+
+### Bug Fixes
+
+- Remove unused import from api_keys.py and update selfmemory version to 0.9.0 in uv.lock
+  ([`d670e45`](https://github.com/SelfMemory/SelfMemory/commit/d670e4561e8961bab9f66d59a3d122a2f8857ab7))
+
+### Refactoring
+
+- Remove unused get_user_project_permissions function and simplify API key retrieval
+  ([`f2da47d`](https://github.com/SelfMemory/SelfMemory/commit/f2da47da01d909338677d040d6b1eb0678147e0a))
+
+
 ## v0.9.0 (2026-02-24)
 
 ### Bug Fixes
