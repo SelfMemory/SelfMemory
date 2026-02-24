@@ -55,6 +55,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from auth.token_extractor import create_project_client  # noqa: E402
 from config import config  # noqa: E402
 from middleware import UnifiedAuthMiddleware, current_token_context  # noqa: E402
+from oauth.client_registration import sanitize_registration_response  # noqa: E402
 from oauth.metadata import get_protected_resource_metadata  # noqa: E402
 from tools.fetch import format_fetch_result  # noqa: E402
 from tools.search import format_search_results  # noqa: E402
@@ -364,16 +365,7 @@ async def dynamic_client_registration(request: Request):
             if response.status_code in (200, 201):
                 logger.info("✅ Client registered with Hydra")
 
-                # Sanitize response
-                response_data = response.json()
-                for field in url_fields:
-                    if field in response_data:
-                        value = response_data[field]
-                        if value is None or (
-                            isinstance(value, str)
-                            and not value.startswith(("http://", "https://"))
-                        ):
-                            del response_data[field]
+                response_data = sanitize_registration_response(response.json())
 
                 return Response(
                     content=json.dumps(response_data),
