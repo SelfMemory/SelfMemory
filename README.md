@@ -1,4 +1,11 @@
 ![SelfMemory](docs/static/img/github_banner.png)
+
+[![CI](https://github.com/SelfMemory/SelfMemory/actions/workflows/ci.yml/badge.svg)](https://github.com/SelfMemory/SelfMemory/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/selfmemory)](https://pypi.org/project/selfmemory/)
+[![Python](https://img.shields.io/pypi/pyversions/selfmemory)](https://pypi.org/project/selfmemory/)
+[![License](https://img.shields.io/github/license/SelfMemory/SelfMemory)](https://github.com/SelfMemory/SelfMemory/blob/master/LICENSE.txt)
+[![codecov](https://codecov.io/gh/SelfMemory/SelfMemory/graph/badge.svg)](https://codecov.io/gh/SelfMemory/SelfMemory)
+
 # SelfMemory
 
 **Store AI memories for you and your agents**
