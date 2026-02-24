@@ -19,7 +19,7 @@ We welcome contributions to SelfMemory! This document provides guidelines for co
    make install-dev
    # Or manually: uv pip install -e ".[dev]"
 
-   # Install pre-commit hooks
+   # Install pre-commit hooks (includes commit message validation)
    uv run pre-commit install
    ```
 
