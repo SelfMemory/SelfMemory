@@ -35,17 +35,17 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 # Load environment variables before any imports that depend on them
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(_PROJECT_ROOT / ".env")
 
-import httpx
-from fastapi import FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.transport_security import TransportSecuritySettings
-from opentelemetry import trace
-from telemetry import init_logging, init_telemetry
+import httpx  # noqa: E402
+from fastapi import FastAPI, Request, Response  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from mcp.server.fastmcp import Context, FastMCP  # noqa: E402
+from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
+from opentelemetry import trace  # noqa: E402
+from telemetry import init_logging, init_telemetry  # noqa: E402
 
 init_logging()
 init_telemetry(service_name="selfmemory-mcp")
