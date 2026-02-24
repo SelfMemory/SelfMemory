@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.8.5 (2026-02-24)
+
+### Bug Fixes
+
+- Resolve 421 Misdirected Request by configuring MCP transport security allowed hosts
+  ([`1613056`](https://github.com/SelfMemory/SelfMemory/commit/161305654af81f3f24fbfd79737f72b55421e020))
+
+### Continuous Integration
+
+- **deps**: Bump actions/upload-artifact from 4 to 6
+  ([`d35df5d`](https://github.com/SelfMemory/SelfMemory/commit/d35df5df9212834f74d04ea74a0e1c9bee6a70d8))
+
+
 ## v0.8.4 (2026-02-24)
 
 ### Bug Fixes
