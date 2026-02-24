@@ -31,8 +31,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-# Load .env from selfmemory-mcp directory (two levels up from app/)
-DOTENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
+# Load .env from selfmemory-core root (shared config for all services)
+DOTENV_PATH = Path(__file__).resolve().parent.parent.parent.parent / ".env"
 load_dotenv(dotenv_path=DOTENV_PATH)
 
 # Import client cache for performance optimization
