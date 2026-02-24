@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.8.4 (2026-02-24)
+
+### Bug Fixes
+
+- Replace setuptools-scm with static versioning to prevent post-release suffixes
+  ([`16f7ffa`](https://github.com/SelfMemory/SelfMemory/commit/16f7ffa3c5e235d40e8810cf1bb2446a79e5fe5a))
+
+
 ## v0.8.3 (2026-02-24)
 
 ### Bug Fixes
