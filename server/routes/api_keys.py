@@ -20,7 +20,6 @@ import secrets
 import string
 from datetime import timedelta
 
-from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
