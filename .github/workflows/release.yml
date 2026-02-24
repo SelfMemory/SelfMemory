@@ -1,4 +1,4 @@
-name: Release & Publish to PyPI
+name: Release & Publish to PyPI + NPM
 
 on:
   push:
@@ -80,10 +80,46 @@ jobs:
           verbose: true
           print-hash: true
 
+  publish-npm:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+    needs: release
+    if: ${{ needs.release.outputs.released == 'true' }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Sync version from release
+        working-directory: selfmemory-ts
+        env:
+          RELEASE_VERSION: ${{ needs.release.outputs.version }}
+        run: npm version "$RELEASE_VERSION" --no-git-tag-version
+
+      - name: Install and build
+        working-directory: selfmemory-ts
+        run: npm install && npm run build
+
+      - name: Publish to npm
+        working-directory: selfmemory-ts
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   summary:
     name: Release Summary
     runs-on: ubuntu-latest
-    needs: [release, publish]
+    needs: [release, publish, publish-npm]
     if: always()
     permissions:
       contents: read
@@ -100,10 +136,12 @@ jobs:
             echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
             echo "**GitHub Release**: Created" >> $GITHUB_STEP_SUMMARY
             echo "**PyPI Package**: Published" >> $GITHUB_STEP_SUMMARY
+            echo "**NPM Package**: Published" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Installation" >> $GITHUB_STEP_SUMMARY
             echo '```bash' >> $GITHUB_STEP_SUMMARY
             echo "pip install selfmemory==$VERSION" >> $GITHUB_STEP_SUMMARY
+            echo "npm install @selfmemory/sdk@$VERSION" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           else
             echo "## No Release Created" >> $GITHUB_STEP_SUMMARY

@@ -29,30 +29,29 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
-import httpx
+# Add project root to path FIRST so telemetry can import shared modules
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
-# Load environment variables FIRST, before any imports that depend on them
+# Load environment variables before any imports that depend on them
 from dotenv import load_dotenv
+
+load_dotenv(_PROJECT_ROOT / ".env")
+
+import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from opentelemetry import trace
-from telemetry import init_telemetry
+from telemetry import init_logging, init_telemetry
 
-load_dotenv()
-
-
+init_logging()
 init_telemetry(service_name="selfmemory-mcp")
 
 # Get tracer for tool instrumentation
 tracer = trace.get_tracer(__name__)
-
-
-# Add project root to path
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from auth.token_extractor import create_project_client  # noqa: E402
 from config import config  # noqa: E402
@@ -63,10 +62,6 @@ from tools.fetch import format_fetch_result  # noqa: E402
 from tools.search import format_search_results  # noqa: E402
 from utils import handle_tool_errors  # noqa: E402
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 # Configuration
