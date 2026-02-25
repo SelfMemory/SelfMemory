@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.9.2 (2026-02-25)
+
+### Bug Fixes
+
+- Add coverage and test analytics reporting to CI workflow
+  ([`367b7ad`](https://github.com/SelfMemory/SelfMemory/commit/367b7ad59ee20bf32bdbeaf56913585415e17428))
+
+
 ## v0.9.1 (2026-02-24)
 
 ### Bug Fixes
