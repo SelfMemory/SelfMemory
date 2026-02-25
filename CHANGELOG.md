@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.9.4 (2026-02-25)
+
+### Bug Fixes
+
+- Whitelist MCP server URL as allowed audience for dynamic client registration
+  ([`c97501b`](https://github.com/SelfMemory/SelfMemory/commit/c97501b24272ac50272eeb1a8539b7fef1c900d8))
+
+
 ## v0.9.3 (2026-02-25)
 
 ### Bug Fixes
