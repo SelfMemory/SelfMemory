@@ -361,6 +361,17 @@ async def dynamic_client_registration(request: Request):
         registration_data["scope"] = " ".join(current_scopes)
         logger.info(f"✨ Final scopes: {registration_data['scope']}")
 
+        # Ensure MCP server URL is whitelisted as an allowed audience for this client
+        # Required for RFC 8707 resource indicators — without this, Hydra rejects
+        # authorization requests that include audience=https://mcp.selfmemory.com
+        audiences = registration_data.get("audience", [])
+        if isinstance(audiences, str):
+            audiences = [audiences] if audiences else []
+        if config.hydra.mcp_server_url not in audiences:
+            audiences.append(config.hydra.mcp_server_url)
+        registration_data["audience"] = audiences
+        logger.info(f"🎯 Client audiences: {audiences}")
+
         # Forward to Hydra
         async with httpx.AsyncClient(follow_redirects=True) as client:
             response = await client.post(
