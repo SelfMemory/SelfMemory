@@ -1,6 +1,6 @@
 [project]
 name = "selfmemory"
-version = "0.9.2"
+version = "0.9.3"
 description = "Enhanced Memory Management for AI Agents"
 readme = "README.md"
 requires-python = ">=3.10"

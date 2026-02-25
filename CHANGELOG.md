@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v0.9.3 (2026-02-25)
+
+### Bug Fixes
+
+- Include decryption of API keys in the project API keys listing
+  ([`3405cd5`](https://github.com/SelfMemory/SelfMemory/commit/3405cd5e7e46c5e40d8f54eb520568745c50e318))
+
+- Update selfmemory version to 0.9.2 in uv.lock
+  ([`311e8bb`](https://github.com/SelfMemory/SelfMemory/commit/311e8bb230ee02bcc6c5177c088982d90492a9b1))
+
+### Build System
+
+- **deps**: Bump the npm_and_yarn group across 1 directory with 3 updates (#128)
+  ([#128](https://github.com/SelfMemory/SelfMemory/pull/128),
+  [`256148b`](https://github.com/SelfMemory/SelfMemory/commit/256148bc14ae41c5ea26c3e457b5aac2e37be9b8))
+
+### Chores
+
+- **deps**: Bump the npm_and_yarn group across 1 directory with 2 updates
+  ([`8063021`](https://github.com/SelfMemory/SelfMemory/commit/806302156c4f3999a45613062b9313183d8a1bfa))
+
+
 ## v0.9.2 (2026-02-25)
 
 ### Bug Fixes
