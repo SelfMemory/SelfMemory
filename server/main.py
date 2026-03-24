@@ -316,7 +316,7 @@ def list_memories(
         raise
     except Exception as e:
         logging.exception("Error in list_memories:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @app.get("/api/memories/stats", summary="Get memory statistics for a project")
@@ -423,7 +423,7 @@ def get_memory_stats(
         raise
     except Exception as e:
         logging.exception("Error in get_memory_stats:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @app.post("/api/memories", summary="Create memories with multi-tenant isolation")
@@ -605,7 +605,7 @@ def add_memory(
         raise
     except Exception as e:
         logging.exception("Error in add_memory:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @app.get("/api/memories/{memory_id}", summary="Get a memory (legacy endpoint)")
@@ -615,7 +615,7 @@ def get_memory(memory_id: str, auth: AuthContext = Depends(authenticate_api_key)
         return MEMORY_INSTANCE.get(memory_id, user_id=auth.user_id)
     except Exception as e:
         logging.exception("Error in get_memory:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @app.post("/api/memories/search", summary="Search memories with multi-tenant isolation")
@@ -748,7 +748,7 @@ def search_memories(
         return MEMORY_INSTANCE.search(query=search_req.query, **params)
     except Exception as e:
         logging.exception("Error in search_memories:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @app.delete(
@@ -891,7 +891,7 @@ def create_organization(
         raise
     except Exception as e:
         logging.exception("Error in create_organization:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @app.get("/api/organizations/{org_id}", summary="Get organization details")
@@ -920,7 +920,7 @@ def get_organization(org_id: str, auth: AuthContext = Depends(authenticate_api_k
         raise
     except Exception as e:
         logging.exception("Error in get_organization:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # Project Management Endpoints
@@ -1004,7 +1004,7 @@ def list_projects(auth: AuthContext = Depends(authenticate_api_key)):
 
     except Exception as e:
         logging.exception("Error in list_projects:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @app.post("/api/projects", summary="Create new project")
@@ -1088,7 +1088,7 @@ def create_project(
         raise
     except Exception as e:
         logging.exception("Error in create_project:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @app.get("/api/projects/{project_id}", summary="Get project details")
@@ -1118,7 +1118,7 @@ def get_project(project_id: str, auth: AuthContext = Depends(authenticate_api_ke
         raise
     except Exception as e:
         logging.exception("Error in get_project:")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @app.get(
