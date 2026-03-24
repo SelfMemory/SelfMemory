@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.9.5 (2026-03-24)
+
+### Bug Fixes
+
+- Patch security vulnerabilities across dependencies and code
+  ([`b9ddec3`](https://github.com/SelfMemory/SelfMemory/commit/b9ddec3c561b9b4af6717b291256d2b45b0183ce))
+
+
 ## v0.9.4 (2026-02-25)
 
 ### Bug Fixes
