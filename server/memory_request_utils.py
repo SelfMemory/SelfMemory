@@ -1,6 +1,7 @@
 """Helpers for translating memory HTTP requests into core memory calls."""
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 SUPPORTED_SEARCH_FILTERS = {
     "include_metadata",

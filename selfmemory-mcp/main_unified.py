@@ -57,7 +57,7 @@ from auth.token_extractor import create_project_client  # noqa: E402
 from auth.tool_auth import get_validated_tool_context  # noqa: E402
 from config import config  # noqa: E402
 from middleware import UnifiedAuthMiddleware, current_token_context  # noqa: E402
-from oauth.client_registration import (
+from oauth.client_registration import (  # noqa: E402
     inject_memory_scopes,
     sanitize_registration_request,
     sanitize_registration_response,
@@ -401,9 +401,7 @@ async def add(content: str, ctx: Context) -> dict:
             parsed_content: str | dict | list[dict] = content
             try:
                 parsed = json.loads(content)
-                if isinstance(parsed, list):
-                    parsed_content = parsed
-                elif isinstance(parsed, dict):
+                if isinstance(parsed, (list, dict)):
                     parsed_content = parsed
             except (json.JSONDecodeError, ValueError):
                 parsed_content = content

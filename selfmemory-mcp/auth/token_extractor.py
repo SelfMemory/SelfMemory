@@ -5,7 +5,7 @@ It replaces the custom OAuth token validation with Hydra's standards-compliant
 OAuth 2.1 token introspection.
 """
 
-import logging
+import logging  # noqa: I001
 
 from auth.client_cache import get_or_create_client
 from server.auth.hydra_validator import HydraToken, validate_token
