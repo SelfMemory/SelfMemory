@@ -2,6 +2,26 @@
 
 <!-- version list -->
 
+## v0.9.6 (2026-03-28)
+
+### Bug Fixes
+
+- Add PyPI and npm download badges to README
+  ([`9300eb7`](https://github.com/SelfMemory/SelfMemory/commit/9300eb762a676a79752bb22f35ca0af5cdd4f96b))
+
+- Apply ruff formatting and fix UP038 isinstance style
+  ([`477a270`](https://github.com/SelfMemory/SelfMemory/commit/477a270528344ad2721294395be470060d68c99a))
+
+- Clean up MCP server, add NeMo adapter, and harden auth layer
+  ([`b624eb7`](https://github.com/SelfMemory/SelfMemory/commit/b624eb7f0fc1959da5f4a1de6df3918758587f15))
+
+- Prevent log injection in validators and organization invitations
+  ([`5662083`](https://github.com/SelfMemory/SelfMemory/commit/56620837e351f719377ef81793bfeaea9084b96c))
+
+- Resolve ruff linting errors in Code Quality CI
+  ([`4d03d31`](https://github.com/SelfMemory/SelfMemory/commit/4d03d311306285e08f039541bc1c452c8807d221))
+
+
 ## v0.9.5 (2026-03-24)
 
 ### Bug Fixes
