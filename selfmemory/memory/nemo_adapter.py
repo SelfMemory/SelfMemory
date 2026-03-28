@@ -2,7 +2,7 @@ import asyncio
 import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from selfmemory.memory.base import MemoryBase
@@ -66,7 +66,6 @@ def _build_nemo_editor(config):
 
 
 class NemoMemoryAdapter(MemoryBase):
-
     def __init__(self, config):
         self._editor = _build_nemo_editor(config)
         self._config = config
@@ -159,9 +158,7 @@ class NemoMemoryAdapter(MemoryBase):
         project_id: str | None = None,
         organization_id: str | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
-        nemo_results = _run_async(
-            self._editor.search("", top_k=limit, user_id=user_id)
-        )
+        nemo_results = _run_async(self._editor.search("", top_k=limit, user_id=user_id))
         formatted = self._format_nemo_results(nemo_results, include_metadata=True)
         return {"results": formatted[offset : offset + limit]}
 
@@ -248,18 +245,18 @@ class NemoMemoryAdapter(MemoryBase):
         filtered = []
         for r in results:
             stored_tags = r.get("metadata", {}).get("tags", "")
-            stored_set = {t.strip().lower() for t in stored_tags.split(",") if t.strip()}
+            stored_set = {
+                t.strip().lower() for t in stored_tags.split(",") if t.strip()
+            }
             search_set = {t.lower() for t in tags}
-            if match_all and search_set.issubset(stored_set):
-                filtered.append(r)
-            elif not match_all and search_set & stored_set:
+            if (match_all and search_set.issubset(stored_set)) or (
+                not match_all and search_set & stored_set
+            ):
                 filtered.append(r)
         return filtered
 
     @staticmethod
-    def _filter_by_people(
-        results: list[dict], people: list[str]
-    ) -> list[dict]:
+    def _filter_by_people(results: list[dict], people: list[str]) -> list[dict]:
         filtered = []
         for r in results:
             stored_people = r.get("metadata", {}).get("people_mentioned", "").lower()

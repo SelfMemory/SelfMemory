@@ -5,7 +5,7 @@ OpenID Connect Discovery to Hydra, injecting the Dynamic Client
 Registration endpoint.
 """
 
-import json
+import json  # noqa: I001
 import logging
 
 import httpx
