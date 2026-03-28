@@ -3,6 +3,8 @@
 [![CI](https://github.com/SelfMemory/SelfMemory/actions/workflows/ci.yml/badge.svg)](https://github.com/SelfMemory/SelfMemory/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/selfmemory)](https://pypi.org/project/selfmemory/)
 [![Python](https://img.shields.io/pypi/pyversions/selfmemory)](https://pypi.org/project/selfmemory/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/selfmemory)](https://pypi.org/project/selfmemory/)
+[![npm downloads](https://img.shields.io/npm/dm/@selfmemory/sdk)](https://www.npmjs.com/package/@selfmemory/sdk)
 [![License](https://img.shields.io/github/license/SelfMemory/SelfMemory)](https://github.com/SelfMemory/SelfMemory/blob/master/LICENSE.txt)
 [![codecov](https://codecov.io/gh/SelfMemory/SelfMemory/graph/badge.svg)](https://codecov.io/gh/SelfMemory/SelfMemory)
 
