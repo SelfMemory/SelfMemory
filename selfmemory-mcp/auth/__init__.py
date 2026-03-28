@@ -3,6 +3,7 @@
 This module provides:
 1. Hydra OAuth 2.1 token validation and extraction
 2. Unified authentication supporting both OAuth and API key methods
+3. Tool-level auth context extraction and scope validation
 """
 
 from .token_extractor import (
@@ -10,6 +11,7 @@ from .token_extractor import (
     extract_bearer_token,
     extract_token_context,
 )
+from .tool_auth import get_validated_tool_context
 from .unified_auth import (
     AuthType,
     TokenContext,
@@ -24,6 +26,8 @@ __all__ = [
     "create_project_client",
     "extract_bearer_token",
     "extract_token_context",
+    # Tool auth
+    "get_validated_tool_context",
     # Unified authentication
     "AuthType",
     "TokenContext",

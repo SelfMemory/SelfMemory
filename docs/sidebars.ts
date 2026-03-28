@@ -15,6 +15,13 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Integrations',
+      items: [
+        'Integrations/nvidia-nemo',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Platform',
       items: [
         'Platform/API Key page',

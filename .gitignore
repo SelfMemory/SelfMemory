@@ -288,3 +288,4 @@ apis/chatlab.bru
 apis/login.bru
 apis/Search Memory.bru
 apis/environments/DEV.bru
+qdrant_storage/

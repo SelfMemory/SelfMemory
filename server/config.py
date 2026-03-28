@@ -257,7 +257,7 @@ class OTelConfig:
 
     # OTLP exporter endpoint (SigNoz gRPC endpoint)
     OTLP_ENDPOINT: str = os.getenv(
-        "OTEL_EXPORTER_OTLP_ENDPOINT", "http://192.168.1.41:4317"
+        "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"
     )
 
     # Protocol: grpc or http/protobuf

@@ -30,7 +30,9 @@ export class SelfMemory {
       throw new Error('apiKey is required')
     }
     this.apiKey = config.apiKey
-    this.host = (config.host || DEFAULT_HOST).replace(/\/+$/, '')
+    let host = config.host || DEFAULT_HOST
+    host = host.replace(/\/+$/, '')
+    this.host = host
   }
 
   async add(content: string, options: AddOptions = {}): Promise<AddResponse> {

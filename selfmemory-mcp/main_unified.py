@@ -54,9 +54,15 @@ init_telemetry(service_name="selfmemory-mcp")
 tracer = trace.get_tracer(__name__)
 
 from auth.token_extractor import create_project_client  # noqa: E402
+from auth.tool_auth import get_validated_tool_context  # noqa: E402
 from config import config  # noqa: E402
 from middleware import UnifiedAuthMiddleware, current_token_context  # noqa: E402
-from oauth.client_registration import sanitize_registration_response  # noqa: E402
+from oauth.client_registration import (
+    inject_memory_scopes,
+    sanitize_registration_request,
+    sanitize_registration_response,
+)
+from oauth.discovery_proxy import proxy_discovery_metadata  # noqa: E402
 from oauth.metadata import get_protected_resource_metadata  # noqa: E402
 from tools.fetch import format_fetch_result  # noqa: E402
 from tools.search import format_search_results  # noqa: E402
@@ -142,10 +148,14 @@ app.add_middleware(UnifiedAuthMiddleware, core_server_host=CORE_SERVER_HOST)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all requests for debugging."""
+    """Log all requests with timing for performance monitoring."""
+    start = time.time()
     logger.info(f"📍 {request.method} {request.url.path}")
     response = await call_next(request)
-    logger.info(f"📤 Response: {response.status_code}")
+    duration_ms = (time.time() - start) * 1000
+    logger.info(
+        f"📤 {request.method} {request.url.path} -> {response.status_code} ({duration_ms:.0f}ms)"
+    )
     return response
 
 
@@ -201,176 +211,53 @@ async def protected_resource_metadata():
 
 @app.get("/.well-known/oauth-authorization-server")
 async def oauth_authorization_server(request: Request):
-    """Proxy OAuth 2.0 Authorization Server Metadata to Hydra (RFC 8414).
-
-    VS Code and other OAuth clients discover the authorization server
-    by fetching this endpoint. We proxy to Hydra's OIDC discovery and
-    inject the registration_endpoint for Dynamic Client Registration.
-
-    IMPORTANT: Points authorization_endpoint to our backend proxy to enable
-    scope injection for Docker MCP Toolkit compatibility.
-    """
-    hydra_url = f"{config.hydra.public_url}/.well-known/openid-configuration"
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(hydra_url, timeout=10.0)
-            response.raise_for_status()
-
-            config_data = response.json()
-
-            # Inject registration endpoint (Hydra doesn't advertise this)
-            base_url = f"{request.url.scheme}://{request.url.netloc}"
-            config_data["registration_endpoint"] = f"{base_url}/register"
-
-            logger.info(
-                f"✅ Proxied OAuth authorization server metadata with DCR: {base_url}/register"
-            )
-
-            return Response(
-                content=json.dumps(config_data),
-                status_code=200,
-                media_type="application/json",
-            )
-    except httpx.HTTPError as e:
-        logger.error(f"❌ Failed to fetch authorization server metadata: {e}")
-        return Response(
-            content="Failed to fetch authorization server metadata.",
-            status_code=502,
-            media_type="text/plain",
-        )
+    """Proxy OAuth 2.0 Authorization Server Metadata to Hydra (RFC 8414)."""
+    return await proxy_discovery_metadata(request)
 
 
 @app.get("/.well-known/openid-configuration")
 async def openid_configuration(request: Request):
-    """Proxy OpenID Connect Discovery to Hydra.
-
-    Some OAuth clients prefer OIDC discovery over plain OAuth.
-    We proxy to Hydra and inject the registration_endpoint.
-    """
-    hydra_url = f"{config.hydra.public_url}/.well-known/openid-configuration"
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(hydra_url, timeout=10.0)
-            response.raise_for_status()
-
-            config_data = response.json()
-
-            # Inject registration endpoint
-            base_url = f"{request.url.scheme}://{request.url.netloc}"
-            config_data["registration_endpoint"] = f"{base_url}/register"
-
-            # Note: authorization_endpoint stays as Hydra's (not modified)
-            # Scope handling is done via consent-level fallback, not authorization proxy
-
-            logger.info(
-                f"✅ Proxied OpenID Connect discovery with DCR: {base_url}/register"
-            )
-            return Response(
-                content=json.dumps(config_data),
-                status_code=200,
-                media_type="application/json",
-            )
-    except httpx.HTTPError as e:
-        logger.error(f"❌ Failed to fetch OpenID configuration: {e}")
-        return Response(
-            content="Failed to fetch OpenID configuration.",
-            status_code=502,
-            media_type="text/plain",
-        )
+    """Proxy OpenID Connect Discovery to Hydra."""
+    return await proxy_discovery_metadata(request)
 
 
 @app.post("/register")
 async def dynamic_client_registration(request: Request):
     """Proxy Dynamic Client Registration to Hydra (RFC 7591).
 
-    Allows OAuth clients like VS Code to automatically register themselves.
-    Injects memory scopes (memories:read, memories:write) into registration.
+    Sanitizes client metadata, injects memory scopes and audience,
+    then forwards to Hydra admin API.
     """
     hydra_url = f"{config.hydra.admin_url}/clients"
 
-    logger.info("=" * 80)
-    logger.info("🔥 DYNAMIC CLIENT REGISTRATION")
-    logger.info(f"🔥 From: {request.client.host if request.client else 'unknown'}")
-    logger.info("=" * 80)
-
     try:
-        # Get and parse request body
         body_bytes = await request.body()
         registration_data = json.loads(body_bytes)
 
         client_name = registration_data.get("client_name", "Unknown")
-        logger.info(f"📝 Client: {client_name}")
+        logger.info(f"DCR request from: {client_name}")
 
-        # DIAGNOSTIC: Log audience configuration
-        logger.info("🔍 DCR AUDIENCE CONFIG:")
-        logger.info(f"   MCP_SERVER_URL from config: {config.hydra.mcp_server_url}")
-        logger.info(
-            f"   MCP_SERVER_URL from env: {os.getenv('MCP_SERVER_URL', 'NOT SET')}"
-        )
-        logger.info(f"   Request base URL: {request.url.scheme}://{request.url.netloc}")
+        # Sanitize invalid fields (URLs, contacts)
+        registration_data = sanitize_registration_request(registration_data)
 
-        # Sanitize invalid URL fields (Hydra rejects null/empty URLs)
-        url_fields = ["client_uri", "logo_uri", "tos_uri", "policy_uri"]
-        for field in url_fields:
-            if field in registration_data:
-                value = registration_data[field]
-                if value is None or (
-                    isinstance(value, str)
-                    and (not value or not value.startswith(("http://", "https://")))
-                ):
-                    logger.info(f"🧹 Removing invalid {field}: {repr(value)}")
-                    del registration_data[field]
-
-        # Sanitize contacts array
-        if "contacts" in registration_data:
-            contacts = registration_data["contacts"]
-            if contacts is None or not isinstance(contacts, list) or len(contacts) == 0:
-                logger.info(f"🧹 Removing invalid contacts: {repr(contacts)}")
-                del registration_data["contacts"]
-
-        # === SCOPE-AGNOSTIC HANDLING ===
-        # Accept whatever scopes the client sends, and ensure our required scopes are included
-        # This makes the server work with ANY OAuth client (Docker, Windsurf, ChatGPT, etc.)
-
+        # Inject memory scopes
         current_scopes = registration_data.get("scope", "openid offline_access")
-        if isinstance(current_scopes, str):
-            current_scopes = current_scopes.split()
-        elif not isinstance(current_scopes, list):
-            current_scopes = ["openid", "offline_access"]
+        registration_data["scope"] = inject_memory_scopes(
+            current_scopes, ["memories:read", "memories:write"]
+        )
 
-        logger.info(f"📥 Client requested scopes: {' '.join(current_scopes)}")
+        # Whitelist MCP server as audience (RFC 8707)
+        mcp_server_url = config.hydra.mcp_server_url.rstrip("/")
+        current_audience = registration_data.get("audience", [])
+        if isinstance(current_audience, str):
+            current_audience = [current_audience] if current_audience else []
+        elif not isinstance(current_audience, list):
+            current_audience = []
 
-        # Fix offline scope (accept both offline and offline_access)
-        has_offline = "offline" in current_scopes or "offline_access" in current_scopes
-        current_scopes = [
-            s for s in current_scopes if s not in ["offline", "offline_access"]
-        ]
-        if has_offline:
-            current_scopes.extend(["offline", "offline_access"])
+        if mcp_server_url not in current_audience:
+            current_audience.append(mcp_server_url)
 
-        # Always ensure our core memory scopes are included (required for tools to work)
-        required_scopes = ["memories:read", "memories:write"]
-        for scope in required_scopes:
-            if scope not in current_scopes:
-                current_scopes.append(scope)
-                logger.info(f"➕ Added required scope: {scope}")
-
-        # Keep any client-specific scopes (mcp.read, mcp.write, etc.) - we're scope-agnostic
-        registration_data["scope"] = " ".join(current_scopes)
-        logger.info(f"✨ Final scopes: {registration_data['scope']}")
-
-        # Ensure MCP server URL is whitelisted as an allowed audience for this client
-        # Required for RFC 8707 resource indicators — without this, Hydra rejects
-        # authorization requests that include audience=https://mcp.selfmemory.com
-        audiences = registration_data.get("audience", [])
-        if isinstance(audiences, str):
-            audiences = [audiences] if audiences else []
-        if config.hydra.mcp_server_url not in audiences:
-            audiences.append(config.hydra.mcp_server_url)
-        registration_data["audience"] = audiences
-        logger.info(f"🎯 Client audiences: {audiences}")
+        registration_data["audience"] = current_audience
 
         # Forward to Hydra
         async with httpx.AsyncClient(follow_redirects=True) as client:
@@ -382,63 +269,27 @@ async def dynamic_client_registration(request: Request):
             )
 
             if response.status_code in (200, 201):
-                logger.info("✅ Client registered with Hydra")
-
+                logger.info("Client registered with Hydra")
                 response_data = sanitize_registration_response(response.json())
-
                 return Response(
                     content=json.dumps(response_data),
                     status_code=response.status_code,
                     media_type="application/json",
                 )
-            logger.warning(f"⚠️  Registration returned {response.status_code}")
+
+            logger.warning(f"Registration returned {response.status_code}")
             return Response(
                 content=response.content,
                 status_code=response.status_code,
                 media_type="application/json",
             )
     except httpx.HTTPError as e:
-        logger.error(f"❌ Failed to register client: {e}")
+        logger.error(f"Failed to register client: {e}")
         return Response(
             content="Failed to register client due to a server error.",
             status_code=502,
             media_type="text/plain",
         )
-
-
-# Helper function to get auth context
-def get_auth_from_context(ctx: Context) -> dict:
-    """Extract authentication context from FastMCP Context.
-
-    Uses two methods in order of preference:
-    1. request.scope['auth_context'] - Standard ASGI scope (set by UnifiedAuthMiddleware)
-    2. ContextVar - Thread-safe context variable (set by UnifiedAuthMiddleware)
-
-    MCP requests are sequential per session, making this approach safe.
-    """
-    # Priority 1: Access request.scope['auth_context'] via request_context
-    # This is where UnifiedAuthMiddleware injects the auth context (propagates to mounted apps)
-    if hasattr(ctx, "request_context") and ctx.request_context:
-        logger.debug("🔍 Accessing request_context from FastMCP Context")
-        try:
-            request = ctx.request_context.request
-            if hasattr(request, "scope"):
-                auth_context = request.scope.get("auth_context")
-                if auth_context:
-                    logger.debug("✅ Got auth from request.scope['auth_context']")
-                    return auth_context
-        except Exception as e:
-            logger.warning(f"⚠️  Error accessing request_context: {e}")
-
-    # Priority 2: Try ContextVar (set by UnifiedAuthMiddleware)
-    token_context = current_token_context.get()
-    if token_context:
-        logger.debug("✅ Got auth from ContextVar")
-        return token_context
-
-    # No auth context found - this should not happen if middleware is working
-    logger.error("❌ No auth context available from any source")
-    raise ValueError("Authentication context not available")
 
 
 # Mount MCP server
@@ -478,33 +329,14 @@ async def search(query: str, ctx: Context) -> dict:
         span.set_attribute("query.length", len(query))
 
         tool_start = time.time()
-        logger.info(f"🔍 Search: '{query}'")
+        logger.info(f"Search: '{query}'")
 
-        # Get token context from MCP Context (set by middleware)
-        with tracer.start_as_current_span("get_token_context"):
-            token_context = get_auth_from_context(ctx)
-
-            if not token_context:
-                logger.error("❌ No token context available in search tool")
-                raise ValueError("No authentication context available")
-
-            logger.info(
-                f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
-            )
-
-            span.set_attribute("auth.type", token_context.get("auth_type"))
-            span.set_attribute("user.id", token_context.get("user_id"))
-            span.set_attribute("project.id", token_context.get("project_id", ""))
-
-        # Verify required scopes
-        with tracer.start_as_current_span("verify_scopes"):
-            if "memories:read" not in token_context["scopes"]:
-                raise ValueError("Token missing required scope: memories:read")
-
+        token_context = get_validated_tool_context(
+            ctx, "memories:read", current_token_context
+        )
         project_id = token_context["project_id"]
         oauth_token = token_context["raw_token"]
 
-        # Create client and execute search (works with both OAuth tokens and API keys)
         with tracer.start_as_current_span("execute_search") as search_span:
             search_start = time.time()
             client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
@@ -553,57 +385,35 @@ async def add(content: str, ctx: Context) -> dict:
         span.set_attribute("content.length", len(content))
 
         tool_start = time.time()
-        logger.info(f"➕ Add: {content[:50]}...")
+        logger.info(f"Add: {content[:50]}...")
 
-        # Get token context from MCP Context
-        with tracer.start_as_current_span("get_token_context"):
-            token_context = get_auth_from_context(ctx)
-
-            if not token_context:
-                logger.error("❌ No token context available in add tool")
-                raise ValueError("No authentication context available")
-
-            logger.info(
-                f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
-            )
-
-            span.set_attribute("auth.type", token_context.get("auth_type"))
-            span.set_attribute("user.id", token_context.get("user_id"))
-            span.set_attribute("project.id", token_context.get("project_id", ""))
-
-        # Verify required scopes
-        with tracer.start_as_current_span("verify_scopes"):
-            if "memories:write" not in token_context["scopes"]:
-                raise ValueError("Token missing required scope: memories:write")
-
+        token_context = get_validated_tool_context(
+            ctx, "memories:write", current_token_context
+        )
         project_id = token_context["project_id"]
         oauth_token = token_context["raw_token"]
 
-        # Create client and store memory
         with tracer.start_as_current_span("store_memory") as store_span:
             store_start = time.time()
             client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)
 
             # Parse content format (simple string or JSON array)
-            import json
-
+            parsed_content: str | dict | list[dict] = content
             try:
                 parsed = json.loads(content)
                 if isinstance(parsed, list):
-                    messages = parsed
-                else:
-                    messages = [{"role": "user", "content": content}]
+                    parsed_content = parsed
+                elif isinstance(parsed, dict):
+                    parsed_content = parsed
             except (json.JSONDecodeError, ValueError):
-                messages = [{"role": "user", "content": content}]
+                parsed_content = content
 
-            memory_data = {
-                "messages": messages,
-                "metadata": {"source": "mcp_unified", "project_id": project_id},
-            }
-
-            response = client.client.post("/api/memories", json=memory_data)
-            response.raise_for_status()
-            result = response.json()
+            result = client.add(
+                parsed_content,
+                metadata={"source": "mcp_unified"},
+            )
+            if not result.get("success", True):
+                raise RuntimeError(result.get("error", "Failed to store memory"))
             # Don't close cached clients - let cache manage lifecycle
 
             store_duration = time.time() - store_start
@@ -652,33 +462,14 @@ async def fetch(id: str, ctx: Context) -> dict:
         span.set_attribute("memory.id", id)
 
         tool_start = time.time()
-        logger.info(f"📥 Fetch: id={id}")
+        logger.info(f"Fetch: id={id}")
 
-        # Get token context from MCP Context
-        with tracer.start_as_current_span("get_token_context"):
-            token_context = get_auth_from_context(ctx)
-
-            if not token_context:
-                logger.error("❌ No token context available in fetch tool")
-                raise ValueError("No authentication context available")
-
-            logger.info(
-                f"✅ Auth via {token_context.get('auth_type')}: user={token_context.get('user_id')}"
-            )
-
-            span.set_attribute("auth.type", token_context.get("auth_type"))
-            span.set_attribute("user.id", token_context.get("user_id"))
-            span.set_attribute("project.id", token_context.get("project_id", ""))
-
-        # Verify required scopes
-        with tracer.start_as_current_span("verify_scopes"):
-            if "memories:read" not in token_context["scopes"]:
-                raise ValueError("Token missing required scope: memories:read")
-
+        token_context = get_validated_tool_context(
+            ctx, "memories:read", current_token_context
+        )
         project_id = token_context["project_id"]
         oauth_token = token_context["raw_token"]
 
-        # Fetch memory
         with tracer.start_as_current_span("fetch_memory") as fetch_span:
             fetch_start = time.time()
             client = create_project_client(project_id, oauth_token, CORE_SERVER_HOST)

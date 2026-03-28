@@ -1,4 +1,5 @@
 import importlib
+import logging
 
 from selfmemory.configs.embeddings.base import BaseEmbedderConfig
 from selfmemory.configs.llms.anthropic import AnthropicConfig
@@ -219,6 +220,49 @@ class VectorStoreFactory:
     def reset(cls, instance):
         instance.reset()
         return instance
+
+
+logger = logging.getLogger(__name__)
+
+
+class MemoryFactory:
+    provider_to_class = {
+        "nemo_mem0": "selfmemory.memory.nemo_adapter.NemoMemoryAdapter",
+        "nemo_redis": "selfmemory.memory.nemo_adapter.NemoMemoryAdapter",
+        "nemo_zep": "selfmemory.memory.nemo_adapter.NemoMemoryAdapter",
+    }
+
+    _nemo_provider_map = {
+        "nemo_mem0": "mem0",
+        "nemo_redis": "redis",
+        "nemo_zep": "zep",
+    }
+
+    @classmethod
+    def create(cls, provider_name: str, config):
+        if provider_name not in cls.provider_to_class:
+            raise ValueError(
+                f"Unsupported memory provider: '{provider_name}'. "
+                f"Supported: {list(cls.provider_to_class.keys())}"
+            )
+
+        class_type = cls.provider_to_class[provider_name]
+        memory_class = load_class(class_type)
+
+        nemo_provider = cls._nemo_provider_map[provider_name]
+        if isinstance(config, dict):
+            from selfmemory.configs.nemo import NemoMemoryConfig
+
+            config = NemoMemoryConfig(provider=nemo_provider, config=config)
+        elif hasattr(config, "provider") and config.provider != nemo_provider:
+            config.provider = nemo_provider
+
+        logger.info(f"Creating memory provider: {provider_name}")
+        return memory_class(config)
+
+    @classmethod
+    def get_supported_providers(cls) -> list[str]:
+        return list(cls.provider_to_class.keys())
 
 
 # class GraphStoreFactory:

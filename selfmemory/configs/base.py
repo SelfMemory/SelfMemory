@@ -20,6 +20,7 @@ except ImportError:
 from pydantic import BaseModel, Field, model_validator
 
 # Import the working config classes
+from selfmemory.configs.nemo import NemoMemoryConfig
 from selfmemory.embeddings.configs import EmbedderConfig
 from selfmemory.llms.configs import LlmConfig
 from selfmemory.vector_stores.configs import VectorStoreConfig
@@ -139,6 +140,10 @@ class SelfMemoryConfig(BaseModel):
     )
     llm: LlmConfig | None = Field(
         default=None, description="Optional LLM for intelligent memory extraction"
+    )
+    nemo_memory: NemoMemoryConfig | None = Field(
+        default=None,
+        description="Optional NVIDIA NeMo Agent Toolkit memory backend",
     )
     server: ServerConfig = Field(default_factory=ServerConfig)
 

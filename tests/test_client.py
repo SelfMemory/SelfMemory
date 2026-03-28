@@ -71,6 +71,22 @@ class TestClientAdd:
         assert "memory_content" not in payload
         assert result["success"] is True
 
+    def test_accepts_structured_messages(self, client, mock_http_client):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True, "memory_id": "abc-123"}
+        mock_response.raise_for_status.return_value = None
+        mock_http_client.post.return_value = mock_response
+
+        messages = [
+            {"role": "user", "content": "Remember that Alice likes oolong tea."},
+            {"role": "assistant", "content": "Saved."},
+        ]
+
+        client.add(messages)
+
+        payload = mock_http_client.post.call_args[1]["json"]
+        assert payload["messages"] == messages
+
     def test_sends_metadata(self, client, mock_http_client):
         mock_response = MagicMock()
         mock_response.json.return_value = {"success": True}

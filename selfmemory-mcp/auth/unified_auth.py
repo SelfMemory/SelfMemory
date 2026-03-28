@@ -11,10 +11,12 @@ Performance optimization: Token validation results are cached to avoid
 repeated expensive validation calls (OAuth: 5 min TTL, API keys: 10 min TTL).
 """
 
+import asyncio
 import logging
 import time
 from typing import Literal
 
+import httpx
 from opentelemetry import trace
 
 from server.auth.hydra_validator import HydraToken, validate_token
@@ -172,7 +174,7 @@ def validate_oauth_token(token: str, core_server_host: str) -> TokenContext:
             raise ValueError(f"Invalid OAuth token: {e}") from e
 
 
-def validate_api_key(token: str, core_server_host: str) -> TokenContext:
+async def validate_api_key(token: str, core_server_host: str) -> TokenContext:
     """Validate API key via Core server and create token context.
 
     Checks cache first to avoid expensive Core server API calls.
@@ -211,16 +213,14 @@ def validate_api_key(token: str, core_server_host: str) -> TokenContext:
         logger.info("❌ API KEY CACHE MISS - validating with Core server")
 
         try:
-            # Validate API key by making a test request to Core server
-            import httpx
-
             # Use /health endpoint to validate API key and get user context
             with tracer.start_as_current_span("api_key_health_request"):
-                response = httpx.get(
-                    f"{core_server_host}/health",
-                    headers={"Authorization": f"Bearer {token}"},
-                    timeout=10.0,
-                )
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"{core_server_host}/health",
+                        headers={"Authorization": f"Bearer {token}"},
+                        timeout=10.0,
+                    )
 
             api_duration = time.time() - span_start
             span.set_attribute("api_key.validation_ms", api_duration * 1000)
@@ -306,7 +306,10 @@ async def detect_and_validate_auth(
         # Try OAuth validation first if token looks like JWT
         if looks_like_jwt(token):
             try:
-                result = validate_oauth_token(token, core_server_host)
+                # Ory Hydra SDK is sync — run in thread to avoid blocking event loop
+                result = await asyncio.to_thread(
+                    validate_oauth_token, token, core_server_host
+                )
                 detect_duration = time.time() - detect_start
                 span.set_attribute("auth.detection_ms", detect_duration * 1000)
                 span.set_attribute("auth.method_detected", "oauth")
@@ -314,9 +317,9 @@ async def detect_and_validate_auth(
             except ValueError as e:
                 logger.debug(f"JWT token validation failed, trying API key: {e}")
 
-        # Try API key validation
+        # Try API key validation (async — uses httpx.AsyncClient)
         try:
-            result = validate_api_key(token, core_server_host)
+            result = await validate_api_key(token, core_server_host)
             detect_duration = time.time() - detect_start
             span.set_attribute("auth.detection_ms", detect_duration * 1000)
             span.set_attribute("auth.method_detected", "api_key")

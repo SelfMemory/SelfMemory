@@ -38,6 +38,7 @@ print(results)
 - **Dual Architecture**: Direct library usage OR managed client with REST API
 - **Advanced Search**: Semantic similarity with vector embeddings
 - **Flexible Storage**: File-based or MongoDB backend
+- **NVIDIA NeMo Integration**: Use Mem0, Redis, or Zep as memory backends via NeMo Agent Toolkit
 - **Production Ready**: Authentication, API keys, and dashboard integration
 
 ## 📚 Documentation Sections
@@ -47,6 +48,10 @@ print(results)
 - **[Quick Start Guide](./Python/QuickStart.md)**: Get started with SelfMemory in 5 minutes
 - **[Client Usage](./Python/Client.md)**: Using SelfMemoryClient with the REST API
 - **[Configuration](./Python/Configuration.md)**: Advanced configuration options
+
+### Integrations
+
+- **[NVIDIA NeMo Agent Toolkit](./Integrations/nvidia-nemo.md)**: Use Mem0, Redis, or Zep as memory backends
 
 ### For Platform Users
 
