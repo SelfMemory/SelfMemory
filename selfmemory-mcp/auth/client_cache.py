@@ -11,30 +11,31 @@ Performance Impact:
 
 import hashlib
 import logging
+import threading
 
 from cachetools import TTLCache
-
-# PBKDF2 salt for secure API key hashing in cache keys
-PBKDF2_CACHE_SALT = b"selfmemory.mcp.client.cache.v1"
 
 logger = logging.getLogger(__name__)
 
 # Cache for SelfMemoryClient instances (10 minute TTL)
 # Key: api_key hash, Value: SelfMemoryClient instance
 _client_cache = TTLCache(maxsize=100, ttl=600)
+_client_lock = threading.Lock()
 
 
 def _hash_api_key(api_key: str) -> str:
-    """Create a secure hash of the API key for cache key using PBKDF2-HMAC-SHA256.
+    """Create a hash of the API key for cache key lookup using SHA256.
+
+    Tokens and API keys are already high-entropy cryptographic strings,
+    so PBKDF2 password-stretching is unnecessary overhead for cache keys.
 
     Args:
         api_key: The API key string to hash
 
     Returns:
-        PBKDF2-HMAC-SHA256 hash of the API key (hex)
+        SHA256 hash of the API key (hex)
     """
-    dk = hashlib.pbkdf2_hmac("sha256", api_key.encode(), PBKDF2_CACHE_SALT, 100_000)
-    return dk.hex()
+    return hashlib.sha256(api_key.encode()).hexdigest()
 
 
 def get_client_from_cache(api_key: str):
@@ -47,7 +48,8 @@ def get_client_from_cache(api_key: str):
         Cached SelfMemoryClient instance if found, None otherwise
     """
     key_hash = _hash_api_key(api_key)
-    cached = _client_cache.get(key_hash)
+    with _client_lock:
+        cached = _client_cache.get(key_hash)
 
     if cached:
         logger.info(
@@ -69,7 +71,8 @@ def set_client_in_cache(api_key: str, client) -> None:
         client: SelfMemoryClient instance to cache
     """
     key_hash = _hash_api_key(api_key)
-    _client_cache[key_hash] = client
+    with _client_lock:
+        _client_cache[key_hash] = client
     logger.info(
         f"💾 CACHED: SelfMemoryClient "
         f"[TTL: 10min, size: {len(_client_cache)}/{_client_cache.maxsize}]"

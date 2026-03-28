@@ -6,6 +6,7 @@ to avoid hitting Hydra or Core server on every request.
 
 import hashlib
 import logging
+import threading
 
 from cachetools import TTLCache
 
@@ -14,10 +15,12 @@ logger = logging.getLogger(__name__)
 # Cache for OAuth token validation results (5 minute TTL)
 # Key: token hash, Value: TokenContext dict
 _oauth_token_cache = TTLCache(maxsize=1000, ttl=300)
+_oauth_lock = threading.Lock()
 
 # Cache for API key validation results (10 minute TTL)
 # Key: api key hash, Value: TokenContext dict
 _api_key_cache = TTLCache(maxsize=1000, ttl=600)
+_api_key_lock = threading.Lock()
 
 
 def _hash_token(token: str) -> str:
@@ -34,7 +37,7 @@ def _hash_token(token: str) -> str:
     Returns:
         SHA256 hash of the token (hex)
     """
-    return hashlib.sha256(token.encode()).hexdigest()
+    return hashlib.sha256(token.encode()).hexdigest()  # noqa: S324 - SHA256 appropriate for cache keys (high-entropy tokens, not passwords)
 
 
 def get_oauth_token_from_cache(token: str) -> dict | None:
@@ -47,7 +50,8 @@ def get_oauth_token_from_cache(token: str) -> dict | None:
         Cached TokenContext dict if found, None otherwise
     """
     token_hash = _hash_token(token)
-    cached = _oauth_token_cache.get(token_hash)
+    with _oauth_lock:
+        cached = _oauth_token_cache.get(token_hash)
 
     if cached:
         logger.info(
@@ -69,7 +73,8 @@ def set_oauth_token_in_cache(token: str, token_context: dict) -> None:
         token_context: TokenContext dict to cache
     """
     token_hash = _hash_token(token)
-    _oauth_token_cache[token_hash] = token_context
+    with _oauth_lock:
+        _oauth_token_cache[token_hash] = token_context
     logger.info(
         f"💾 CACHED: OAuth token for user {token_context.get('user_id')} "
         f"[TTL: 5min, size: {len(_oauth_token_cache)}/{_oauth_token_cache.maxsize}]"
@@ -86,7 +91,8 @@ def get_api_key_from_cache(api_key: str) -> dict | None:
         Cached TokenContext dict if found, None otherwise
     """
     key_hash = _hash_token(api_key)
-    cached = _api_key_cache.get(key_hash)
+    with _api_key_lock:
+        cached = _api_key_cache.get(key_hash)
 
     if cached:
         logger.info(f"💾 CACHE HIT: API key (cache size: {len(_api_key_cache)})")
@@ -106,7 +112,8 @@ def set_api_key_in_cache(api_key: str, token_context: dict) -> None:
         token_context: TokenContext dict to cache
     """
     key_hash = _hash_token(api_key)
-    _api_key_cache[key_hash] = token_context
+    with _api_key_lock:
+        _api_key_cache[key_hash] = token_context
     logger.info(
         f"💾 CACHED: API key [TTL: 10min, size: {len(_api_key_cache)}/{_api_key_cache.maxsize}]"
     )

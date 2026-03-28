@@ -11,6 +11,7 @@ import os
 from ory_hydra_client.exceptions import ApiException
 
 from .ory_config import get_hydra_oauth2_api
+from .token_cache import cache_hydra_token, get_cached_hydra_token
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,12 @@ def validate_token(access_token: str) -> HydraToken:
         error_msg = "Access token is required"
         logger.warning(error_msg)
         raise ValueError(error_msg)
+
+    # Check cache first to avoid repeated Hydra introspection
+    cached = get_cached_hydra_token(access_token)
+    if cached:
+        logger.info("✅ Hydra token cache HIT")
+        return cached
 
     try:
         oauth2_api = get_hydra_oauth2_api()
@@ -197,6 +204,9 @@ def validate_token(access_token: str) -> HydraToken:
         )
 
         logger.info(f"✅ Hydra token validated: {hydra_token}")
+
+        # Cache the validated token
+        cache_hydra_token(access_token, hydra_token)
 
         return hydra_token
 

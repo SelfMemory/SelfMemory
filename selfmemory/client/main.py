@@ -83,7 +83,7 @@ class SelfMemoryClient:
 
     def add(
         self,
-        memory_content: str,
+        memory_content: str | dict[str, Any] | list[dict[str, Any]],
         tags: str | None = None,
         people_mentioned: str | None = None,
         topic_category: str | None = None,
@@ -108,8 +108,9 @@ class SelfMemoryClient:
             ...           people_mentioned="Sarah,Mike")
         """
         try:
+            messages = self._normalize_messages(memory_content)
             payload = {
-                "messages": [{"role": "user", "content": memory_content}],
+                "messages": messages,
                 "metadata": {
                     "tags": tags or "",
                     "people_mentioned": people_mentioned or "",
@@ -122,7 +123,15 @@ class SelfMemoryClient:
             response.raise_for_status()
 
             result = response.json()
-            logger.info(f"Memory added: {memory_content[:50]}...")
+            preview = next(
+                (
+                    message.get("content", "")
+                    for message in messages
+                    if message.get("content")
+                ),
+                "",
+            )
+            logger.info(f"Memory added: {preview[:50]}...")
             return result
 
         except httpx.HTTPStatusError as e:
@@ -142,6 +151,18 @@ class SelfMemoryClient:
                 "success": False,
                 "error": "An internal error occurred while adding a new memory.",
             }
+
+    @staticmethod
+    def _normalize_messages(
+        memory_content: str | dict[str, Any] | list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        if isinstance(memory_content, str):
+            return [{"role": "user", "content": memory_content}]
+        if isinstance(memory_content, dict):
+            return [memory_content]
+        if isinstance(memory_content, list):
+            return memory_content
+        raise TypeError("memory_content must be a string, dict, or list of dicts")
 
     def search(
         self,

@@ -51,6 +51,11 @@ Issues = "https://github.com/selfmemory/selfmemory/issues"
 Changelog = "https://github.com/selfmemory/selfmemory/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+# NVIDIA NeMo Agent Toolkit memory integration
+nemo = [
+    "nvidia-nat>=1.4",
+]
+
 # Testing dependencies
 test = [
     "pytest>=9.0.0",

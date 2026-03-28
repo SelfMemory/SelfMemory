@@ -95,7 +95,6 @@ async def search_memories(
 
         request_payload = {
             "query": query,
-            "user_id": project_id,  # Project as session identifier for shared memories
             "filters": {"limit": limit},
         }
 
@@ -179,7 +178,6 @@ async def add_memory(
                 f"{SELFMEMORY_API_URL}/api/memories",
                 json={
                     "messages": [{"role": "user", "content": content}],
-                    "user_id": project_id,  # Project as session identifier
                     "metadata": memory_metadata,
                 },
                 params={"project_id": project_id},

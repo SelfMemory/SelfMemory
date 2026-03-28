@@ -162,12 +162,11 @@ updates:
       - dependency-name: "mcp"
         update-types: ["version-update:semver-major"]
 
-  # GitHub Actions workflow dependencies - weekly (as requested)
+  # GitHub Actions workflow dependencies - daily
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"
       time: "12:00"
       timezone: "Etc/UTC"
     open-pull-requests-limit: 2

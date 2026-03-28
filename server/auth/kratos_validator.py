@@ -11,6 +11,7 @@ from ory_kratos_client.exceptions import ApiException
 
 from .ory_config import get_kratos_frontend_api, get_kratos_identity_api
 from .retry_utils import retry_with_exponential_backoff
+from .token_cache import cache_kratos_session, get_cached_kratos_session
 
 # Session cookie validation constants
 MAX_COOKIE_LENGTH = 4096  # Standard HTTP header limit
@@ -94,6 +95,12 @@ def validate_session(session_cookie: str) -> KratosSession:
         logger.warning(error_msg)
         raise ValueError(error_msg)
 
+    # Check cache first to avoid repeated Kratos API calls
+    cached = get_cached_kratos_session(session_cookie)
+    if cached:
+        logger.info("✅ Kratos session cache HIT")
+        return cached
+
     try:
         # Validate session with Kratos using Cookie header (not x-session-token)
         # This matches how the dashboard validates sessions successfully
@@ -171,6 +178,9 @@ def validate_session(session_cookie: str) -> KratosSession:
         )
 
         logger.info(f"✅ Kratos session validated: {kratos_session}")
+
+        # Cache the validated session
+        cache_kratos_session(session_cookie, kratos_session)
 
         return kratos_session
 

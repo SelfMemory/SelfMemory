@@ -67,3 +67,30 @@ def create_401_response(
         "error_description": error_description or "Authentication failed",
         "www_authenticate": www_authenticate,
     }
+
+
+def build_www_authenticate_header(www_auth: dict) -> str:
+    """Build WWW-Authenticate header string per RFC 6750.
+
+    Constructs a properly formatted Bearer challenge header from
+    the dict returned by create_401_response().
+
+    Args:
+        www_auth: Dictionary with realm, resource, resource_metadata,
+                  and optional error/error_description fields.
+
+    Returns:
+        Formatted WWW-Authenticate header value.
+    """
+    parts = [
+        f'realm="{www_auth["realm"]}"',
+        f'resource="{www_auth["resource"]}"',
+        f'resource_metadata="{www_auth["resource_metadata"]}"',
+    ]
+
+    if "error" in www_auth:
+        parts.append(f'error="{www_auth["error"]}"')
+    if "error_description" in www_auth:
+        parts.append(f'error_description="{www_auth["error_description"]}"')
+
+    return "Bearer " + ", ".join(parts)

@@ -210,6 +210,31 @@ config = {
 }
 ```
 
+## NVIDIA NeMo Memory Backend (Optional)
+
+Use NeMo Agent Toolkit providers (Mem0, Redis, Zep) instead of the native vector store:
+
+```python
+config = {
+    "nemo_memory": {
+        "provider": "mem0",  # or "redis", "zep"
+        "config": {
+            "api_key": "your-api-key"
+        }
+    }
+}
+```
+
+Or use the `MemoryFactory` directly:
+
+```python
+from selfmemory.utils.factory import MemoryFactory
+
+memory = MemoryFactory.create("nemo_mem0", {"api_key": "your-key"})
+```
+
+Requires `pip install selfmemory[nemo]` and Python 3.11+. See the full [NVIDIA NeMo Integration Guide](../Integrations/nvidia-nemo.md).
+
 ## YAML Configuration File
 
 Create `~/.selfmemory/config.yaml`:

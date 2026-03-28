@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Any
 
 from bson import ObjectId
@@ -14,6 +15,11 @@ from .config import config
 from .dependencies import AuthContext, authenticate_api_key, mongo_db
 from .health import is_alive, is_ready, perform_health_checks
 from .mcp_auth import get_protected_resource_metadata
+from .memory_request_utils import (
+    build_search_kwargs,
+    serialize_messages,
+    split_memory_metadata,
+)
 from .routes.api_keys import router as api_keys_router
 from .routes.chat import router as chat_router
 from .routes.hydra_proxy import router as hydra_proxy_router
@@ -127,12 +133,13 @@ app.state.limiter = limiter
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # Dashboard (localhost)
-        "http://127.0.0.1:3000",  # Dashboard (127.0.0.1)
-        "http://localhost:8081",  # Backend API (localhost)
-        "http://127.0.0.1:8081",  # Backend API (127.0.0.1)
-        config.app.FRONTEND_URL,  # Dynamic frontend URL from config
-    ],
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ALLOWED_ORIGINS",
+            "http://localhost:3000,http://127.0.0.1:3000",
+        ).split(",")
+    ]
+    + [config.app.FRONTEND_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -157,9 +164,6 @@ class Message(BaseModel):
 
 class MemoryCreate(BaseModel):
     messages: list[Message] = Field(..., description="List of messages to store.")
-    user_id: str | None = None
-    agent_id: str | None = None
-    run_id: str | None = None
     metadata: dict[str, Any] | None = None
 
     @field_validator("messages")
@@ -176,10 +180,7 @@ class MemoryCreate(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str = Field(..., description="Search query.")
-    user_id: str | None = None
-    agent_id: str | None = None
-    run_id: str | None = None
-    people_mentioned: str | None = None
+    people_mentioned: str | list[str] | None = None
     filters: dict[str, Any] | None = None
 
 
@@ -426,6 +427,83 @@ def get_memory_stats(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+def _resolve_session_project(
+    auth: AuthContext,
+    requested_project_id: str | None,
+    *,
+    permission: str,
+    permission_error: str,
+) -> str:
+    """Resolve and authorize project for session-authenticated users.
+
+    Uses a single permission lookup for both access validation and
+    operation-specific authorization.
+    """
+    from .dependencies import get_user_permissions
+
+    if not requested_project_id:
+        raise HTTPException(
+            status_code=400,
+            detail="project_id required for session authentication",
+        )
+
+    try:
+        ObjectId(requested_project_id)
+    except Exception as err:
+        raise HTTPException(
+            status_code=400, detail="Invalid project_id format"
+        ) from err
+
+    permissions = get_user_permissions(auth.user_id, requested_project_id)
+    permission_allowed = {
+        "read": permissions.canRead,
+        "write": permissions.canWrite,
+    }.get(permission, False)
+
+    if not permission_allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=permission_error,
+        )
+
+    return requested_project_id
+
+
+def _enforce_token_isolation(
+    auth: AuthContext,
+    metadata: dict | None,
+) -> str:
+    """Enforce tenant isolation for token-authenticated users (API key / Hydra).
+
+    Uses auth.permissions already resolved during authentication —
+    no additional DB queries.
+    """
+    metadata = metadata or {}
+
+    if metadata.get("project_id") and metadata["project_id"] != auth.project_id:
+        raise HTTPException(
+            status_code=403,
+            detail="API key is not authorized for the requested project",
+        )
+
+    if (
+        metadata.get("organization_id")
+        and metadata["organization_id"] != auth.organization_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="API key is not authorized for the requested organization",
+        )
+
+    if not auth.permissions or not auth.permissions.canWrite:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied - write access required to create memories",
+        )
+
+    return auth.project_id
+
+
 @app.post("/api/memories", summary="Create memories with multi-tenant isolation")
 @limiter.limit(config.rate_limit.MEMORY_CREATE)
 def add_memory(
@@ -433,118 +511,36 @@ def add_memory(
     memory_create: MemoryCreate,
     auth: AuthContext = Depends(authenticate_api_key),
     project_id: str | None = None,
-    organization_id: str | None = None,
 ):
     """Store new memories with multi-tenant isolation (supports both API key and Session auth)."""
-    if not any(
-        [
-            memory_create.user_id,
-            memory_create.agent_id,
-            memory_create.run_id,
-            auth.user_id,
-        ]
-    ):
-        raise HTTPException(
-            status_code=400, detail="At least one identifier is required."
-        )
-
     try:
-        # For Session auth, extract and validate project context from request
+        # Resolve project context and verify write permission
         if auth.project_id is None:
-            # Session authentication - get project context from query params or metadata
             requested_project_id = project_id or (memory_create.metadata or {}).get(
                 "project_id"
             )
-
-            try:
-                project_obj_id = ObjectId(requested_project_id)
-                # user_obj_id = ObjectId(auth.user_id)  # Remove unused assignment
-            except Exception as err:
-                raise HTTPException(
-                    status_code=400, detail="Invalid project_id or user_id format"
-                ) from err
-
-            # Use Phase 6 helper function to check access (not just ownership)
-            from .dependencies import check_project_access
-
-            if not check_project_access(auth.user_id, requested_project_id):
-                logging.warning(
-                    f"❌ Session user {auth.user_id} does not have access to project {requested_project_id}"
-                )
-                raise HTTPException(status_code=403, detail="Access denied to project")
-
-            # Get project details for organization context
-            project = mongo_db.projects.find_one({"_id": project_obj_id})
-            if not project:
-                raise HTTPException(status_code=404, detail="Project not found")
-
-            # Set validated project context
-            final_project_id = str(project["_id"])
-            # final_org_id = str(project["organizationId"])  # Remove unused assignment
-
-            logging.info(
-                f"✅ Session auth project validated: user={auth.user_id}, project={final_project_id}"
+            final_project_id = _resolve_session_project(
+                auth,
+                requested_project_id,
+                permission="write",
+                permission_error="Permission denied - write access required to create memories",
             )
         else:
-            # API key authentication - use key's scoped context
-            # Reject attempts to specify different project/org
-            metadata = memory_create.metadata or {}
-            if (
-                metadata.get("project_id")
-                and metadata.get("project_id") != auth.project_id
-            ):
-                logging.warning(
-                    f"❌ ISOLATION VIOLATION: User {auth.user_id} attempted to create memory in project {metadata.get('project_id')} but API key is scoped to {auth.project_id}"
-                )
-                raise HTTPException(
-                    status_code=403,
-                    detail="API key is not authorized for the requested project",
-                )
+            # API key / Hydra — enforce isolation, use pre-resolved permissions
+            final_project_id = _enforce_token_isolation(auth, memory_create.metadata)
 
-            if (
-                metadata.get("organization_id")
-                and metadata.get("organization_id") != auth.organization_id
-            ):
-                logging.warning(
-                    f"❌ ISOLATION VIOLATION: User {auth.user_id} attempted to create memory in org {metadata.get('organization_id')} but API key is scoped to {auth.organization_id}"
-                )
-                raise HTTPException(
-                    status_code=403,
-                    detail="API key is not authorized for the requested organization",
-                )
-
-            final_project_id = auth.project_id
-
-        # PHASE 7: Check write permission
-        from .dependencies import has_permission
-
-        if not has_permission(auth.user_id, final_project_id, "write"):
-            logging.warning(
-                f"❌ User {auth.user_id} does not have write permission for project {final_project_id}"
-            )
-            raise HTTPException(
-                status_code=403,
-                detail="Permission denied - write access required to create memories",
-            )
-
-        # PHASE 7: Get user email for creator attribution
-        # Note: auth.user_id is Kratos identity_id (string), not ObjectId
+        # Get user email for creator attribution
         user = mongo_db.users.find_one({"_id": auth.user_id})
         user_email = user.get("email", "unknown") if user else "unknown"
 
-        # Extract memory content from messages (selfmemory style)
-        memory_content = ""
-        if memory_create.messages:
-            memory_content = " ".join([msg.content for msg in memory_create.messages])
-
-        # Extract metadata fields for selfmemory-core compatibility
-        metadata = memory_create.metadata or {}
-        tags = metadata.get("tags", "")
-        people_mentioned = metadata.get("people_mentioned", "")
-        topic_category = metadata.get("topic_category", "")
+        tags, people_mentioned, topic_category, custom_metadata = (
+            split_memory_metadata(memory_create.metadata)
+        )
+        messages = serialize_messages(memory_create.messages)
 
         # Creator attribution metadata
         creator_metadata = {
+            **custom_metadata,
             "createdBy": auth.user_id,
             "createdByEmail": user_email,
         }
@@ -553,11 +549,11 @@ def add_memory(
         # Use project_id as the session identifier (selfmemory pattern)
         # Track actual creator in metadata for attribution
         logging.info(
-            f"📝 Creating memory: project={final_project_id}, creator={auth.user_id} ({user_email})"
+            f"📝 Creating memory: project={final_project_id}, creator_id={auth.user_id}, message_count={len(messages)}"
         )
 
         response = MEMORY_INSTANCE.add(
-            messages=memory_content,
+            messages=messages,
             user_id=final_project_id,  # Project as session identifier for shared memories
             tags=tags,
             people_mentioned=people_mentioned,
@@ -573,7 +569,7 @@ def add_memory(
                 # Extract memory ID from first result
                 memory_id = results[0].get("id") if results else None
                 logging.info(
-                    f"✅ Memory created (LLM): project={final_project_id}, memory_id={memory_id}, operations={len(results)}, creator={user_email}"
+                    f"✅ Memory created (LLM): project={final_project_id}, memory_id={memory_id}, operations={len(results)}, creator_id={auth.user_id}"
                 )
                 return JSONResponse(
                     content={
@@ -585,7 +581,7 @@ def add_memory(
                 )
             # Empty results - no changes needed, this is a valid scenario
             logging.info(
-                f"✅ LLM determined no memory changes needed for project={final_project_id}, creator={user_email}"
+                f"✅ LLM determined no memory changes needed for project={final_project_id}, creator_id={auth.user_id}"
             )
             return JSONResponse(
                 content={
@@ -598,7 +594,7 @@ def add_memory(
         # Standard response from _add_without_llm
         memory_id = response.get("memory_id")
         logging.info(
-            f"✅ Memory created: project={final_project_id}, memory_id={memory_id}, creator={user_email}"
+            f"✅ Memory created: project={final_project_id}, memory_id={memory_id}, creator_id={auth.user_id}"
         )
         return JSONResponse(content=response)
     except HTTPException:
@@ -628,124 +624,45 @@ def search_memories(
 ):
     """Search for memories with multi-tenant isolation (supports both API key and Session auth)."""
     try:
-        # For Session auth, extract and validate project context from request
+        requested_project_id = project_id or (search_req.filters or {}).get("project_id")
+
         if auth.project_id is None:
-            # Session authentication - get project context from query params or filters
-            requested_project_id = (
-                project_id or (search_req.filters or {}).get("project_id")
-                if search_req.filters
-                else None
-            )
-
-            if not requested_project_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="project_id required for session authentication",
-                )
-
-            # Validate user has access to the project (owner or member)
-            try:
-                project_obj_id = ObjectId(requested_project_id)
-                # user_obj_id = ObjectId(auth.user_id)  # Remove unused assignment
-            except Exception as err:
-                raise HTTPException(
-                    status_code=400, detail="Invalid project_id or user_id format"
-                ) from err
-
-            # Use Phase 6 helper function to check access (not just ownership)
-            from .dependencies import check_project_access
-
-            if not check_project_access(auth.user_id, requested_project_id):
-                logging.warning(
-                    f"❌ Session user {auth.user_id} does not have access to project {requested_project_id}"
-                )
-                raise HTTPException(status_code=403, detail="Access denied to project")
-
-            # Get project details for organization context
-            project = mongo_db.projects.find_one({"_id": project_obj_id})
-            if not project:
-                raise HTTPException(status_code=404, detail="Project not found")
-
-            # Set validated project context
-            final_project_id = str(project["_id"])
-            # final_org_id = str(project["organizationId"])  # Remove unused assignment
-
-            logging.info(
-                f"✅ Session auth project validated for search: user={auth.user_id}, project={final_project_id}"
+            final_project_id = _resolve_session_project(
+                auth,
+                requested_project_id,
+                permission="read",
+                permission_error="Permission denied - read access required to search memories",
             )
         else:
-            # API key authentication - use key's scoped context
+            if requested_project_id and requested_project_id != auth.project_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="API key is not authorized for the requested project",
+                )
+
+            if not auth.permissions or not auth.permissions.canRead:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Permission denied - read access required to search memories",
+                )
+
             final_project_id = auth.project_id
-
-        # PHASE 7: Check read permission
-        from .dependencies import has_permission
-
-        if not has_permission(auth.user_id, final_project_id, "read"):
-            logging.warning(
-                f"❌ User {auth.user_id} does not have read permission for project {final_project_id}"
-            )
-            raise HTTPException(
-                status_code=403,
-                detail="Permission denied - read access required to search memories",
-            )
 
         # Project-level memory search: All project members search the same memory space
         logging.info(
             f"🔍 Searching memories: project={final_project_id}, requester={auth.user_id}, query='{search_req.query[:50]}...'"
         )
 
-        # Build base parameters - exclude query, filters, and None values
-        params = {
-            k: v
-            for k, v in search_req.model_dump().items()
-            if v is not None and k not in ["query", "filters", "people_mentioned"]
-        }
-
-        # Project as session identifier for shared memory search
-        params["user_id"] = final_project_id
-
-        # Handle top-level people_mentioned field
-        if search_req.people_mentioned:
-            # Convert string to list for the search method
-            params["people_mentioned"] = [search_req.people_mentioned]
-
-        # Handle filters parameter by extracting supported filter options
-        if search_req.filters:
-            # Extract supported filter parameters from the filters dict
-            supported_filters = [
-                "limit",
-                "tags",
-                "people_mentioned",
-                "topic_category",
-                "temporal_filter",
-                "threshold",
-                "match_all_tags",
-                "include_metadata",
-                "sort_by",
-            ]
-            for filter_key in supported_filters:
-                if filter_key in search_req.filters:
-                    filter_value = search_req.filters[filter_key]
-
-                    # Handle special cases for data type conversion
-                    if (
-                        filter_key == "tags"
-                        and isinstance(filter_value, list)
-                        or filter_key == "people_mentioned"
-                        and isinstance(filter_value, list)
-                    ):
-                        # Keep as list - Memory.search() expects list
-                        params[filter_key] = filter_value
-                    elif filter_key == "people_mentioned" and isinstance(
-                        filter_value, str
-                    ):
-                        # Convert string to list for people_mentioned
-                        params[filter_key] = [filter_value]
-                    else:
-                        params[filter_key] = filter_value
+        search_kwargs = build_search_kwargs(
+            scope_user_id=final_project_id,
+            filters=search_req.filters,
+            people_mentioned=search_req.people_mentioned,
+        )
 
         # Call search with multi-tenant context (enhanced selfmemory pattern)
-        return MEMORY_INSTANCE.search(query=search_req.query, **params)
+        return MEMORY_INSTANCE.search(query=search_req.query, **search_kwargs)
+    except HTTPException:
+        raise
     except Exception as e:
         logging.exception("Error in search_memories:")
         raise HTTPException(status_code=500, detail="Internal server error") from e

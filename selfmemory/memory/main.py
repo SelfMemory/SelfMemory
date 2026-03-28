@@ -11,7 +11,6 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from selfmemory.configs.base import SelfMemoryConfig
@@ -407,14 +406,6 @@ class SelfMemory(MemoryBase):
                 parsed_messages, is_agent_memory=False
             )
 
-            print(
-                "LLM Fact Extraction Prompts:",
-                [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-            )
-
             response = self.llm.generate_response(
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -422,11 +413,9 @@ class SelfMemory(MemoryBase):
                 ],
                 response_format={"type": "json_object"},
             )
-            print("LLM Fact Extraction Response:", response)
 
             try:
                 response = remove_code_blocks(response)
-                print("After removing code blocks:", response)
                 if not response.strip():
                     new_facts = []
                     extracted_tags = []
@@ -456,10 +445,6 @@ class SelfMemory(MemoryBase):
                                 if memory_text.strip():
                                     # Parse the memory operations JSON
                                     memory_operations = json.loads(memory_text)
-                                    print(
-                                        "Parsed new format memory operations:",
-                                        memory_operations,
-                                    )
 
                                     # Skip to Step 5: Execute memory operations directly
                                     # Set variables to skip intermediate steps
@@ -689,13 +674,6 @@ class SelfMemory(MemoryBase):
                     logger.info(
                         f"LLM Memory Operations Response received (length: {len(response) if response else 0})"
                     )
-
-                    # Save full response to file for debugging
-                    with Path("/tmp/llm_response_debug.txt").open("w") as f:
-                        f.write(f"Full response:\n{response}\n")
-                        f.write(
-                            f"Response length: {len(response) if response else 0}\n"
-                        )
 
                 except Exception as e:
                     logger.error(f"Error getting memory operations from LLM: {e}")

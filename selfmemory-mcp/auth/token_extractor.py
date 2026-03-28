@@ -6,19 +6,9 @@ OAuth 2.1 token introspection.
 """
 
 import logging
-import sys
-from pathlib import Path
 
 from auth.client_cache import get_or_create_client
-
 from server.auth.hydra_validator import HydraToken, validate_token
-
-# Add project root to path to enable importing from server package
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-# Import client cache for performance optimization
 
 logger = logging.getLogger(__name__)
 
