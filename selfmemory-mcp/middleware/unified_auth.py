@@ -87,9 +87,7 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
 
         except ValueError as e:
             logger.warning(f"Authentication failed: {e}")
-            return self._create_error_response(
-                "invalid_token", "Authentication failed"
-            )
+            return self._create_error_response("invalid_token", "Authentication failed")
 
     def _validate_protocol_version(self, request: Request) -> Response | None:
         """Validate MCP-Protocol-Version header per MCP spec.
@@ -101,7 +99,10 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
             Error Response if version is unsupported, None if valid.
         """
         protocol_version = request.headers.get("mcp-protocol-version")
-        is_initialization = request.method == "POST" and request.url.path in ("/mcp", "/mcp/")
+        is_initialization = request.method == "POST" and request.url.path in (
+            "/mcp",
+            "/mcp/",
+        )
 
         if not is_initialization and not protocol_version:
             protocol_version = self.SUPPORTED_MCP_VERSIONS[0]
@@ -123,7 +124,9 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
             error="invalid_token",
             error_description="Authorization required. Provide OAuth token or API key.",
         )
-        www_auth_header = build_www_authenticate_header(error_response["www_authenticate"])
+        www_auth_header = build_www_authenticate_header(
+            error_response["www_authenticate"]
+        )
 
         return Response(
             content=error_response["error_description"],
@@ -134,7 +137,9 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
     def _create_error_response(self, error: str, description: str) -> Response:
         """Create 401 error response with WWW-Authenticate header."""
         error_response = create_401_response(error=error, error_description=description)
-        www_auth_header = build_www_authenticate_header(error_response["www_authenticate"])
+        www_auth_header = build_www_authenticate_header(
+            error_response["www_authenticate"]
+        )
 
         return Response(
             content=error_response["error_description"],
