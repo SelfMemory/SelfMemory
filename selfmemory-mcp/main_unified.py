@@ -401,7 +401,7 @@ async def add(content: str, ctx: Context) -> dict:
             parsed_content: str | dict | list[dict] = content
             try:
                 parsed = json.loads(content)
-                if isinstance(parsed, (list, dict)):
+                if isinstance(parsed, list | dict):
                     parsed_content = parsed
             except (json.JSONDecodeError, ValueError):
                 parsed_content = content

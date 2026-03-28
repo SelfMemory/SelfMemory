@@ -26,12 +26,15 @@ def nemo_config():
 
 @pytest.fixture
 def adapter(mock_editor, nemo_config):
-    with patch(
-        "selfmemory.memory.nemo_adapter._build_nemo_editor",
-        return_value=mock_editor,
-    ), patch(
-        "selfmemory.memory.nemo_adapter._get_memory_item_class",
-        return_value=NemoMemoryItem,
+    with (
+        patch(
+            "selfmemory.memory.nemo_adapter._build_nemo_editor",
+            return_value=mock_editor,
+        ),
+        patch(
+            "selfmemory.memory.nemo_adapter._get_memory_item_class",
+            return_value=NemoMemoryItem,
+        ),
     ):
         return NemoMemoryAdapter(nemo_config)
 
@@ -117,18 +120,14 @@ class TestNemoMemoryAdapterSearch:
         assert len(result["results"]) == 1
         assert result["results"][0]["content"] == "I love pizza"
         assert result["results"][0]["id"] == "mem_1"
-        mock_editor.search.assert_called_once_with(
-            "pizza", top_k=10, user_id="alice"
-        )
+        mock_editor.search.assert_called_once_with("pizza", top_k=10, user_id="alice")
 
     def test_search_with_limit(self, adapter, mock_editor):
         mock_editor.search.return_value = []
 
         adapter.search("test", user_id="alice", limit=5)
 
-        mock_editor.search.assert_called_once_with(
-            "test", top_k=5, user_id="alice"
-        )
+        mock_editor.search.assert_called_once_with("test", top_k=5, user_id="alice")
 
     def test_search_empty_results(self, adapter, mock_editor):
         mock_editor.search.return_value = []
@@ -205,9 +204,7 @@ class TestNemoMemoryAdapterGetAll:
         result = adapter.get_all(user_id="alice")
 
         assert len(result["results"]) == 1
-        mock_editor.search.assert_called_once_with(
-            "", top_k=100, user_id="alice"
-        )
+        mock_editor.search.assert_called_once_with("", top_k=100, user_id="alice")
 
     def test_get_all_with_offset(self, adapter, mock_editor):
         mock_editor.search.return_value = [
@@ -282,12 +279,15 @@ class TestNemoMemoryConfig:
 
 class TestMemoryFactory:
     def test_create_nemo_mem0(self):
-        with patch(
-            "selfmemory.memory.nemo_adapter._build_nemo_editor",
-            return_value=AsyncMock(),
-        ), patch(
-            "selfmemory.memory.nemo_adapter._get_memory_item_class",
-            return_value=NemoMemoryItem,
+        with (
+            patch(
+                "selfmemory.memory.nemo_adapter._build_nemo_editor",
+                return_value=AsyncMock(),
+            ),
+            patch(
+                "selfmemory.memory.nemo_adapter._get_memory_item_class",
+                return_value=NemoMemoryItem,
+            ),
         ):
             from selfmemory.utils.factory import MemoryFactory
 

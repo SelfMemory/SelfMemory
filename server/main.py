@@ -533,8 +533,8 @@ def add_memory(
         user = mongo_db.users.find_one({"_id": auth.user_id})
         user_email = user.get("email", "unknown") if user else "unknown"
 
-        tags, people_mentioned, topic_category, custom_metadata = (
-            split_memory_metadata(memory_create.metadata)
+        tags, people_mentioned, topic_category, custom_metadata = split_memory_metadata(
+            memory_create.metadata
         )
         messages = serialize_messages(memory_create.messages)
 
@@ -624,7 +624,9 @@ def search_memories(
 ):
     """Search for memories with multi-tenant isolation (supports both API key and Session auth)."""
     try:
-        requested_project_id = project_id or (search_req.filters or {}).get("project_id")
+        requested_project_id = project_id or (search_req.filters or {}).get(
+            "project_id"
+        )
 
         if auth.project_id is None:
             final_project_id = _resolve_session_project(
