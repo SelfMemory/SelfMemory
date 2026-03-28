@@ -29,6 +29,12 @@ from .invitations import generate_invitation_token, send_invitation_email
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_log(value: str) -> str:
+    """Strip newlines to prevent log injection."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 router = APIRouter(prefix="/api/organizations", tags=["Organization Management"])
 
 
@@ -295,15 +301,19 @@ def invite_user_to_organization(
                 {"$set": {"status": "expired"}},
             )
             logger.info(
-                f"Marked expired invitation as 'expired': id={existing_invitation['_id']}, "
-                f"email={invite.email}, org={org_id}"
+                "Marked expired invitation as 'expired': id=%s, email=%r, org=%s",
+                existing_invitation["_id"],
+                invite.email,
+                org_id,
             )
         else:
             # Auto-cancel existing pending invitation and create new one
             mongo_db.invitations.delete_one({"_id": existing_invitation["_id"]})
             logger.info(
-                f"Auto-cancelled existing pending invitation: id={existing_invitation['_id']}, "
-                f"email={invite.email}, org={org_id}, reason=new_invitation_requested"
+                "Auto-cancelled existing pending invitation: id=%s, email=%r, org=%s, reason=new_invitation_requested",
+                existing_invitation["_id"],
+                invite.email,
+                org_id,
             )
 
     # Generate invitation token using shared helper
@@ -364,8 +374,12 @@ def invite_user_to_organization(
     invitation_id = str(result.inserted_id)
 
     logger.info(
-        f"✅ Created organization invitation: org={org_id}, email={invite.email}, "
-        f"inviter={auth.user_id}, role={invite.role}, projects={len(project_assignments)}"
+        "Created organization invitation: org=%s, email=%r, inviter=%s, role=%r, projects=%d",
+        org_id,
+        invite.email,
+        auth.user_id,
+        invite.role,
+        len(project_assignments),
     )
 
     # Get inviter information for email
@@ -384,7 +398,8 @@ def invite_user_to_organization(
     )
 
     logger.info(
-        f"✅ Invitation email queued for {invite.email} (will send in background)"
+        "Invitation email queued for %r (will send in background)",
+        invite.email,
     )
 
     return {
