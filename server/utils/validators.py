@@ -63,8 +63,8 @@ def validate_object_id(value: Any, field_name: str = "ID") -> ObjectId:
     # Validate format using regex (24 hex characters)
     if not OBJECTID_PATTERN.match(value_str):
         logger.warning(
-            f"ObjectId validation failed: {field_name}='{value_str}' does not match "
-            f"expected format (24 hexadecimal characters)"
+            "ObjectId validation failed: %s does not match expected format (24 hex chars)",
+            field_name,
         )
         raise HTTPException(status_code=400, detail=f"Invalid {field_name} format")
 
@@ -75,8 +75,9 @@ def validate_object_id(value: Any, field_name: str = "ID") -> ObjectId:
     except Exception as e:
         # Log detailed error for debugging (not exposed to user)
         logger.error(
-            f"ObjectId conversion failed: {field_name}='{value_str}', "
-            f"error_type={type(e).__name__}, error={str(e)}"
+            "ObjectId conversion failed: %s, error_type=%s",
+            field_name,
+            type(e).__name__,
         )
         # Return generic error to user (no system information leakage)
         raise HTTPException(
