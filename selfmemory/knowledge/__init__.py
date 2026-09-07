@@ -15,15 +15,24 @@ from selfmemory.knowledge.models import (
     Source,
 )
 from selfmemory.knowledge.retrieval import Answer
+from selfmemory.knowledge.session import (
+    AgentRunner,
+    AgentSessionError,
+    OpencodeRunner,
+    SessionResult,
+)
 from selfmemory.knowledge.store import (
     DEFAULT_SCHEMA_DOC,
     ConcurrentEditError,
     KnowledgeStore,
     SQLiteKnowledgeStore,
 )
+from selfmemory.knowledge.workspace import Workspace
 
 __all__ = [
     "DEFAULT_SCHEMA_DOC",
+    "AgentRunner",
+    "AgentSessionError",
     "Answer",
     "CompactionResult",
     "ConcurrentEditError",
@@ -32,8 +41,11 @@ __all__ = [
     "KnowledgeMemory",
     "KnowledgeStore",
     "LogEntry",
+    "OpencodeRunner",
     "Page",
     "PageEdit",
+    "SessionResult",
     "SQLiteKnowledgeStore",
     "Source",
+    "Workspace",
 ]

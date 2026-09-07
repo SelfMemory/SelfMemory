@@ -18,11 +18,17 @@ from typing import TYPE_CHECKING
 from selfmemory.knowledge.compactor import Compactor
 from selfmemory.knowledge.lint import Finding, Linter
 from selfmemory.knowledge.retrieval import Answer, Retriever
+from selfmemory.knowledge.session import (
+    AgentRunner,
+    OpencodeRunner,
+    extract_citations,
+)
 from selfmemory.knowledge.store import (
     DEFAULT_SCHEMA_DOC,
     KnowledgeStore,
     SQLiteKnowledgeStore,
 )
+from selfmemory.knowledge.workspace import Workspace
 from selfmemory.utils.factory import LlmFactory
 
 if TYPE_CHECKING:
@@ -42,14 +48,36 @@ class KnowledgeMemory:
         store: KnowledgeStore | None = None,
         llm=None,
         project_id: str = DEFAULT_PROJECT,
+        runner: AgentRunner | None = None,
     ):
         self.store = store or SQLiteKnowledgeStore(db_path)
-        self.llm = llm or LlmFactory.create(llm_provider, llm_config)
         self.project_id = project_id
+        self.runner = runner or OpencodeRunner()
 
-        self.compactor = Compactor(self.store, self.llm)
-        self.retriever = Retriever(self.store, self.llm)
-        self.linter = Linter(self.store, self.llm)
+        # The LLM is built on first use, not here: research() runs an external
+        # agent, so a caller using only that path should not have to configure
+        # a provider at all.
+        self._llm = llm
+        self._llm_provider = llm_provider
+        self._llm_config = llm_config
+
+    @property
+    def llm(self):
+        if self._llm is None:
+            self._llm = LlmFactory.create(self._llm_provider, self._llm_config)
+        return self._llm
+
+    @property
+    def compactor(self) -> Compactor:
+        return Compactor(self.store, self.llm)
+
+    @property
+    def retriever(self) -> Retriever:
+        return Retriever(self.store, self.llm)
+
+    @property
+    def linter(self) -> Linter:
+        return Linter(self.store, self.llm)
 
     def _project(self, project_id: str | None) -> str:
         return project_id or self.project_id
@@ -93,6 +121,46 @@ class KnowledgeMemory:
 
     def log(self, limit: int = 50, project_id: str | None = None) -> list[LogEntry]:
         return self.store.log(self._project(project_id), limit=limit)
+
+    def research(
+        self,
+        question: str,
+        project_ids: list[str] | None = None,
+        timeout: int = 180,
+    ) -> Answer:
+        """Answer by running an agent over the pages themselves.
+
+        Slower and more expensive than ``ask``, and better at anything needing
+        more than one hop -- following links, reconciling two pages, tracing
+        when a decision changed.
+
+        The caller passes the projects it has already resolved as permitted;
+        this does not check access. Nothing outside that list is written to the
+        workspace, so nothing outside it can be read.
+        """
+        projects = project_ids or [self.project_id]
+        with Workspace.materialize(self.store, projects, writable=False) as ws:
+            prompt = (
+                "Answer the question from the pages in this directory.\n\n"
+                "Start with index.md, then open only the pages you need and "
+                "follow [[slug]] links between them. Cite every page you used "
+                "as [[slug]]. If the pages do not answer the question, say so "
+                "plainly rather than guessing.\n\n"
+                f"Question: {question}"
+            )
+            result = self.runner.run(
+                ws.session_root, prompt, writable=False, timeout=timeout
+            )
+
+        known = {p.slug for pid in projects for p in self.store.list_pages(pid)}
+        cited = extract_citations(result.text, known)
+        pages = [
+            page
+            for slug in cited
+            for pid in projects
+            if (page := self.store.get_page(pid, slug)) is not None
+        ]
+        return Answer(text=result.text, pages=pages)
 
     # -- maintenance ---------------------------------------------------
 
