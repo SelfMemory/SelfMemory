@@ -1,0 +1,26 @@
+meta {
+  name: Get Page
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/knowledge/pages/{{lastSlug}}
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("returns the page, or 404", function () {
+    expect([200, 404]).to.include(res.getStatus());
+  });
+}
+
+docs {
+  One page in full, as both structured fields and rendered `markdown`.
+
+  Slugs are paths — `topic/tooling`, `person/shrijayan` — so the slashes are
+  part of the slug, not nested routes.
+
+  Uses `lastSlug`, set by `Remember`. Run that first, or edit the URL.
+}

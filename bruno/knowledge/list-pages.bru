@@ -1,0 +1,25 @@
+meta {
+  name: List Pages
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/knowledge/pages
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("returns the page index", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().pages).to.be.an("array");
+  });
+}
+
+docs {
+  Every page with its one-line summary — the same index the agent reads first
+  to orient itself.
+
+  Cheap: no model call, no agent session. This is what a UI lists.
+}

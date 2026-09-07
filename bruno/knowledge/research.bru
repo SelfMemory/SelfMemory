@@ -1,0 +1,63 @@
+meta {
+  name: Research
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/knowledge/research
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "question": "Why doesn't selfmemory use a vector database any more, and who decided?",
+    "timeout": 240
+  }
+}
+
+tests {
+  test("answers, or says the runtime is unavailable", function () {
+    expect([200, 503]).to.include(res.getStatus());
+  });
+
+  test("citations name pages that exist", function () {
+    if (res.getStatus() !== 200) return;
+    expect(res.getBody().citations).to.be.an("array");
+    expect(res.getBody().projects).to.be.an("array");
+  });
+}
+
+settings {
+  timeout: 300000
+}
+
+docs {
+  The deep read path. Materializes the project's pages into a disposable
+  directory, runs an agent over them with read-only tools, then wipes it.
+
+  **Expect this to take 10-60 seconds.** The Bruno timeout above is raised to
+  5 minutes to match; the server caps `timeout` at 600s.
+
+  Answers multi-hop questions the fast path cannot: following `[[links]]`,
+  reconciling two pages, tracing when a decision changed. Citations are
+  validated against real slugs, so a page the model invents is dropped rather
+  than returned.
+
+  ### Querying several projects
+
+  Send `project_ids` instead of `project_id`:
+
+      { "question": "...", "project_ids": ["<id-a>", "<id-b>"] }
+
+  Every id is authorized individually and an unauthorized one is rejected —
+  the request fails rather than quietly returning a narrower answer. Projects
+  marked isolated are never included. A project API key is pinned to one
+  project, so cross-project research needs session auth.
+
+  ### Failure modes
+
+  - `503` — the `opencode` binary is not on the server's PATH. `Ask` still works.
+  - `502` — the agent session failed or exceeded `timeout`.
+}

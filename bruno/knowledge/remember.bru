@@ -1,0 +1,52 @@
+meta {
+  name: Remember
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/knowledge/memories
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "text": "selfmemory uses uv as its package manager, never pip.",
+    "metadata": {
+      "kind": "note"
+    }
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("lastSourceId", res.getBody().source_id);
+    const touched = [...res.getBody().created, ...res.getBody().updated];
+    if (touched.length) bru.setVar("lastSlug", touched[0]);
+  }
+}
+
+tests {
+  test("compaction reports which pages it touched", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody()).to.have.property("source_id");
+    expect(res.getBody().created).to.be.an("array");
+    expect(res.getBody().updated).to.be.an("array");
+  });
+}
+
+docs {
+  Ingests one source and merges it into the pages it affects.
+
+  Costs two model calls, so it is not a cheap write. `created` and `updated`
+  name the pages that changed; both being empty means the compactor decided
+  this source changed nothing, which is a valid outcome for a restatement of
+  something already recorded.
+
+  Run this two or three times with related facts, then `List Pages` — the
+  point of the design is that the second fact updates the first page rather
+  than adding a near-duplicate.
+
+  Sets `lastSourceId` and `lastSlug` for the requests below.
+}

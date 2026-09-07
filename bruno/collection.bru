@@ -1,0 +1,35 @@
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{apiKey}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+docs {
+  # selfmemory
+
+  Knowledge-page memory endpoints.
+
+  ## Setup
+
+  1. Run the server: `make run` (listens on :8081)
+  2. Create a project API key: `POST /api/projects/{id}/api-keys`
+  3. Put it in the `local` environment as `apiKey`
+
+  A project API key is pinned to one project, so `project_id` in a request
+  body is optional — send it only to assert which project you expect, and
+  the server rejects a mismatch rather than silently using the key's own.
+
+  ## Two read paths
+
+  `Ask` is one model call over full-text hits — fast, single-hop.
+  `Research` runs an agent over a materialized copy of the pages. Slower by
+  an order of magnitude, and the only path that follows `[[links]]` between
+  pages. It needs the `opencode` binary on the server's PATH; without it the
+  endpoint returns 503 and `Ask` still works.
+}

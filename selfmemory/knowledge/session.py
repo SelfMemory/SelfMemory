@@ -112,6 +112,9 @@ class OpencodeRunner:
                 timeout=timeout,
                 cwd=str(cwd),
                 check=False,
+                # Never inherit stdin: under a server process it is not a tty
+                # and the agent waits on it forever instead of running.
+                stdin=subprocess.DEVNULL,
             )
         except subprocess.TimeoutExpired as exc:
             raise AgentSessionError(f"agent session exceeded {timeout}s") from exc
