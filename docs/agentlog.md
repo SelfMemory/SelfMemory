@@ -50,3 +50,67 @@ Append-only. Newest entries at the bottom. Read the last entry to resume.
 2. Commit the Bruno `.bru` → `.yml` migration as a separate `chore:`/`refactor:` commit.
 3. Commit `scripts/dev_seed_api_key.py` as a `chore(dev):` commit.
 4. Open a PR, then add a CHANGELOG entry.
+
+---
+
+## 2026-10-08 — Pushed and opened PR #160
+
+### Commits added this session
+```
+d665788  fix(core): add SelfMemory.get() with strict tenant isolation
+79f68fd  refactor(bruno): migrate collection to OpenCollection YAML
+33f2237  chore(dev): add local API key seed script
+cf0d380  chore(deps): resync uv.lock to 0.9.6
+aed3f70  docs: add agent log for cross-session handoff
+2d71933  fix(security): sanitize user input before it reaches the log
+```
+
+PR: https://github.com/SelfMemory/SelfMemory/pull/160 (base `master`, 10 commits).
+Note: the repo moved — remote is now `SelfMemory/SelfMemory`, not
+`selfmemory/selfmemory`. Git redirects, but the local remote URL is stale.
+
+### CI result
+Run Tests, Code Quality, and all three Analyze jobs pass. **CodeQL is red.**
+
+### CodeQL: two real bugs found and fixed (`2d71933`)
+CodeQL caught two genuine log-injection alerts in the `SelfMemory.get()` written
+earlier that session — both interpolated request-controlled `user_id` /
+`memory_id` into a log record, so a newline in either value lets a caller forge
+a log line. Fixed by adding `sanitize_for_log()` in `selfmemory/utils/logging.py`.
+
+Placement matters: the helper lives in the SDK, not `server/`, because both
+layers need it and `server` already depends on `selfmemory`. Putting it in
+`server/` would make the published package import the web app.
+
+Also removed a dead `_sanitize_log()` from `server/routes/organizations.py` —
+written for alerts fixed in `5662083`, but those were resolved by dropping
+values from the messages, so nothing called it afterwards.
+
+Lesson worth keeping: **always let CodeQL run before calling a PR done.** The
+`get()` fix shipped with an injection hole in its own error path, and it was
+only visible because CI was checked rather than assumed.
+
+### CodeQL: six alerts still open, none from the follow-up commits
+All from the earlier engine/HTTP commits on this branch:
+- `session.py:109` command-line-injection — **false positive**; list-form
+  `subprocess.run`, no `shell=True`, prompt is one argv entry
+- `dev_seed_api_key.py:117` clear-text-logging — **true but deliberate**; the
+  script exists to print the key, dev-only, refuses non-local Mongo
+- `knowledge.py:141`, `dependencies.py:171`, `dependencies.py:198`
+  log-injection — **not examined**
+- `store.py:147` path-injection — **not examined**
+
+Proposal posted on the PR: land #160, clear the four unexamined ones in a
+follow-up.
+
+### Verification at time of push
+`ruff check` clean, `ruff format --check` clean (121 files), `pytest` 178 passed.
+
+### Next actions
+1. Review PR #160 and merge.
+2. Follow-up PR for the four unexamined CodeQL alerts.
+3. Decide on `dev_seed_api_key.py` — leave the alert, or `# nosec` + comment,
+   or gate the print behind `--print-key`.
+4. Update the local git remote to `SelfMemory/SelfMemory`.
+5. CHANGELOG has no `Unreleased` section; confirm whether this repo wants
+   hand-written entries or relies on python-semantic-release.
