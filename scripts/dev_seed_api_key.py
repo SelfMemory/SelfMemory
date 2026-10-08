@@ -113,7 +113,7 @@ def main() -> None:
         }
     )
 
-    print("Seeded. Put these in bruno/environments/local.bru:\n")
+    print("Seeded. Put these in bruno/environments/local.yml:\n")
     print(f"  apiKey:    {api_key}")
     print(f"  projectId: {project_id}")
     print(f"  orgId:     {org_id}")

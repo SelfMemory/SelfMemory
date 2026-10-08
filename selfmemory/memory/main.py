@@ -23,6 +23,7 @@ from selfmemory.memory.utils import (
 )
 from selfmemory.security.encryption import decrypt_payload, encrypt_payload
 from selfmemory.utils.factory import EmbedderFactory, VectorStoreFactory
+from selfmemory.utils.logging import sanitize_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -914,8 +915,10 @@ class SelfMemory(MemoryBase):
             # the existence of memories owned by other users/projects.
             if payload.get("user_id") != user_id:
                 logger.warning(
-                    f"❌ ISOLATION: user '{user_id}' attempted to access memory "
-                    f"{memory_id} not owned by them"
+                    "❌ ISOLATION: user '%s' attempted to access memory %s "
+                    "not owned by them",
+                    sanitize_for_log(user_id),
+                    sanitize_for_log(memory_id),
                 )
                 return {"success": False, "error": "Memory not found"}
 
@@ -926,7 +929,7 @@ class SelfMemory(MemoryBase):
             }
 
         except Exception as e:
-            logger.error(f"Error getting memory {memory_id}: {e}")
+            logger.error("Error getting memory %s: %s", sanitize_for_log(memory_id), e)
             return {"success": False, "error": "Memory not found"}
 
     def search(
