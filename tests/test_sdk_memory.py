@@ -173,3 +173,42 @@ class TestSelfMemoryDeleteAll:
 
         assert result["success"] is True
         assert result["deleted_count"] == 0
+
+
+class TestSelfMemoryGet:
+    """Regression tests for SelfMemory.get() — previously missing entirely,
+    causing GET /api/memories/{memory_id} to raise AttributeError (500)."""
+
+    def test_get_returns_memory_owned_by_user(self, memory_instance, mock_vector_store):
+        mock_point = MagicMock()
+        mock_point.id = "mem-123"
+        mock_point.payload = {"user_id": "alice", "data": "I have a BMW bike."}
+        mock_vector_store.get.return_value = mock_point
+
+        result = memory_instance.get("mem-123", user_id="alice")
+
+        assert result["id"] == "mem-123"
+        assert result["content"] == "I have a BMW bike."
+        mock_vector_store.get.assert_called_once_with(vector_id="mem-123")
+
+    def test_get_missing_memory_returns_failure_not_exception(
+        self, memory_instance, mock_vector_store
+    ):
+        mock_vector_store.get.return_value = None
+
+        result = memory_instance.get("nonexistent", user_id="alice")
+
+        assert result["success"] is False
+
+    def test_get_denies_access_to_other_users_memory(
+        self, memory_instance, mock_vector_store
+    ):
+        """Isolation: a memory owned by 'bob' must not be returned to 'alice'."""
+        mock_point = MagicMock()
+        mock_point.id = "mem-123"
+        mock_point.payload = {"user_id": "bob", "data": "Bob's secret"}
+        mock_vector_store.get.return_value = mock_point
+
+        result = memory_instance.get("mem-123", user_id="alice")
+
+        assert result["success"] is False

@@ -879,6 +879,56 @@ class SelfMemory(MemoryBase):
 
         logger.info(f"Updated memory {memory_id}")
 
+    def get(self, memory_id: str, *, user_id: str) -> dict[str, Any]:
+        """
+        Retrieve a single memory by ID, scoped to the given user/project context.
+
+        Enforces ownership: a memory is only returned if its stored ``user_id``
+        (which may be a project identifier in multi-tenant deployments) matches
+        the ``user_id`` argument. This prevents cross-tenant access to memories
+        via ID guessing/enumeration.
+
+        Args:
+            memory_id: Memory identifier to retrieve
+            user_id: Required user/project identifier for isolation
+
+        Returns:
+            Dict: Memory data with "id", "content", and "metadata" keys on success,
+            or {"success": False, "error": ...} if not found / not owned by user_id.
+
+        Examples:
+            >>> memory = SelfMemory()
+            >>> result = memory.get("memory_123", user_id="alice")
+        """
+        try:
+            point = self.vector_store.get(vector_id=memory_id)
+            if not point:
+                return {"success": False, "error": "Memory not found"}
+
+            payload = self._extract_metadata(point)
+            if self._encryption_enabled:
+                payload = decrypt_payload(payload, self._master_key)
+
+            # STRICT ISOLATION: only return the memory if it belongs to user_id.
+            # Return a generic "not found" (not "forbidden") to avoid leaking
+            # the existence of memories owned by other users/projects.
+            if payload.get("user_id") != user_id:
+                logger.warning(
+                    f"❌ ISOLATION: user '{user_id}' attempted to access memory "
+                    f"{memory_id} not owned by them"
+                )
+                return {"success": False, "error": "Memory not found"}
+
+            return {
+                "id": self._extract_memory_id(point),
+                "content": payload.get("data", ""),
+                "metadata": payload,
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting memory {memory_id}: {e}")
+            return {"success": False, "error": "Memory not found"}
+
     def search(
         self,
         query: str = "",
