@@ -1,27 +1,33 @@
-meta {
+info:
   name: Lint
   type: http
   seq: 6
-}
 
-post {
-  url: {{baseUrl}}/api/knowledge/lint
-  body: json
+http:
+  method: POST
+  url: "{{baseUrl}}/api/knowledge/lint"
+  body:
+    type: json
+    data: "{}"
   auth: inherit
-}
 
-body:json {
-  {}
-}
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns findings", function () {
+          expect(res.getStatus()).to.equal(200);
+          expect(res.getBody().findings).to.be.an("array");
+        });
 
-tests {
-  test("returns findings", function () {
-    expect(res.getStatus()).to.equal(200);
-    expect(res.getBody().findings).to.be.an("array");
-  });
-}
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
 
-docs {
+docs: |-
   Audits the knowledge base for decay: contradictions between pages,
   duplicates that should be merged, stale claims, orphans, and `[[links]]`
   pointing at pages that do not exist.
@@ -31,4 +37,3 @@ docs {
   path. An empty `findings` array is the good result.
 
   Requires write permission — it audits the pages the caller can change.
-}

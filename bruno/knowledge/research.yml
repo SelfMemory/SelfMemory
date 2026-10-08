@@ -1,39 +1,42 @@
-meta {
+info:
   name: Research
   type: http
   seq: 3
-}
 
-post {
-  url: {{baseUrl}}/api/knowledge/research
-  body: json
+http:
+  method: POST
+  url: "{{baseUrl}}/api/knowledge/research"
+  body:
+    type: json
+    data: |-
+      {
+        "question": "Why doesn't selfmemory use a vector database any more, and who decided?",
+        "timeout": 240
+      }
   auth: inherit
-}
 
-body:json {
-  {
-    "question": "Why doesn't selfmemory use a vector database any more, and who decided?",
-    "timeout": 240
-  }
-}
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("answers, or says the runtime is unavailable", function () {
+          expect([200, 503]).to.include(res.getStatus());
+        });
 
-tests {
-  test("answers, or says the runtime is unavailable", function () {
-    expect([200, 503]).to.include(res.getStatus());
-  });
+        test("citations name pages that exist", function () {
+          if (res.getStatus() !== 200) return;
+          expect(res.getBody().citations).to.be.an("array");
+          expect(res.getBody().projects).to.be.an("array");
+        });
 
-  test("citations name pages that exist", function () {
-    if (res.getStatus() !== 200) return;
-    expect(res.getBody().citations).to.be.an("array");
-    expect(res.getBody().projects).to.be.an("array");
-  });
-}
-
-settings {
+settings:
+  encodeUrl: false
   timeout: 300000
-}
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
 
-docs {
+docs: |-
   The deep read path. Materializes the project's pages into a disposable
   directory, runs an agent over them with read-only tools, then wipes it.
 
@@ -60,4 +63,3 @@ docs {
 
   - `503` — the `opencode` binary is not on the server's PATH. `Ask` still works.
   - `502` — the agent session failed or exceeded `timeout`.
-}
