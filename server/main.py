@@ -24,6 +24,7 @@ from .routes.api_keys import router as api_keys_router
 from .routes.chat import router as chat_router
 from .routes.hydra_proxy import router as hydra_proxy_router
 from .routes.invitations import router as invitations_router
+from .routes.knowledge import router as knowledge_router
 from .routes.notifications import router as notifications_router
 from .routes.organizations import router as organizations_router
 from .routes.projects import router as projects_router
@@ -151,6 +152,7 @@ app.include_router(api_keys_router)
 app.include_router(chat_router)
 app.include_router(hydra_proxy_router)
 app.include_router(invitations_router)
+app.include_router(knowledge_router)
 app.include_router(notifications_router)
 app.include_router(organizations_router)
 app.include_router(projects_router)
@@ -608,7 +610,14 @@ def add_memory(
 def get_memory(memory_id: str, auth: AuthContext = Depends(authenticate_api_key)):
     """Retrieve a specific memory by ID - Note: Individual memory retrieval uses legacy user_id only."""
     try:
-        return MEMORY_INSTANCE.get(memory_id, user_id=auth.user_id)
+        result = MEMORY_INSTANCE.get(memory_id, user_id=auth.user_id)
+        if result.get("success") is False:
+            raise HTTPException(
+                status_code=404, detail=result.get("error", "Memory not found")
+            )
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         logging.exception("Error in get_memory:")
         raise HTTPException(status_code=500, detail="Internal server error") from e

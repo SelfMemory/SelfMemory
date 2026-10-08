@@ -1,0 +1,9 @@
+variables:
+  - name: baseUrl
+    value: https://api.selfmemory.com
+  - name: projectId
+    value: ""
+  - name: orgId
+    value: ""
+  - secret: true
+    name: apiKey
