@@ -21,6 +21,19 @@ import type {
 
 const DEFAULT_HOST = 'https://api.selfmemory.com'
 
+/**
+ * Remove trailing slashes in linear time.
+ *
+ * Replaces `host.replace(/\/+$/, '')`, which backtracks quadratically: on a
+ * long run of slashes that is not at the end, the engine retries the run from
+ * every starting position before failing.
+ */
+export function stripTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value[end - 1] === '/') end--
+  return value.slice(0, end)
+}
+
 export class SelfMemory {
   private readonly apiKey: string
   private readonly host: string
@@ -30,9 +43,7 @@ export class SelfMemory {
       throw new Error('apiKey is required')
     }
     this.apiKey = config.apiKey
-    let host = config.host || DEFAULT_HOST
-    host = host.replace(/\/+$/, '')
-    this.host = host
+    this.host = stripTrailingSlashes(config.host || DEFAULT_HOST)
   }
 
   async add(content: string, options: AddOptions = {}): Promise<AddResponse> {
