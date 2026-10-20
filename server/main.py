@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from selfmemory import SelfMemory
+from selfmemory.utils.logging import sanitize_for_log
 
 from .config import config
 from .dependencies import AuthContext, authenticate_api_key, mongo_db
@@ -303,7 +304,7 @@ def list_memories(
             )
 
         logging.info(
-            f"📋 Listing memories: project={final_project_id}, requester={auth.user_id}, limit={limit}, offset={offset}"
+            f"📋 Listing memories: project={sanitize_for_log(final_project_id)}, requester={sanitize_for_log(auth.user_id)}, limit={sanitize_for_log(limit)}, offset={sanitize_for_log(offset)}"
         )
 
         response = MEMORY_INSTANCE.get_all(
@@ -549,7 +550,7 @@ def add_memory(
         # Use project_id as the session identifier (selfmemory pattern)
         # Track actual creator in metadata for attribution
         logging.info(
-            f"📝 Creating memory: project={final_project_id}, creator_id={auth.user_id}, message_count={len(messages)}"
+            f"📝 Creating memory: project={sanitize_for_log(final_project_id)}, creator_id={sanitize_for_log(auth.user_id)}, message_count={len(messages)}"
         )
 
         response = MEMORY_INSTANCE.add(
@@ -569,7 +570,7 @@ def add_memory(
                 # Extract memory ID from first result
                 memory_id = results[0].get("id") if results else None
                 logging.info(
-                    f"✅ Memory created (LLM): project={final_project_id}, memory_id={memory_id}, operations={len(results)}, creator_id={auth.user_id}"
+                    f"✅ Memory created (LLM): project={sanitize_for_log(final_project_id)}, memory_id={sanitize_for_log(memory_id)}, operations={len(results)}, creator_id={sanitize_for_log(auth.user_id)}"
                 )
                 return JSONResponse(
                     content={
@@ -581,7 +582,7 @@ def add_memory(
                 )
             # Empty results - no changes needed, this is a valid scenario
             logging.info(
-                f"✅ LLM determined no memory changes needed for project={final_project_id}, creator_id={auth.user_id}"
+                f"✅ LLM determined no memory changes needed for project={sanitize_for_log(final_project_id)}, creator_id={sanitize_for_log(auth.user_id)}"
             )
             return JSONResponse(
                 content={
@@ -594,7 +595,7 @@ def add_memory(
         # Standard response from _add_without_llm
         memory_id = response.get("memory_id")
         logging.info(
-            f"✅ Memory created: project={final_project_id}, memory_id={memory_id}, creator_id={auth.user_id}"
+            f"✅ Memory created: project={sanitize_for_log(final_project_id)}, memory_id={sanitize_for_log(memory_id)}, creator_id={sanitize_for_log(auth.user_id)}"
         )
         return JSONResponse(content=response)
     except HTTPException:
@@ -652,7 +653,7 @@ def search_memories(
 
         # Project-level memory search: All project members search the same memory space
         logging.info(
-            f"🔍 Searching memories: project={final_project_id}, requester={auth.user_id}, query='{search_req.query[:50]}...'"
+            f"🔍 Searching memories: project={sanitize_for_log(final_project_id)}, requester={sanitize_for_log(auth.user_id)}, query='{sanitize_for_log(search_req.query[:50])}...'"
         )
 
         search_kwargs = build_search_kwargs(
@@ -691,7 +692,7 @@ def delete_memory(
 
         if not check_project_access(auth.user_id, project_id):
             logging.warning(
-                f"❌ Session user {auth.user_id} does not have access to project {project_id}"
+                f"❌ Session user {sanitize_for_log(auth.user_id)} does not have access to project {sanitize_for_log(project_id)}"
             )
             raise HTTPException(status_code=403, detail="Access denied to project")
 
@@ -720,7 +721,9 @@ def delete_memory(
     # Perform deletion
     MEMORY_INSTANCE.delete(memory_id)
 
-    logging.info(f"✅ Memory {memory_id} deleted by user {auth.user_id}")
+    logging.info(
+        f"✅ Memory {sanitize_for_log(memory_id)} deleted by user {sanitize_for_log(auth.user_id)}"
+    )
     return {"message": "Memory deleted successfully"}
 
 
@@ -796,7 +799,7 @@ def create_organization(
         mongo_db.organization_members.insert_one(org_member_doc)
 
         logging.info(
-            f"Created organization '{org_create.name}' for user {auth.user_id} (mongo_id: {mongo_user_id}) and added owner to organization_members"
+            f"Created organization '{sanitize_for_log(org_create.name)}' for user {sanitize_for_log(auth.user_id)} (mongo_id: {sanitize_for_log(mongo_user_id)}) and added owner to organization_members"
         )
 
         return {
@@ -992,7 +995,7 @@ def create_project(
         project_id = str(result.inserted_id)
 
         logging.info(
-            f"Created project '{project_create.name}' for user {auth.user_id} (mongo_id: {mongo_user_id})"
+            f"Created project '{sanitize_for_log(project_create.name)}' for user {sanitize_for_log(auth.user_id)} (mongo_id: {sanitize_for_log(mongo_user_id)})"
         )
 
         return {

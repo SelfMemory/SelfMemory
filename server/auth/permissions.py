@@ -10,6 +10,8 @@ import logging
 from bson import ObjectId
 from fastapi import Depends, HTTPException
 
+from selfmemory.utils.logging import sanitize_for_log
+
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.permission_helpers import (
     count_project_admins,
@@ -239,7 +241,7 @@ def require_project_admin(project_id: str, auth: AuthContext) -> ObjectId:
 
     if not is_project_admin(mongo_db, project_obj_id, user_obj_id):
         logger.warning(
-            f"Permission denied: User {auth.user_id} is not admin of project {project_id}"
+            f"Permission denied: User {sanitize_for_log(auth.user_id)} is not admin of project {sanitize_for_log(project_id)}"
         )
         raise HTTPException(
             status_code=403,
@@ -247,7 +249,7 @@ def require_project_admin(project_id: str, auth: AuthContext) -> ObjectId:
         )
 
     logger.debug(
-        f"Permission granted: User {auth.user_id} is admin of project {project_id}"
+        f"Permission granted: User {sanitize_for_log(auth.user_id)} is admin of project {sanitize_for_log(project_id)}"
     )
     return project_obj_id
 

@@ -18,6 +18,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from selfmemory.utils.logging import sanitize_for_log
+
 from ..dependencies import AuthContext, authenticate_api_key
 
 logger = logging.getLogger(__name__)
@@ -168,7 +170,7 @@ async def get_consent_request(
     """
     try:
         logger.info(
-            f"Fetching consent request: challenge={consent_challenge}, user={auth.user_id}"
+            f"Fetching consent request: challenge={sanitize_for_log(consent_challenge)}, user={sanitize_for_log(auth.user_id)}"
         )
 
         async with httpx.AsyncClient() as client:
@@ -289,13 +291,15 @@ async def accept_consent_request(
     """
     try:
         logger.info(
-            f"Accepting consent: challenge={body.consent_challenge}, "
-            f"user={auth.user_id}, scopes={body.grant_scope}"
+            f"Accepting consent: challenge={sanitize_for_log(body.consent_challenge)}, "
+            f"user={sanitize_for_log(auth.user_id)}, scopes={sanitize_for_log(body.grant_scope)}"
         )
 
         # DIAGNOSTIC: Log audience being granted
         logger.info("🔍 CONSENT AUDIENCE:")
-        logger.info(f"   Requested audience: {body.grant_access_token_audience}")
+        logger.info(
+            f"   Requested audience: {sanitize_for_log(body.grant_access_token_audience)}"
+        )
 
         # FIX: Always include the correct MCP server URL as audience
         # This ensures tokens are always issued for the right resource server
@@ -319,7 +323,7 @@ async def accept_consent_request(
         if mcp_server_url not in audiences:
             audiences.append(mcp_server_url)
 
-        logger.info(f"   MCP_SERVER_URL from env: {mcp_server_url}")
+        logger.info(f"   MCP_SERVER_URL from env: {sanitize_for_log(mcp_server_url)}")
         logger.info(f"   ✅ Corrected audience: {audiences}")
 
         # Build consent accept payload with corrected audience
@@ -389,8 +393,8 @@ async def reject_consent_request(
     """
     try:
         logger.info(
-            f"Rejecting consent: challenge={body.consent_challenge}, "
-            f"user={auth.user_id}, reason={body.error}"
+            f"Rejecting consent: challenge={sanitize_for_log(body.consent_challenge)}, "
+            f"user={sanitize_for_log(auth.user_id)}, reason={sanitize_for_log(body.error)}"
         )
 
         # Build consent reject payload
@@ -454,7 +458,9 @@ async def get_login_request(
         Login request details including client info, skip flag, and subject
     """
     try:
-        logger.info(f"Fetching login request: challenge={login_challenge}")
+        logger.info(
+            f"Fetching login request: challenge={sanitize_for_log(login_challenge)}"
+        )
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -511,7 +517,7 @@ async def accept_login_request(
     """
     try:
         logger.info(
-            f"Accepting login: challenge={body.login_challenge}, subject={body.subject}"
+            f"Accepting login: challenge={sanitize_for_log(body.login_challenge)}, subject={sanitize_for_log(body.subject)}"
         )
 
         # Build login accept payload
@@ -545,8 +551,8 @@ async def accept_login_request(
             result = response.json()
 
             logger.info(
-                f"✅ Login accepted: redirect_to={result.get('redirect_to')}, "
-                f"subject={body.subject}"
+                f"✅ Login accepted: redirect_to={sanitize_for_log(result.get('redirect_to'))}, "
+                f"subject={sanitize_for_log(body.subject)}"
             )
 
             return result
@@ -580,7 +586,7 @@ async def reject_login_request(
     """
     try:
         logger.info(
-            f"Rejecting login: challenge={body.login_challenge}, reason={body.error}"
+            f"Rejecting login: challenge={sanitize_for_log(body.login_challenge)}, reason={sanitize_for_log(body.error)}"
         )
 
         # Build login reject payload

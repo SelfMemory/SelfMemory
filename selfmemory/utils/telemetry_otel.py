@@ -19,6 +19,8 @@ from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from selfmemory.utils.logging import sanitize_for_log
+
 logger = logging.getLogger(__name__)
 
 
@@ -75,7 +77,7 @@ def setup_opentelemetry(
     LoggingInstrumentor().instrument(set_logging_format=True)
 
     logger.info(
-        f"OpenTelemetry initialized: service={service_name}, endpoint={otlp_endpoint}"
+        f"OpenTelemetry initialized: service={sanitize_for_log(service_name)}, endpoint={sanitize_for_log(otlp_endpoint)}"
     )
 
 

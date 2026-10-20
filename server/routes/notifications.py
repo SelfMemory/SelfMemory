@@ -10,6 +10,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from selfmemory.utils.logging import sanitize_for_log
+
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import utc_now
 from ..utils.permission_helpers import get_user_by_kratos_id
@@ -107,7 +109,7 @@ def mark_notification_read(
         raise HTTPException(status_code=404, detail="Notification not found")
 
     logger.info(
-        f"Marked notification {notification_id} as read for user {auth.user_id}"
+        f"Marked notification {sanitize_for_log(notification_id)} as read for user {sanitize_for_log(auth.user_id)}"
     )
 
     return {

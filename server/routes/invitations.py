@@ -20,6 +20,8 @@ from email.mime.text import MIMEText
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from selfmemory.utils.logging import sanitize_for_log
+
 from ..config import config
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import is_expired
@@ -158,12 +160,12 @@ def send_invitation_email(
     if not smtp_host or not smtp_username or not smtp_password:
         logger.info(
             f"📧 INVITATION EMAIL (SMTP not configured - logging only):\n"
-            f"  To: {email}\n"
-            f"  From: {invited_by_email}\n"
-            f"  Organization: {organization_name}\n"
-            f"  Project: {project_name or 'N/A'}\n"
-            f"  Role: {role}\n"
-            f"  Link: {invitation_link}\n"
+            f"  To: {sanitize_for_log(email)}\n"
+            f"  From: {sanitize_for_log(invited_by_email)}\n"
+            f"  Organization: {sanitize_for_log(organization_name)}\n"
+            f"  Project: {sanitize_for_log(project_name or 'N/A')}\n"
+            f"  Role: {sanitize_for_log(role)}\n"
+            f"  Link: {sanitize_for_log(invitation_link)}\n"
         )
         return
 
@@ -502,7 +504,9 @@ def get_invitation_details(token: str):
     inviter = mongo_db.users.find_one({"_id": invitation["invitedBy"]})
     inviter_email = inviter["email"] if inviter else "Unknown"
 
-    logger.info(f"✅ Retrieved invitation details for token: {token[:10]}...")
+    logger.info(
+        f"✅ Retrieved invitation details for token: {sanitize_for_log(token[:10])}..."
+    )
 
     return InvitationResponse(
         invitation_id=str(invitation["_id"]),

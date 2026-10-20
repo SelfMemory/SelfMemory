@@ -23,6 +23,8 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from selfmemory.utils.logging import sanitize_for_log
+
 from ..dependencies import (
     AuthContext,
     authenticate_api_key,
@@ -101,7 +103,7 @@ def create_project_api_key(
     # Check if user has access to the project (owner or member)
     if not check_project_access(auth.user_id, project_id):
         logger.warning(
-            f"❌ User {auth.user_id} attempted to create API key for project {project_id} without access"
+            f"❌ User {sanitize_for_log(auth.user_id)} attempted to create API key for project {sanitize_for_log(project_id)} without access"
         )
         raise HTTPException(
             status_code=403, detail="You do not have access to this project"
@@ -162,7 +164,7 @@ def create_project_api_key(
     api_key, key_hash, key_prefix = generate_api_key()
 
     logger.info(
-        f"🔑 Generated API key for user={auth.user_id}, project={project_id}, name={key_create.name}"
+        f"🔑 Generated API key for user={sanitize_for_log(auth.user_id)}, project={sanitize_for_log(project_id)}, name={sanitize_for_log(key_create.name)}"
     )
 
     # Calculate expiration if specified
@@ -196,7 +198,7 @@ def create_project_api_key(
     key_id = str(result.inserted_id)
 
     logger.info(
-        f"✅ Created API key '{key_create.name}' (id={key_id}) for user {auth.user_id} in project {project_id}"
+        f"✅ Created API key '{sanitize_for_log(key_create.name)}' (id={sanitize_for_log(key_id)}) for user {sanitize_for_log(auth.user_id)} in project {sanitize_for_log(project_id)}"
     )
 
     return {
@@ -234,7 +236,7 @@ def list_project_api_keys(
     # Check if user has access to the project (owner or member)
     if not check_project_access(auth.user_id, project_id):
         logger.warning(
-            f"❌ User {auth.user_id} attempted to list API keys for project {project_id} without access"
+            f"❌ User {sanitize_for_log(auth.user_id)} attempted to list API keys for project {sanitize_for_log(project_id)} without access"
         )
         raise HTTPException(
             status_code=403, detail="You do not have access to this project"
@@ -276,7 +278,7 @@ def list_project_api_keys(
         )
 
     logger.info(
-        f"✅ User {auth.user_id} listed {len(result_keys)} API keys for project {project_id}"
+        f"✅ User {sanitize_for_log(auth.user_id)} listed {len(result_keys)} API keys for project {sanitize_for_log(project_id)}"
     )
 
     return {"api_keys": result_keys, "total": len(result_keys)}
@@ -306,7 +308,7 @@ def delete_project_api_key(
     # Check if user has access to the project (owner or member)
     if not check_project_access(auth.user_id, project_id):
         logger.warning(
-            f"❌ User {auth.user_id} attempted to delete API key for project {project_id} without access"
+            f"❌ User {sanitize_for_log(auth.user_id)} attempted to delete API key for project {sanitize_for_log(project_id)} without access"
         )
         raise HTTPException(
             status_code=403, detail="You do not have access to this project"
@@ -330,7 +332,7 @@ def delete_project_api_key(
 
     if not (is_owner or is_admin):
         logger.warning(
-            f"❌ User {auth.user_id} attempted to delete API key {key_id} without permission"
+            f"❌ User {sanitize_for_log(auth.user_id)} attempted to delete API key {sanitize_for_log(key_id)} without permission"
         )
         raise HTTPException(
             status_code=403,
@@ -350,7 +352,7 @@ def delete_project_api_key(
     )
 
     logger.info(
-        f"✅ User {auth.user_id} deactivated API key {key_id} in project {project_id}"
+        f"✅ User {sanitize_for_log(auth.user_id)} deactivated API key {sanitize_for_log(key_id)} in project {sanitize_for_log(project_id)}"
     )
 
     return {

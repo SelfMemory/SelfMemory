@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 
+from selfmemory.utils.logging import sanitize_for_log
+
 # Module-level configuration
 SELFMEMORY_API_URL = os.getenv("SELFMEMORY_API_URL", "http://localhost:8081")
 DEFAULT_TIMEOUT = 5.0
@@ -98,7 +100,9 @@ async def search_memories(
             "filters": {"limit": limit},
         }
 
-        logger.debug(f"Calling memory API: {SELFMEMORY_API_URL}/api/memories/search")
+        logger.debug(
+            f"Calling memory API: {sanitize_for_log(SELFMEMORY_API_URL)}/api/memories/search"
+        )
 
         async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
             response = await client.post(

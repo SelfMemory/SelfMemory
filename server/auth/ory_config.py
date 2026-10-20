@@ -16,6 +16,8 @@ from ory_kratos_client import Configuration as KratosConfiguration
 from ory_kratos_client import FrontendApi as KratosFrontendApi
 from ory_kratos_client import IdentityApi as KratosIdentityApi
 
+from selfmemory.utils.logging import sanitize_for_log
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,8 +41,8 @@ class OryConfig:
 
         logger.info(
             f"Ory configuration loaded - "
-            f"Kratos: {self.kratos_public_url}, "
-            f"Hydra: {self.hydra_public_url}"
+            f"Kratos: {sanitize_for_log(self.kratos_public_url)}, "
+            f"Hydra: {sanitize_for_log(self.hydra_public_url)}"
         )
 
     @staticmethod

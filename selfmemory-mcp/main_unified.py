@@ -29,6 +29,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
+from selfmemory.utils.logging import sanitize_for_log
+
 # Add project root to path FIRST so telemetry can import shared modules
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
@@ -235,7 +237,7 @@ async def dynamic_client_registration(request: Request):
         registration_data = json.loads(body_bytes)
 
         client_name = registration_data.get("client_name", "Unknown")
-        logger.info(f"DCR request from: {client_name}")
+        logger.info(f"DCR request from: {sanitize_for_log(client_name)}")
 
         # Sanitize invalid fields (URLs, contacts)
         registration_data = sanitize_registration_request(registration_data)
@@ -506,10 +508,12 @@ def main():
     logger.info("=" * 60)
     logger.info("🚀 Starting SelfMemory MCP Server (UNIFIED AUTH)")
     logger.info("=" * 60)
-    logger.info(f"📡 Core Server: {CORE_SERVER_HOST}")
-    logger.info(f"🌐 MCP Server: http://{config.server.host}:{config.server.port}")
-    logger.info(f"🔐 Hydra Public: {config.hydra.public_url}")
-    logger.info(f"🔐 Hydra Admin: {config.hydra.admin_url}")
+    logger.info(f"📡 Core Server: {sanitize_for_log(CORE_SERVER_HOST)}")
+    logger.info(
+        f"🌐 MCP Server: http://{sanitize_for_log(config.server.host)}:{sanitize_for_log(config.server.port)}"
+    )
+    logger.info(f"🔐 Hydra Public: {sanitize_for_log(config.hydra.public_url)}")
+    logger.info(f"🔐 Hydra Admin: {sanitize_for_log(config.hydra.admin_url)}")
     logger.info("")
     logger.info("🔑 Authentication Methods:")
     logger.info("   1. OAuth 2.1 (automatic via Hydra)")
