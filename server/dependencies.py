@@ -11,6 +11,8 @@ from typing import NamedTuple
 
 from fastapi import Header, HTTPException
 
+from selfmemory.utils.logging import sanitize_for_log
+
 from .auth import validate_session, validate_token
 from .config import config
 from .database import mongo_db
@@ -117,7 +119,7 @@ def check_project_access(user_id: str, project_id: str) -> bool:
         try:
             user_obj_id = get_user_object_id_from_kratos_id(mongo_db, user_id)
         except ValueError:
-            logger.warning(f"User not found: {user_id}")
+            logger.warning("User not found: %s", sanitize_for_log(user_id))
             return False
 
         # Check if user is the organization owner (implicit full access)
@@ -168,14 +170,14 @@ def get_user_permissions(user_id: str, project_id: str) -> ProjectPermissions:
         # Get project to check organization ownership
         project = mongo_db.projects.find_one({"_id": project_obj_id})
         if not project:
-            logger.warning(f"Project not found: {project_id}")
+            logger.warning("Project not found: %s", sanitize_for_log(project_id))
             return DENIED_PERMISSIONS
 
         # Get user's MongoDB ObjectId by looking up via kratosId
         try:
             user_obj_id = get_user_object_id_from_kratos_id(mongo_db, user_id)
         except ValueError:
-            logger.warning(f"User not found: {user_id}")
+            logger.warning("User not found: %s", sanitize_for_log(user_id))
             return DENIED_PERMISSIONS
 
         # Check if user is the organization owner (implicit full access)
@@ -195,7 +197,11 @@ def get_user_permissions(user_id: str, project_id: str) -> ProjectPermissions:
         )
 
         if not member:
-            logger.info(f"User {user_id} is not a member of project {project_id}")
+            logger.info(
+                "User %s is not a member of project %s",
+                sanitize_for_log(user_id),
+                sanitize_for_log(project_id),
+            )
             return DENIED_PERMISSIONS
 
         perms = member.get("permissions", {})
@@ -265,7 +271,7 @@ def is_project_admin(user_id: str, project_id: str) -> bool:
         try:
             user_obj_id = get_user_object_id_from_kratos_id(mongo_db, user_id)
         except ValueError:
-            logger.warning(f"User not found: {user_id}")
+            logger.warning("User not found: %s", sanitize_for_log(user_id))
             return False
 
         # Check if user owns the project

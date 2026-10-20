@@ -10,6 +10,8 @@ import os
 
 from ory_hydra_client.exceptions import ApiException
 
+from selfmemory.utils.logging import sanitize_for_log
+
 from .ory_config import get_hydra_oauth2_api
 from .token_cache import cache_hydra_token, get_cached_hydra_token
 
@@ -149,7 +151,9 @@ def validate_token(access_token: str) -> HydraToken:
         logger.info("🔍 AUDIENCE VALIDATION:")
         logger.info(f"   Expected: {expected_resource}")
         logger.info(f"   Received: {audiences}")
-        logger.info(f"   MCP_SERVER_URL env: {os.getenv('MCP_SERVER_URL', 'NOT SET')}")
+        logger.info(
+            f"   MCP_SERVER_URL env: {sanitize_for_log(os.getenv('MCP_SERVER_URL', 'NOT SET'))}"
+        )
 
         # Validate token was issued for THIS MCP server
         is_valid_audience = any(

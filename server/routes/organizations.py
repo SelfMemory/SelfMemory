@@ -16,6 +16,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 from pymongo.database import Database
 
+from selfmemory.utils.logging import sanitize_for_log
+
 from ..config import config
 from ..dependencies import AuthContext, authenticate_api_key, mongo_db
 from ..utils.datetime_helpers import utc_now
@@ -302,18 +304,18 @@ def invite_user_to_organization(
             )
             logger.info(
                 "Marked expired invitation as 'expired': id=%s, email=%r, org=%s",
-                existing_invitation["_id"],
-                invite.email,
-                org_id,
+                sanitize_for_log(existing_invitation["_id"]),
+                sanitize_for_log(invite.email),
+                sanitize_for_log(org_id),
             )
         else:
             # Auto-cancel existing pending invitation and create new one
             mongo_db.invitations.delete_one({"_id": existing_invitation["_id"]})
             logger.info(
                 "Auto-cancelled existing pending invitation: id=%s, email=%r, org=%s, reason=new_invitation_requested",
-                existing_invitation["_id"],
-                invite.email,
-                org_id,
+                sanitize_for_log(existing_invitation["_id"]),
+                sanitize_for_log(invite.email),
+                sanitize_for_log(org_id),
             )
 
     # Generate invitation token using shared helper
@@ -375,10 +377,10 @@ def invite_user_to_organization(
 
     logger.info(
         "Created organization invitation: org=%s, email=%r, inviter=%s, role=%r, projects=%d",
-        org_id,
-        invite.email,
-        auth.user_id,
-        invite.role,
+        sanitize_for_log(org_id),
+        sanitize_for_log(invite.email),
+        sanitize_for_log(auth.user_id),
+        sanitize_for_log(invite.role),
         len(project_assignments),
     )
 
@@ -399,7 +401,7 @@ def invite_user_to_organization(
 
     logger.info(
         "Invitation email queued for %r (will send in background)",
-        invite.email,
+        sanitize_for_log(invite.email),
     )
 
     return {
@@ -479,15 +481,15 @@ def list_organization_members(
         try:
             mongo_db.organization_members.insert_one(owner_member_doc.copy())
             logger.info(
-                f"✅ Added missing owner to organization_members: org={org_id}, owner={owner_id}"
+                f"✅ Added missing owner to organization_members: org={sanitize_for_log(org_id)}, owner={sanitize_for_log(owner_id)}"
             )
         except Exception as e:
             # Ignore duplicates or errors - owner is already in response
             logger.debug(f"Could not persist owner to organization_members: {e}")
 
     logger.info(
-        f"🔍 Listing members: org={org_id}, owner={owner_id}, "
-        f"owner_in_members={owner_in_members}, total_members={len(members)}"
+        f"🔍 Listing members: org={sanitize_for_log(org_id)}, owner={sanitize_for_log(owner_id)}, "
+        f"owner_in_members={sanitize_for_log(owner_in_members)}, total_members={len(members)}"
     )
 
     # Enrich member data with user information and project count
@@ -576,7 +578,7 @@ def list_organization_members(
         )
 
     logger.info(
-        f"Listed organization members: org={org_id}, requester={auth.user_id}, "
+        f"Listed organization members: org={sanitize_for_log(org_id)}, requester={sanitize_for_log(auth.user_id)}, "
         f"members={len(enriched_members)}, pending_invitations={len(enriched_invitations)}"
     )
 
@@ -666,9 +668,9 @@ def update_organization_member_role(
     )
 
     logger.info(
-        f"Updated organization member role: org={org_id}, user={user_id}, "
-        f"old_role={target_member['role']}, new_role={role_data.role}, "
-        f"requester={auth.user_id}"
+        f"Updated organization member role: org={sanitize_for_log(org_id)}, user={sanitize_for_log(user_id)}, "
+        f"old_role={sanitize_for_log(target_member['role'])}, new_role={sanitize_for_log(role_data.role)}, "
+        f"requester={sanitize_for_log(auth.user_id)}"
     )
 
     return {
@@ -717,9 +719,9 @@ def remove_user_from_organization(
     is_self_removal = str(requester_obj_id) == user_id or auth.user_id == user_id
 
     logger.info(
-        f"🔍 Organization member removal check: org={org_id}, target={user_id}, "
-        f"requester_obj_id={str(requester_obj_id)}, requester_kratos_id={auth.user_id}, "
-        f"is_admin={is_admin}, is_self_removal={is_self_removal}"
+        f"🔍 Organization member removal check: org={sanitize_for_log(org_id)}, target={sanitize_for_log(user_id)}, "
+        f"requester_obj_id={sanitize_for_log(str(requester_obj_id))}, requester_kratos_id={sanitize_for_log(auth.user_id)}, "
+        f"is_admin={sanitize_for_log(is_admin)}, is_self_removal={sanitize_for_log(is_self_removal)}"
     )
 
     if not is_admin and not is_self_removal:
@@ -756,9 +758,9 @@ def remove_user_from_organization(
 
         # DEBUG: Log admin count and owner status
         logger.info(
-            f"🔍 Admin removal check: org={org_id}, target={user_id}, "
-            f"admin_count={admin_count}, org_owner={str(org_owner_id)}, "
-            f"owner_is_being_removed={owner_is_being_removed}"
+            f"🔍 Admin removal check: org={sanitize_for_log(org_id)}, target={sanitize_for_log(user_id)}, "
+            f"admin_count={sanitize_for_log(admin_count)}, org_owner={sanitize_for_log(str(org_owner_id))}, "
+            f"owner_is_being_removed={sanitize_for_log(owner_is_being_removed)}"
         )
 
         # Only block if we're removing the last admin AND the owner is also being removed
@@ -796,9 +798,9 @@ def remove_user_from_organization(
     )
 
     logger.info(
-        f"Removed user from organization: org={org_id}, user={user_id}, "
-        f"requester={auth.user_id}, projects_removed={project_removal_result.deleted_count}, "
-        f"keys_deactivated={key_deactivation_result.modified_count}"
+        f"Removed user from organization: org={sanitize_for_log(org_id)}, user={sanitize_for_log(user_id)}, "
+        f"requester={sanitize_for_log(auth.user_id)}, projects_removed={sanitize_for_log(project_removal_result.deleted_count)}, "
+        f"keys_deactivated={sanitize_for_log(key_deactivation_result.modified_count)}"
     )
 
     return {
@@ -874,8 +876,8 @@ def cancel_organization_invitation(
     mongo_db.invitations.delete_one({"_id": invitation_obj_id})
 
     logger.info(
-        f"Cancelled invitation: id={invitation_id}, org={org_id}, "
-        f"email={invitation['email']}, cancelled_by={auth.user_id}"
+        f"Cancelled invitation: id={sanitize_for_log(invitation_id)}, org={sanitize_for_log(org_id)}, "
+        f"email={sanitize_for_log(invitation['email'])}, cancelled_by={sanitize_for_log(auth.user_id)}"
     )
 
     return {
@@ -959,8 +961,8 @@ def transfer_organization_ownership(
     )
 
     logger.info(
-        f"Transferred organization ownership: org={org_id}, "
-        f"from={auth.user_id}, to={transfer.new_owner_id}"
+        f"Transferred organization ownership: org={sanitize_for_log(org_id)}, "
+        f"from={sanitize_for_log(auth.user_id)}, to={sanitize_for_log(transfer.new_owner_id)}"
     )
 
     return {
@@ -1074,12 +1076,12 @@ def delete_organization(
     # This preserves data and allows for potential recovery scenarios
 
     logger.info(
-        f"Organization deleted: org={org_id}, owner={auth.user_id}, "
-        f"projects_deleted={projects_deleted.deleted_count}, "
-        f"members_removed={total_members_removed}, "
-        f"org_members_removed={org_members_removed.deleted_count}, "
-        f"keys_deactivated={total_keys_deactivated}, "
-        f"invitations_cancelled={total_project_invitations_cancelled + org_invitations_cancelled.modified_count}"
+        f"Organization deleted: org={sanitize_for_log(org_id)}, owner={sanitize_for_log(auth.user_id)}, "
+        f"projects_deleted={sanitize_for_log(projects_deleted.deleted_count)}, "
+        f"members_removed={sanitize_for_log(total_members_removed)}, "
+        f"org_members_removed={sanitize_for_log(org_members_removed.deleted_count)}, "
+        f"keys_deactivated={sanitize_for_log(total_keys_deactivated)}, "
+        f"invitations_cancelled={sanitize_for_log(total_project_invitations_cancelled + org_invitations_cancelled.modified_count)}"
     )
 
     return {

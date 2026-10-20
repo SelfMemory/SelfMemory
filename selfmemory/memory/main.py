@@ -23,6 +23,7 @@ from selfmemory.memory.utils import (
 )
 from selfmemory.security.encryption import decrypt_payload, encrypt_payload
 from selfmemory.utils.factory import EmbedderFactory, VectorStoreFactory
+from selfmemory.utils.logging import sanitize_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -342,7 +343,9 @@ class SelfMemory(MemoryBase):
             if project_id and organization_id:
                 context_info += f", project='{project_id}', org='{organization_id}'"
 
-            logger.info(f"Memory added ({context_info}): {memory_content[:50]}...")
+            logger.info(
+                f"Memory added ({sanitize_for_log(context_info)}): {sanitize_for_log(memory_content[:50])}..."
+            )
             return {
                 "success": True,
                 "memory_id": memory_id,
@@ -958,10 +961,12 @@ class SelfMemory(MemoryBase):
 
             # Log search operation
             if not query or not query.strip():
-                logger.info(f"Retrieving all memories ({context_info}) (empty query)")
+                logger.info(
+                    f"Retrieving all memories ({sanitize_for_log(context_info)}) (empty query)"
+                )
             else:
                 logger.info(
-                    f"Searching memories ({context_info}) with query: '{query[:50]}...'"
+                    f"Searching memories ({sanitize_for_log(context_info)}) with query: '{sanitize_for_log(query[:50])}...'"
                 )
 
             # Build additional filters from search parameters
@@ -1065,7 +1070,7 @@ class SelfMemory(MemoryBase):
             )
 
             logger.info(
-                f"Search completed ({context_info}): {len(formatted_results)} results"
+                f"Search completed ({sanitize_for_log(context_info)}): {len(formatted_results)} results"
             )
             return {"results": formatted_results}
 
@@ -1083,7 +1088,9 @@ class SelfMemory(MemoryBase):
             context_info = f"user='{user_id}'"
             if project_id and organization_id:
                 context_info += f", project='{project_id}', org='{organization_id}'"
-            logger.error(f"Search failed ({context_info}): {e}")
+            logger.error(
+                f"Search failed ({sanitize_for_log(context_info)}): {sanitize_for_log(e)}"
+            )
             return {"results": []}
 
     def get_all(
@@ -1146,7 +1153,7 @@ class SelfMemory(MemoryBase):
             paginated_results = formatted_results[offset : offset + limit]
 
             logger.info(
-                f"Retrieved {len(paginated_results)} memories ({context_info}) (offset={offset}, limit={limit})"
+                f"Retrieved {len(paginated_results)} memories ({sanitize_for_log(context_info)}) (offset={sanitize_for_log(offset)}, limit={sanitize_for_log(limit)})"
             )
             return {"results": paginated_results}
 
@@ -1179,7 +1186,9 @@ class SelfMemory(MemoryBase):
             success = self.vector_store.delete(memory_id)
 
             if success:
-                logger.info(f"Memory {memory_id} deleted successfully")
+                logger.info(
+                    f"Memory {sanitize_for_log(memory_id)} deleted successfully"
+                )
                 return {"success": True, "message": "Memory deleted successfully"}
             return {
                 "success": False,
@@ -1187,7 +1196,9 @@ class SelfMemory(MemoryBase):
             }
 
         except Exception as e:
-            logger.error(f"Error deleting memory {memory_id}: {e}")
+            logger.error(
+                f"Error deleting memory {sanitize_for_log(memory_id)}: {sanitize_for_log(e)}"
+            )
             return {"success": False, "error": str(e)}
 
     def delete_all(

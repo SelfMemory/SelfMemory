@@ -19,6 +19,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 
+from selfmemory.utils.logging import sanitize_for_log
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from selfmemory.security.encryption import encrypt_payload
@@ -51,9 +53,9 @@ def migrate(dry_run: bool, batch_size: int) -> None:
 
     logger.info(
         "Starting migration (dry_run=%s, collection=%s, batch_size=%d)",
-        dry_run,
-        collection,
-        batch_size,
+        sanitize_for_log(dry_run),
+        sanitize_for_log(collection),
+        sanitize_for_log(batch_size),
     )
 
     while True:

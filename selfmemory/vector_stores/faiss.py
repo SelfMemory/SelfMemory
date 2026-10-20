@@ -1,6 +1,6 @@
+import json
 import logging
 import os
-import pickle
 import uuid
 import warnings
 from pathlib import Path
@@ -29,6 +29,25 @@ except ImportError:
 from selfmemory.vector_stores.base import VectorStoreBase
 
 logger = logging.getLogger(__name__)
+
+
+def _legacy_docstore_message(legacy_path: str, docstore_path: str) -> str:
+    """Explain why a pickle docstore is refused and how to convert it.
+
+    Loading is refused rather than silently starting empty: an empty store
+    looks like data loss, and anything written to it would diverge from the
+    legacy file.
+    """
+    return (
+        f"Found a legacy pickle docstore at {legacy_path!r}. The docstore is "
+        "now stored as JSON, and pickle files are no longer loaded because "
+        "unpickling a file executes code from it. If you trust this file, "
+        "convert it once and restart:\n"
+        '  python -c "import pickle, json; '
+        f"d, i = pickle.load(open({legacy_path!r}, 'rb')); "
+        "json.dump({'docstore': d, 'index_to_id': {str(k): v for k, v in "
+        f"i.items()}}}}, open({docstore_path!r}, 'w'))\""
+    )
 
 
 class OutputData(BaseModel):
@@ -74,9 +93,12 @@ class FAISS(VectorStoreBase):
 
             # Try to load existing index if available
             index_path = f"{self.path}/{collection_name}.faiss"
-            docstore_path = f"{self.path}/{collection_name}.pkl"
+            docstore_path = f"{self.path}/{collection_name}.json"
+            legacy_path = f"{self.path}/{collection_name}.pkl"
             if os.path.exists(index_path) and os.path.exists(docstore_path):
                 self._load(index_path, docstore_path)
+            elif os.path.exists(index_path) and os.path.exists(legacy_path):
+                raise RuntimeError(_legacy_docstore_message(legacy_path, docstore_path))
             else:
                 self.create_col(collection_name)
 
@@ -86,12 +108,15 @@ class FAISS(VectorStoreBase):
 
         Args:
             index_path (str): Path to FAISS index file.
-            docstore_path (str): Path to docstore pickle file.
+            docstore_path (str): Path to docstore JSON file.
         """
         try:
             self.index = faiss.read_index(index_path)
-            with open(docstore_path, "rb") as f:
-                self.docstore, self.index_to_id = pickle.load(f)
+            with open(docstore_path, encoding="utf-8") as f:
+                stored = json.load(f)
+            self.docstore = stored["docstore"]
+            # JSON object keys are always strings; FAISS row ids are ints.
+            self.index_to_id = {int(k): v for k, v in stored["index_to_id"].items()}
             logger.info(
                 f"Loaded FAISS index from {index_path} with {self.index.ntotal} vectors"
             )
@@ -109,11 +134,19 @@ class FAISS(VectorStoreBase):
         try:
             os.makedirs(self.path, exist_ok=True)
             index_path = f"{self.path}/{self.collection_name}.faiss"
-            docstore_path = f"{self.path}/{self.collection_name}.pkl"
+            docstore_path = f"{self.path}/{self.collection_name}.json"
 
+            # Serialize before opening the file, so a payload that is not
+            # JSON-safe fails here instead of leaving a truncated docstore.
+            encoded = json.dumps(
+                {
+                    "docstore": self.docstore,
+                    "index_to_id": {str(k): v for k, v in self.index_to_id.items()},
+                }
+            )
             faiss.write_index(self.index, index_path)
-            with open(docstore_path, "wb") as f:
-                pickle.dump((self.docstore, self.index_to_id), f)
+            with open(docstore_path, "w", encoding="utf-8") as f:
+                f.write(encoded)
         except Exception as e:
             logger.warning(f"Failed to save FAISS index: {e}")
 
@@ -418,12 +451,12 @@ class FAISS(VectorStoreBase):
         if self.path:
             try:
                 index_path = f"{self.path}/{self.collection_name}.faiss"
-                docstore_path = f"{self.path}/{self.collection_name}.pkl"
+                docstore_path = f"{self.path}/{self.collection_name}.json"
+                legacy_path = f"{self.path}/{self.collection_name}.pkl"
 
-                if os.path.exists(index_path):
-                    os.remove(index_path)
-                if os.path.exists(docstore_path):
-                    os.remove(docstore_path)
+                for path in (index_path, docstore_path, legacy_path):
+                    if os.path.exists(path):
+                        os.remove(path)
 
                 logger.info(f"Deleted collection {self.collection_name}")
             except Exception as e:

@@ -14,6 +14,8 @@ Following Uncle Bob's Clean Code:
 import logging
 from typing import Any
 
+from selfmemory.utils.logging import sanitize_for_log
+
 logger = logging.getLogger(__name__)
 
 
@@ -145,7 +147,7 @@ def inject_memory_scopes(
             scope_list.append(scope)
 
     result = " ".join(scope_list)
-    logger.info(f"✨ Injected memory scopes: {result}")
+    logger.info(f"✨ Injected memory scopes: {sanitize_for_log(result)}")
 
     return result
 

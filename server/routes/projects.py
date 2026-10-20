@@ -15,6 +15,8 @@ from datetime import timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 
+from selfmemory.utils.logging import sanitize_for_log
+
 from ..auth.permissions import require_project_admin
 from ..config import config
 from ..database import get_role_permissions
@@ -380,8 +382,8 @@ def add_user_to_project(
         )
 
     logger.info(
-        f"Added user to project: project={project_id}, user={member.user_id}, "
-        f"role={member.role}, requester={auth.user_id}"
+        f"Added user to project: project={sanitize_for_log(project_id)}, user={sanitize_for_log(member.user_id)}, "
+        f"role={sanitize_for_log(member.role)}, requester={sanitize_for_log(auth.user_id)}"
     )
 
     return {
@@ -521,12 +523,12 @@ def invite_user_to_project(
         )
 
         logger.info(
-            f"✅ Invitation email queued for {invite.email} (will send in background)"
+            f"✅ Invitation email queued for {sanitize_for_log(invite.email)} (will send in background)"
         )
         logger.info(
-            f"Created org invitation with project assignment: org={str(organization_id)}, "
-            f"project={project_id}, email={invite.email}, inviter={auth.user_id}, "
-            f"project_role={invite.role}"
+            f"Created org invitation with project assignment: org={sanitize_for_log(str(organization_id))}, "
+            f"project={sanitize_for_log(project_id)}, email={sanitize_for_log(invite.email)}, inviter={sanitize_for_log(auth.user_id)}, "
+            f"project_role={sanitize_for_log(invite.role)}"
         )
 
         return {
@@ -594,11 +596,11 @@ def invite_user_to_project(
     )
 
     logger.info(
-        f"✅ Invitation email queued for {invite.email} (will send in background)"
+        f"✅ Invitation email queued for {sanitize_for_log(invite.email)} (will send in background)"
     )
     logger.info(
-        f"Created project invitation: project={project_id}, email={invite.email}, "
-        f"inviter={auth.user_id}, role={invite.role}"
+        f"Created project invitation: project={sanitize_for_log(project_id)}, email={sanitize_for_log(invite.email)}, "
+        f"inviter={sanitize_for_log(auth.user_id)}, role={sanitize_for_log(invite.role)}"
     )
 
     return {
@@ -673,7 +675,7 @@ def list_project_members(
             )
 
     logger.info(
-        f"Listed project members: project={project_id}, requester={auth.user_id}, "
+        f"Listed project members: project={sanitize_for_log(project_id)}, requester={sanitize_for_log(auth.user_id)}, "
         f"count={len(enriched_members)}"
     )
 
@@ -739,9 +741,9 @@ def update_project_member_role(
     )
 
     logger.info(
-        f"Updated project member role: project={project_id}, user={user_id}, "
-        f"old_role={target_member['role']}, new_role={role_update.role}, "
-        f"requester={auth.user_id}"
+        f"Updated project member role: project={sanitize_for_log(project_id)}, user={sanitize_for_log(user_id)}, "
+        f"old_role={sanitize_for_log(target_member['role'])}, new_role={sanitize_for_log(role_update.role)}, "
+        f"requester={sanitize_for_log(auth.user_id)}"
     )
 
     return {
@@ -820,8 +822,8 @@ def remove_user_from_project(
     )
 
     logger.info(
-        f"Removed user from project: project={project_id}, user={user_id}, "
-        f"requester={auth.user_id}, keys_deactivated={key_deactivation_result.modified_count}"
+        f"Removed user from project: project={sanitize_for_log(project_id)}, user={sanitize_for_log(user_id)}, "
+        f"requester={sanitize_for_log(auth.user_id)}, keys_deactivated={sanitize_for_log(key_deactivation_result.modified_count)}"
     )
 
     return {
@@ -909,10 +911,10 @@ def delete_project(
     # This preserves data and allows for potential recovery scenarios
 
     logger.info(
-        f"Project deleted: project={project_id}, owner={auth.user_id}, "
-        f"members_removed={members_removal_result.deleted_count}, "
-        f"keys_deactivated={key_deactivation_result.modified_count}, "
-        f"invitations_cancelled={invitation_cancel_result.modified_count}"
+        f"Project deleted: project={sanitize_for_log(project_id)}, owner={sanitize_for_log(auth.user_id)}, "
+        f"members_removed={sanitize_for_log(members_removal_result.deleted_count)}, "
+        f"keys_deactivated={sanitize_for_log(key_deactivation_result.modified_count)}, "
+        f"invitations_cancelled={sanitize_for_log(invitation_cancel_result.modified_count)}"
     )
 
     return {

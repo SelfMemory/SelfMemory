@@ -15,6 +15,7 @@ from selfmemory.configs.prompts import (
     AGENT_MEMORY_EXTRACTION_PROMPT,
     USER_MEMORY_EXTRACTION_PROMPT,
 )
+from selfmemory.utils.logging import sanitize_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +69,11 @@ def validate_isolation_context(
     # Log isolation context for audit trail
     if project_id and organization_id:
         logger.info(
-            f"✅ ISOLATION VALIDATED ({operation}): user={user_id}, project={project_id}, org={organization_id}"
+            f"✅ ISOLATION VALIDATED ({sanitize_for_log(operation)}): user={sanitize_for_log(user_id)}, project={sanitize_for_log(project_id)}, org={sanitize_for_log(organization_id)}"
         )
     else:
         logger.info(
-            f"✅ ISOLATION VALIDATED ({operation}): user={user_id} (backward compatibility mode)"
+            f"✅ ISOLATION VALIDATED ({sanitize_for_log(operation)}): user={sanitize_for_log(user_id)} (backward compatibility mode)"
         )
 
 
@@ -129,9 +130,9 @@ def audit_memory_access(
         log_message += f", error={error}"
 
     if success:
-        logger.info(log_message)
+        logger.info(sanitize_for_log(log_message))
     else:
-        logger.warning(log_message)
+        logger.warning(sanitize_for_log(log_message))
 
 
 def build_add_metadata(
@@ -201,11 +202,11 @@ def build_add_metadata(
         processed_metadata["project_id"] = project_id.strip()
         processed_metadata["organization_id"] = organization_id.strip()
         logger.info(
-            f"Adding memory with multi-tenant context: user={user_id}, project={project_id}, org={organization_id}"
+            f"Adding memory with multi-tenant context: user={sanitize_for_log(user_id)}, project={sanitize_for_log(project_id)}, org={sanitize_for_log(organization_id)}"
         )
     else:
         logger.info(
-            f"Adding memory with user-only context: user={user_id} (backward compatibility mode)"
+            f"Adding memory with user-only context: user={sanitize_for_log(user_id)} (backward compatibility mode)"
         )
 
     # Add timestamp for tracking (always use UTC)
@@ -279,11 +280,11 @@ def build_search_filters(
         effective_filters["project_id"] = project_id.strip()
         effective_filters["organization_id"] = organization_id.strip()
         logger.info(
-            f"Searching memories with multi-tenant context: user={user_id}, project={project_id}, org={organization_id}"
+            f"Searching memories with multi-tenant context: user={sanitize_for_log(user_id)}, project={sanitize_for_log(project_id)}, org={sanitize_for_log(organization_id)}"
         )
     else:
         logger.info(
-            f"Searching memories with user-only context: user={user_id} (backward compatibility mode)"
+            f"Searching memories with user-only context: user={sanitize_for_log(user_id)} (backward compatibility mode)"
         )
 
     return effective_filters
