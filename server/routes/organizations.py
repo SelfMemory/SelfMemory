@@ -29,12 +29,6 @@ from .invitations import generate_invitation_token, send_invitation_email
 
 logger = logging.getLogger(__name__)
 
-
-def _sanitize_log(value: str) -> str:
-    """Strip newlines to prevent log injection."""
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
-
-
 router = APIRouter(prefix="/api/organizations", tags=["Organization Management"])
 
 

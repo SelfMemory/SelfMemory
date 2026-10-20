@@ -1,0 +1,9 @@
+variables:
+  - name: baseUrl
+    value: http://localhost:8081
+  - name: projectId
+    value: ""
+  - name: orgId
+    value: ""
+  - secret: true
+    name: apiKey

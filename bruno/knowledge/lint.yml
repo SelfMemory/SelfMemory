@@ -1,0 +1,39 @@
+info:
+  name: Lint
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/knowledge/lint"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns findings", function () {
+          expect(res.getStatus()).to.equal(200);
+          expect(res.getBody().findings).to.be.an("array");
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Audits the knowledge base for decay: contradictions between pages,
+  duplicates that should be merged, stale claims, orphans, and `[[links]]`
+  pointing at pages that do not exist.
+
+  Broken links are found deterministically; the rest costs one model call
+  over every page, so this belongs on a schedule rather than in a request
+  path. An empty `findings` array is the good result.
+
+  Requires write permission — it audits the pages the caller can change.

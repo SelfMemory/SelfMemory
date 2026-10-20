@@ -1,0 +1,42 @@
+info:
+  name: Ask
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/knowledge/ask"
+  body:
+    type: json
+    data: |-
+      {
+        "question": "What package manager does selfmemory use?"
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("answers with citations", function () {
+          expect(res.getStatus()).to.equal(200);
+          expect(res.getBody().answer).to.be.a("string");
+          expect(res.getBody().citations).to.be.an("array");
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  The fast read path: full-text hits plus the page index, one model call.
+
+  Good for single-hop lookups — "what does this user prefer for X". It cannot
+  follow `[[links]]` between pages, so a question whose answer is spread over
+  two pages needs `Research` instead.
+
+  An empty knowledge base returns a plain answer saying so and makes no model
+  call at all.

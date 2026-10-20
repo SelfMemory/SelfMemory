@@ -1,0 +1,36 @@
+info:
+  name: Log
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/knowledge/log?limit=20"
+  params:
+    - name: limit
+      value: "20"
+      type: query
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns operations newest first", function () {
+          expect(res.getStatus()).to.equal(200);
+          expect(res.getBody().entries).to.be.an("array");
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Append-only record of what happened to this knowledge base: every ingest
+  with the pages it created or updated, every lint pass.
+
+  `ingest.noop` means a source was accepted but changed nothing — useful when
+  a `Remember` call looks like it did nothing.
