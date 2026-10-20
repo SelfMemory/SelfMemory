@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,6 +25,8 @@ from selfmemory.knowledge import (
     KnowledgeMemory,
     SQLiteKnowledgeStore,
 )
+from selfmemory.utils.logging import sanitize_for_log
+from selfmemory.utils.paths import resolve_within
 
 from ..dependencies import AuthContext, authenticate_api_key, get_user_permissions
 
@@ -31,7 +34,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
-KNOWLEDGE_DB = os.getenv("SELFMEMORY_KNOWLEDGE_DB", "knowledge.db")
+# Confined to the working directory: the store creates parent directories
+# for whatever path it is given, so an absolute path or a "../" in this
+# setting would otherwise write a database anywhere on the host. Fails at
+# startup rather than on first request. Relative paths behave as before.
+KNOWLEDGE_DB = resolve_within(
+    Path.cwd(), os.getenv("SELFMEMORY_KNOWLEDGE_DB", "knowledge.db")
+)
 _store = SQLiteKnowledgeStore(KNOWLEDGE_DB)
 
 
@@ -138,7 +147,7 @@ def remember(
     result = _memory().remember(body.text, metadata=metadata, project_id=project_id)
     logger.info(
         "knowledge ingest: project=%s source=%s created=%d updated=%d",
-        project_id,
+        sanitize_for_log(project_id),
         result.source_id,
         len(result.created),
         len(result.updated),
@@ -210,7 +219,11 @@ def research(
             body.question, project_ids=projects, timeout=body.timeout
         )
     except AgentSessionError as err:
-        logger.warning("research failed: projects=%s error=%s", projects, err)
+        logger.warning(
+            "research failed: projects=%s error=%s",
+            sanitize_for_log(projects),
+            sanitize_for_log(err),
+        )
         raise HTTPException(
             status_code=502, detail=f"Agent session failed: {err}"
         ) from err
