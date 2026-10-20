@@ -562,6 +562,17 @@ def add_memory(
             metadata=creator_metadata,
         )
 
+        # The SDK reports failure in-band, with the exception text in "error".
+        # Returning that verbatim leaked internals (database errors, paths) to
+        # the client -- and as a 200, so callers believed the write succeeded.
+        if response.get("success") is False:
+            logging.error(
+                "Memory creation failed: project=%s, error=%s",
+                sanitize_for_log(final_project_id),
+                sanitize_for_log(response.get("error")),
+            )
+            raise HTTPException(status_code=500, detail="Failed to create memory")
+
         # Handle different response formats from _add_with_llm and _add_without_llm
         if "results" in response:
             # response from _add_with_llm
