@@ -114,3 +114,57 @@ follow-up.
 4. Update the local git remote to `SelfMemory/SelfMemory`.
 5. CHANGELOG has no `Unreleased` section; confirm whether this repo wants
    hand-written entries or relies on python-semantic-release.
+
+---
+
+## 2026-10-20 — Cleared the four unexamined CodeQL alerts
+
+### Commit
+`0ab527f fix(security): close remaining log- and path-injection alerts` — local
+only, **not pushed**. CodeQL has not re-run, so the alerts are fixed in code but
+not yet confirmed closed.
+
+### What each alert actually was
+Pulled the taint paths from the SARIF rather than reading line numbers, which had
+drifted under uncommitted edits.
+- **#234, #202, #203 log-injection** — real. Request-supplied `project_id` reached
+  log lines. Fixed with `sanitize_for_log`, plus three sibling `User not found`
+  lines with the same shape.
+- **#231 path-injection** — source is `os.getenv("SELFMEMORY_KNOWLEDGE_DB")`, not a
+  request. Operator config, low real risk, but the store `mkdir(parents=True)`s
+  whatever it is handed. Added `selfmemory/utils/paths.py::resolve_within()`,
+  confining the DB to the server's working directory. Bad values fail at startup.
+
+### Decision worth knowing
+Did **not** reuse `SELFMEMORY_DATA_DIR` as the base. It is documented (default
+`~/.selfmemory`, legacy file store) but nothing reads it; adopting it would
+silently move the DB for anyone who exported it and break the devstack's
+`REPO_ROOT / knowledge.db` assumption.
+
+### Still open on PR #160
+- **#233** `session.py` command-line-injection — false positive. List-form
+  `subprocess.run`, no shell; the prompt is one argv entry and always begins with
+  fixed text, so it cannot be parsed as a flag either.
+- **#232** `dev_seed_api_key.py` clear-text-logging — deliberate; the script exists
+  to print a key, and refuses non-local Mongo.
+CodeQL stays red until these two are dismissed with a reason — a GitHub action,
+left for the user.
+
+### Working tree left untouched
+Uncommitted from an earlier session, deliberately not swept into this commit:
+the LLM provider fix in `server/routes/knowledge.py` and `selfmemory/llms/*`,
+`server/main.py`, `Makefile`, and the untracked devstack
+(`docker-compose.yml`, `scripts/devstack/`, `tests/test_devstack.py`,
+`tests/test_llm_params.py`). The `knowledge.py` fix was committed by staging a
+patched copy of HEAD, so the provider-fix hunks stay unstaged.
+
+### Verification
+`pytest` 278 passed. `ruff check` clean on all touched files. Server import
+checked under four `SELFMEMORY_KNOWLEDGE_DB` values: default and `stores/kb.db`
+boot; `../escape.db` and `/etc/kb.db` refused at startup.
+
+### Next actions
+1. Push `0ab527f` and confirm CodeQL closes #202, #203, #231, #234.
+2. Dismiss #233 (false positive) and #232 (won't fix) with the reasons above.
+3. Commit the provider fix and devstack.
+4. Update the local git remote to `SelfMemory/SelfMemory`.
