@@ -88,6 +88,13 @@ def create_project_api_key(
     - External auth layer → Kratos IDs
     - Internal database relationships → MongoDB ObjectIds
     """
+    # Only an interactive session may mint keys; otherwise a leaked API key or
+    # OAuth token could create new long-lived keys, even for other projects.
+    if auth.auth_type != "session":
+        raise HTTPException(
+            status_code=403, detail="API keys can only be created from a session"
+        )
+
     # auth.user_id is Kratos identity_id (UUID string)
     project_obj_id = validate_object_id(project_id, "project_id")
 
