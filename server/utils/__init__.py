@@ -1,3 +1,0 @@
-"""
-Server utilities package.
-"""

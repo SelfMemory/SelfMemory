@@ -289,3 +289,7 @@ apis/login.bru
 apis/Search Memory.bru
 apis/environments/DEV.bru
 qdrant_storage/
+
+# local knowledge store
+knowledge.db
+knowledge.db-*

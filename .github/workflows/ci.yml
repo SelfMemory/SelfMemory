@@ -20,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -28,15 +28,16 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: |
-          uv sync
-          uv add ruff --dev
+        run: uv sync --locked
 
       - name: Run ruff linting
         run: uv run ruff check .
 
       - name: Run ruff formatting check
         run: uv run ruff format --check .
+
+      - name: Check layer contracts
+        run: uv run lint-imports
 
   test:
     name: Run Tests
@@ -49,7 +50,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -57,7 +58,7 @@ jobs:
           version: "latest"
 
       - name: Install dependencies with test extras
-        run: uv sync --extra test
+        run: uv sync --locked
 
       - name: Run tests with coverage
         run: uv run pytest tests/ -v --cov --cov-branch --cov-report=xml --junitxml=junit.xml -o junit_family=legacy
@@ -96,20 +97,15 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
-      - name: Install dependencies
-        run: |
-          uv sync
-          uv add build --dev
-
       - name: Build package
-        run: uv run python -m build
+        run: uv build --package selfmemory
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
