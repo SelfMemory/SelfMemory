@@ -1,0 +1,29 @@
+info:
+  name: Scopes
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v1/wiki/scopes"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("lists scopes", function () {
+          expect(res.getStatus()).to.be.oneOf([200, 202]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Every scope this credential can read in its organization: the org room,
+  projects and sub-projects, and (for session callers) personal notes. An
+  API key is pinned to its project, so it sees that project and the org room.

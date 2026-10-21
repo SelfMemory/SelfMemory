@@ -1,0 +1,28 @@
+info:
+  name: Promotions
+  type: http
+  seq: 11
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v1/wiki/promotions"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("lists promotions", function () {
+          expect(res.getStatus()).to.be.oneOf([200, 202]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Org-wide facts the agent queued from project and personal scopes. Org
+  owners and admins approve them into the org room with promotions/decide.

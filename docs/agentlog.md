@@ -168,3 +168,99 @@ boot; `../escape.db` and `/etc/kb.db` refused at startup.
 2. Dismiss #233 (false positive) and #232 (won't fix) with the reasons above.
 3. Commit the provider fix and devstack.
 4. Update the local git remote to `SelfMemory/SelfMemory`.
+
+---
+
+## 2026-10-21 — Backend rebuilt on the Org Brain model (branch `feat/orgbrain-backend`)
+
+Branched from `feat/knowledge-memory-2.0` with its uncommitted work still in the
+tree. A copy of that uncommitted diff and the untracked devstack files was saved
+to the session scratchpad before anything changed.
+
+### What the backend is now
+The design of `projects/tw/orgbrain` (Next.js) reimplemented in this Python/FastAPI
+repo. Ory auth, API keys, and org/project RBAC are unchanged.
+- **Scopes** map onto the existing tenancy: the org room, a project, a sub-project
+  (new `projects.parentProjectId`, one level deep, membership of the parent grants
+  nothing), and personal notes. On disk they live at
+  `SELFMEMORY_DATA_ROOT/orgs/<org>/{raw,wiki}/...`, and each wiki scope is its own
+  git repository.
+- **All model work is opencode** (`opencode run --format json --agent
+  selfmemory-ingest|selfmemory-query`, run per job). The server has no LLM,
+  embeddings, or vector store.
+- **Isolation**: bwrap or docker, checked by a probe before any run. Runs fail
+  closed in production; unconfined runs need `SELFMEMORY_UNISOLATED_ACK=1`.
+- **Durable job queue** in Mongo (`wiki_jobs`, `wiki_job_events`, `wiki_leases`,
+  `wiki_chats`, `wiki_chat_messages`). Events stream over SSE and resume from
+  `Last-Event-ID`. The worker runs in-process, or alone via
+  `python -m server.wiki.worker`.
+- **Promotion review**: listing proposals and approving them into the org room.
+  Orgbrain planned this but never built it.
+
+### Improvements over orgbrain, found while porting
+- A parent project's sandbox mount and its graph walk exposed the sub-projects
+  nested inside it. Nested sub-projects are now masked in the mount (tmpfs) and
+  excluded from walks and from the parent's git index (`.git/info/exclude`).
+  Docker rejects a mask and a bind at the same path, so a readable child gets
+  only its bind.
+- opencode v2 dropped `--dir` and `--command`. The command prompts are now
+  rendered by the server, and `--standalone` gives each run a private server
+  instead of the shared background service, which sits outside the sandbox.
+- An unconfined spawn path that actually works in development. Orgbrain's fell
+  through to docker.
+- Lint accepts an empty message. Orgbrain returned 400 for it.
+- Ingests into one scope are serialised by a lease. A busy scope requeues the job
+  with `notBefore`, without spending an attempt.
+
+### Verified
+- 56 wiki tests pass in a clean `--extra test` environment (mongomock, a fake
+  agent for the worker, FastAPI TestClient for the routes).
+- Real docker checks: confinement holds; a masked child is hidden; a readable
+  child is read-only.
+- Live end-to-end run against local Mongo (database `selfmemory_e2e`) with real
+  opencode (`opencode/big-pickle`). Upload, ingest, commit, query with citations,
+  graph, search, timeline, a queued promotion, and the MCP client all worked.
+
+### Not done / follow-ups
+- Legacy modules are still in the tree pending deletion approval. See the final
+  message of the session.
+- Not ported: the Google Drive connector, and per-user Google sign-in (Ory stays).
+- `selfmemory-ts` and the dashboard (separate repo) still call `/api/memories`
+  and `/api/knowledge` and need moving to `/api/wiki`.
+- `docs/` (Docusaurus) still documents the old SDK.
+- The sandbox image (`scripts/sandbox-image`) has not been built on a host yet,
+  so the docker agent probe was only seen to fail with "opencode not found", as
+  expected.
+
+## 2026-10-21 — Blueprint phases 0 and 1 (restructure)
+
+Followed `docs/architecture/index.html`, phases 0–1.
+
+### Done
+- uv workspace: library at `packages/selfmemory` (src layout, `uv_build`, Python
+  3.13, `server` extra); root `pyproject.toml` holds dev group + tool config.
+  `selfmemory-mcp` is no longer a workspace member, folded into `selfmemory.apps.mcp`
+  + `platform/mcp` + `features/wiki/interfaces/mcp`.
+- Layout `kernel/ features/{wiki,runs,uploads,tenancy,api_keys} platform/ apps/`.
+  Module moves are in the README layout section; notable: `server.wiki.access` →
+  `features.tenancy.access`, `selfmemory.wiki.paths` → `kernel.safe_paths`,
+  `selfmemory.wiki.settings` → `selfmemory.wiki_settings`, `server.wiki.worker` →
+  `features.runs.worker`, prompts → `features/runs/schema/`.
+- `config.py` is pydantic-settings (same attribute and env names).
+- Feature registry (`kernel/feature.py`, `features.BUILTIN`, entry-point group
+  `selfmemory.features`); `apps/api.py` only mounts. Inline org/project create
+  endpoints moved into the tenancy routers.
+- API versioned at `/api/v1`; `/api/*` still mounted but hidden from OpenAPI for
+  the old dashboard. Tests, MCP wiki client, Bruno and devstack use `/api/v1`.
+- import-linter contracts (layers + pure wiki domain) in `make lint` and CI.
+- `docker-compose.yml` and the sandbox image moved to `deploy/`.
+- Fixed a stale `create_project_client` export that stopped the MCP server from importing.
+
+### Not done / follow-ups
+- Deleting the legacy stack was blocked by the permission classifier. It has all been
+  moved to `legacy/` (selfmemory memory/vector/LLM code, old `server/` leftovers
+  incl. chat + knowledge routes, `selfmemory-mcp/pyproject.toml`, legacy tests,
+  `bruno/knowledge`); delete that directory to finish phase 1.
+- Wiki `domain/` is only `layout.py` so far; ports (`WikiRepo`, `JobQueue`,
+  `Sandbox`, …) and a `bootstrap.py` composition root are not written yet.
+- Phases 2+ (FTS index, OpenAPI contract tests, TS client, MCP at `/mcp`, CLI, A2A).

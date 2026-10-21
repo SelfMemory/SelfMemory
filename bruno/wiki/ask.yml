@@ -1,0 +1,36 @@
+info:
+  name: Ask (query run)
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v1/wiki/runs"
+  body:
+    type: json
+    data: |-
+      {
+        "command": "query",
+        "message": "What decisions were made and who owns them?"
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("queued", function () {
+          expect(res.getStatus()).to.be.oneOf([200, 202]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Queues a read-only query run. The agent navigates the wiki indexes and
+  answers with citations like wiki/projects/<id>/decisions/x.md. Returns 202
+  with a job id; read the answer from Run or stream Run events.

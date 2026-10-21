@@ -20,14 +20,14 @@ import os
 import secrets
 import string
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pymongo import MongoClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from server.utils.crypto import hash_api_key  # noqa: E402
+from selfmemory.kernel.crypto import hash_api_key  # noqa: E402
 
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1", "mongo", "mongodb")
 
@@ -57,7 +57,7 @@ def main() -> None:
 
     client = MongoClient(args.mongodb_uri)
     db = client.get_default_database()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # The Kratos identity this user would have had. Nothing validates it while
     # authenticating with an sk_im_ key, so a stable fake is enough.

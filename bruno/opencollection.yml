@@ -4,9 +4,6 @@ info:
   name: selfmemory
 
 request:
-  headers:
-    - name: Content-Type
-      value: application/json
   auth:
     type: bearer
     token: "{{apiKey}}"
@@ -15,26 +12,25 @@ docs:
   content: |-
     # selfmemory
 
-    Knowledge-page memory endpoints.
+    The knowledge wiki API. Sources go in, an agent files them into a scoped,
+    git-backed Open Knowledge Format wiki, and questions are answered from it
+    with citations.
 
     ## Setup
 
     1. Run the server: `make run` (listens on :8081)
-    2. Create a project API key: `POST /api/projects/{id}/api-keys`
-    3. Put it in the `local` environment as `apiKey`
+    2. Seed a project API key: `uv run python scripts/dev_seed_api_key.py`
+    3. Put it in the `local` environment as `apiKey`, and its project as
+       `projectId`
 
-    A project API key is pinned to one project, so `project_id` in a request
-    body is optional — send it only to assert which project you expect, and
-    the server rejects a mismatch rather than silently using the key's own.
+    A project API key is pinned to one project: it reads that project, its
+    sub-projects it may read, and the org room, and needs no `org_id`.
 
-    ## Two read paths
+    ## Runs are asynchronous
 
-    `Ask` is one model call over full-text hits — fast, single-hop.
-    `Research` runs an agent over a materialized copy of the pages. Slower by
-    an order of magnitude, and the only path that follows `[[links]]` between
-    pages. It needs the `opencode` binary on the server's PATH; without it the
-    endpoint returns 503 and `Ask` still works.
-  type: text/markdown
+    `Upload and ingest`, `Ask` and `Lint` return a job id. Put it in `jobId`,
+    then read `Run` (polling) or `Run events` (server-sent events).
+
 bundled: false
 extensions:
   bruno:

@@ -5,5 +5,7 @@ variables:
     value: ""
   - name: orgId
     value: ""
+  - name: jobId
+    value: ""
   - secret: true
     name: apiKey
