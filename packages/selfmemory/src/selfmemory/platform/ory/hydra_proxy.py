@@ -7,8 +7,8 @@ Dashboard (Vercel) calls these backend proxy routes instead of Hydra directly.
 
 Security:
 - Consent routes require Ory Kratos session authentication (user already logged in)
-- Login routes do NOT require authentication (user is in the process of logging in)
-- The login_challenge/consent_challenge tokens themselves provide security
+- Login accept requires a Kratos session; the subject is the session's user
+- Consent accept builds token claims and scopes server-side, never from the body
 """
 
 import logging
@@ -18,7 +18,13 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from selfmemory.platform.dependencies import AuthContext, authenticate_api_key
+from selfmemory.kernel.validators import validate_object_id
+from selfmemory.platform.dependencies import (
+    AuthContext,
+    authenticate_api_key,
+    check_project_access,
+    mongo_db,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +45,13 @@ class ConsentAcceptRequest(BaseModel):
     grant_access_token_audience: list[str] = Field(
         default_factory=list, description="Token audience"
     )
-    session: dict = Field(..., description="Session data to include in token")
+    project_id: str | None = Field(
+        default=None, description="Project to pin the token to (access is checked)"
+    )
+    session: dict | None = Field(
+        default=None,
+        description="Deprecated: only access_token.project_id is read, then checked",
+    )
     remember: bool = Field(default=True, description="Remember consent decision")
     remember_for: int = Field(default=3600, description="Remember duration in seconds")
 
@@ -58,7 +70,6 @@ class LoginAcceptRequest(BaseModel):
     """Request body for accepting login."""
 
     login_challenge: str = Field(..., description="Login challenge from Hydra")
-    subject: str = Field(..., description="User ID (Kratos identity ID)")
     remember: bool = Field(default=True, description="Remember login decision")
     remember_for: int = Field(default=3600, description="Remember duration in seconds")
 
@@ -146,6 +157,68 @@ def enrich_scope_metadata(scopes: list[str]) -> list[dict]:
     return enriched
 
 
+REQUIRED_MEMORY_SCOPES = ["memories:read", "memories:write"]
+
+
+async def _allowed_scopes(client: httpx.AsyncClient, consent_data: dict) -> list[str]:
+    """Scopes the user may grant: those requested, else the client's registered
+    ones, plus the memory scopes MCP tools need."""
+    scopes = list(consent_data.get("requested_scope") or [])
+    if not scopes:
+        client_id = consent_data.get("client", {}).get("client_id")
+        try:
+            resp = await client.get(
+                f"{HYDRA_ADMIN_URL}/admin/clients/{client_id}", timeout=10.0
+            )
+            if resp.status_code == 200:
+                scopes = (resp.json().get("scope") or "").split()
+            else:
+                logger.error(f"Failed to fetch client details: {resp.status_code}")
+        except Exception as e:
+            logger.error(f"Error fetching client scopes: {e}")
+    for scope in REQUIRED_MEMORY_SCOPES:
+        if scope not in scopes:
+            scopes.append(scope)
+    return scopes
+
+
+async def _fetch_consent_request(
+    client: httpx.AsyncClient, consent_challenge: str
+) -> dict:
+    response = await client.get(
+        f"{HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent",
+        params={"consent_challenge": consent_challenge},
+        timeout=10.0,
+    )
+    if response.status_code != 200:
+        logger.error(
+            f"Hydra consent request failed: status={response.status_code}, "
+            f"body={response.text}"
+        )
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to fetch consent request: {response.text}",
+        )
+    return response.json()
+
+
+def _build_session_claims(user_id: str, project_id: str | None) -> dict:
+    """Token claims, derived from what the server can verify about the user."""
+    claims: dict = {}
+    if project_id:
+        if not check_project_access(user_id, project_id):
+            raise HTTPException(
+                status_code=403, detail="You do not have access to this project"
+            )
+        project = mongo_db.projects.find_one(
+            {"_id": validate_object_id(project_id, "project_id")}
+        )
+        claims["project_id"] = project_id
+        if project and project.get("organizationId"):
+            claims["organization_id"] = str(project["organizationId"])
+    return {"access_token": dict(claims), "id_token": dict(claims)}
+
+
 @router.get("/consent/request", summary="Get consent request details")
 async def get_consent_request(
     consent_challenge: str,
@@ -172,83 +245,13 @@ async def get_consent_request(
         )
 
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent",
-                params={"consent_challenge": consent_challenge},
-                timeout=10.0,
-            )
+            consent_data = await _fetch_consent_request(client, consent_challenge)
 
-            if response.status_code != 200:
-                logger.error(
-                    f"Hydra consent request failed: status={response.status_code}, "
-                    f"body={response.text}"
-                )
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Failed to fetch consent request: {response.text}",
-                )
-
-            consent_data = response.json()
-
-            # Get requested scopes
-            requested_scopes = consent_data.get("requested_scope", [])
-
-            # FALLBACK: If requested_scope is empty, use client's registered scopes
-            # This happens when Docker MCP Toolkit doesn't send scope parameter
-            if not requested_scopes:
-                client_id = consent_data.get("client", {}).get("client_id")
-                logger.warning(
-                    f"⚠️  Empty requested_scope - fetching client's registered scopes for client_id={client_id}"
-                )
-
-                try:
-                    # Fetch client details from Hydra
-                    client_response = await client.get(
-                        f"{HYDRA_ADMIN_URL}/admin/clients/{client_id}",
-                        timeout=10.0,
-                    )
-
-                    if client_response.status_code == 200:
-                        client_details = client_response.json()
-                        client_scope_str = client_details.get("scope", "")
-                        client_scopes = (
-                            client_scope_str.split() if client_scope_str else []
-                        )
-
-                        logger.info(f"✅ Fetched client scopes: {client_scopes}")
-
-                        # Use client's registered scopes as fallback
-                        requested_scopes = client_scopes
-                        # Also update the consent_data so frontend knows what to grant
-                        consent_data["requested_scope"] = requested_scopes
-                        consent_data["scope_fallback_used"] = True
-
-                        logger.info(
-                            f"✅ Using client's registered scopes as fallback: {requested_scopes}"
-                        )
-                    else:
-                        logger.error(
-                            f"Failed to fetch client details: {client_response.status_code}"
-                        )
-
-                except Exception as e:
-                    logger.error(f"Error fetching client scopes: {e}")
-
-            # CRITICAL: Always ensure memory scopes are included (required for MCP tools)
-            # This matches the behavior in Dynamic Client Registration
-            required_memory_scopes = ["memories:read", "memories:write"]
-            scopes_added = []
-            for scope in required_memory_scopes:
-                if scope not in requested_scopes:
-                    requested_scopes.append(scope)
-                    scopes_added.append(scope)
-
-            if scopes_added:
-                logger.info(
-                    f"➕ Added required memory scopes to consent: {scopes_added}"
-                )
-                # Update consent_data so frontend displays all scopes
-                consent_data["requested_scope"] = requested_scopes
+            original = list(consent_data.get("requested_scope") or [])
+            requested_scopes = await _allowed_scopes(client, consent_data)
+            if not original:
+                consent_data["scope_fallback_used"] = True
+            consent_data["requested_scope"] = requested_scopes
 
             # Enrich scope metadata with descriptions
             consent_data["scope_metadata"] = enrich_scope_metadata(requested_scopes)
@@ -322,19 +325,38 @@ async def accept_consent_request(
         logger.info(f"   MCP_SERVER_URL from env: {mcp_server_url}")
         logger.info(f"   ✅ Corrected audience: {audiences}")
 
-        # Build consent accept payload with corrected audience
-        accept_payload = {
-            "grant_scope": body.grant_scope,
-            "grant_access_token_audience": audiences,
-            "session": body.session,
-            "remember": body.remember,
-            "remember_for": body.remember_for,
-        }
-
         # CRITICAL: follow_redirects=False — Hydra returns a redirect_to URL with a
         # one-time consent_verifier. If httpx follows the redirect, it consumes the
         # verifier server-side, and the browser can't use it ("verifier already used").
         async with httpx.AsyncClient(follow_redirects=False) as client:
+            consent_data = await _fetch_consent_request(client, body.consent_challenge)
+            if consent_data.get("subject") != auth.user_id:
+                logger.warning(
+                    f"Consent subject mismatch: challenge={body.consent_challenge}, "
+                    f"user={auth.user_id}"
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail="Consent request does not belong to this user",
+                )
+
+            allowed = await _allowed_scopes(client, consent_data)
+            grant_scope = [s for s in body.grant_scope if s in allowed]
+
+            project_id = body.project_id
+            if project_id is None and isinstance(body.session, dict):
+                legacy = body.session.get("access_token") or {}
+                if isinstance(legacy, dict):
+                    project_id = legacy.get("project_id")
+
+            accept_payload = {
+                "grant_scope": grant_scope,
+                "grant_access_token_audience": audiences,
+                "session": _build_session_claims(auth.user_id, project_id),
+                "remember": body.remember,
+                "remember_for": body.remember_for,
+            }
+
             response = await client.put(
                 f"{HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent/accept",
                 params={"consent_challenge": body.consent_challenge},
@@ -495,28 +517,33 @@ async def get_login_request(
 @router.put("/login/accept", summary="Accept login request")
 async def accept_login_request(
     body: LoginAcceptRequest,
+    auth: AuthContext = Depends(authenticate_api_key),
 ):
     """
     Accept OAuth login request via Hydra admin API.
 
     This endpoint proxies the login accept call to Hydra admin API securely.
-    No authentication required - the user just authenticated with Kratos.
-    The login_challenge itself acts as a secure token.
+    Requires a Kratos session; the subject is always the session's user.
 
     Args:
-        body: Login accept request with subject and remember settings
+        body: Login accept request with remember settings
 
     Returns:
         Redirect URL to continue OAuth flow (usually to consent page)
     """
+    if auth.auth_type != "session":
+        raise HTTPException(
+            status_code=403, detail="Login must be accepted with a browser session"
+        )
+    subject = auth.user_id
     try:
         logger.info(
-            f"Accepting login: challenge={body.login_challenge}, subject={body.subject}"
+            f"Accepting login: challenge={body.login_challenge}, subject={subject}"
         )
 
         # Build login accept payload
         accept_payload = {
-            "subject": body.subject,
+            "subject": subject,
             "remember": body.remember,
             "remember_for": body.remember_for,
             "context": {
@@ -546,7 +573,7 @@ async def accept_login_request(
 
             logger.info(
                 f"✅ Login accepted: redirect_to={result.get('redirect_to')}, "
-                f"subject={body.subject}"
+                f"subject={subject}"
             )
 
             return result

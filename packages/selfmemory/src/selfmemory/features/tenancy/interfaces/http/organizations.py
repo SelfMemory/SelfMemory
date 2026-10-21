@@ -28,6 +28,7 @@ from selfmemory.platform.dependencies import AuthContext, authenticate_api_key, 
 from selfmemory.platform.permissions import (
     get_user_by_kratos_id,
     get_user_object_id_from_kratos_id,
+    user_id_variants,
 )
 from selfmemory.platform.rate_limiter import limiter
 
@@ -871,7 +872,7 @@ def remove_user_from_organization(
     # CASCADE 3: Deactivate ALL API keys in this organization
     key_deactivation_result = mongo_db.api_keys.update_many(
         {
-            "userId": target_user_obj_id,
+            "userId": {"$in": user_id_variants(mongo_db, target_user_obj_id)},
             "projectId": {
                 "$in": [
                     p["_id"]
