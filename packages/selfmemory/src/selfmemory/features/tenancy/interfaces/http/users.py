@@ -13,7 +13,10 @@ from pymongo.database import Database
 
 from selfmemory.kernel.datetime import utc_now
 from selfmemory.platform.dependencies import AuthContext, authenticate_api_key, mongo_db
-from selfmemory.platform.permissions import get_user_object_id_from_kratos_id
+from selfmemory.platform.permissions import (
+    get_user_object_id_from_kratos_id,
+    user_id_variants,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +110,10 @@ def delete_user_account(
 
     # CASCADE 2: Deactivate ALL user's API keys
     key_deactivation_result = mongo_db.api_keys.update_many(
-        {"userId": user_obj_id, "isActive": True},
+        {
+            "userId": {"$in": user_id_variants(mongo_db, user_obj_id)},
+            "isActive": True,
+        },
         {
             "$set": {
                 "isActive": False,

@@ -23,7 +23,7 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from selfmemory.kernel.crypto import decrypt_api_key, encrypt_api_key, hash_api_key
+from selfmemory.kernel.crypto import encrypt_api_key, hash_api_key
 from selfmemory.kernel.datetime import utc_now
 from selfmemory.kernel.validators import validate_object_id
 from selfmemory.platform.dependencies import (
@@ -257,14 +257,11 @@ def list_project_api_keys(
         user = mongo_db.users.find_one({"kratosId": key["userId"]})
         owner_email = user.get("email", "Unknown") if user else "Unknown"
 
-        full_key = decrypt_api_key(key.get("encryptedKey", ""))
-
         result_keys.append(
             {
                 "id": str(key["_id"]),
                 "name": key.get("name", "Unnamed Key"),
                 "key_prefix": key.get("keyPrefix", "sk_im_..."),
-                "api_key": full_key,
                 "owner_id": key["userId"],
                 "owner_email": owner_email,
                 "permissions": key.get("permissions", []),
