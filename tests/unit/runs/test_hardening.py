@@ -61,8 +61,7 @@ def test_settings_read_quota_retention_and_audit_knobs():
     assert s.max_runs_per_owner_per_day == 50
     assert s.max_runs_per_org_per_day == 500
     assert s.session_home_retention_s == 86400
-    # quotas look back a day, so audit records are kept at least two
-    assert s.audit_retention_days == 2
+    assert s.audit_retention_days == 1
     assert s.worker_enabled is False
     d = load_settings({})
     assert d.max_runs_per_owner_per_day == 0 and d.max_runs_per_org_per_day == 0
@@ -102,12 +101,49 @@ def test_org_daily_quota_counts_every_owner(service, world):
         service.enqueue(owner, command="query", message="q", scope_key=None)
 
 
-def test_quota_window_is_one_rolling_day(service, world, db):
+def test_quota_resets_with_the_day(service, world, db):
+    from selfmemory.features.runs.store import QUOTAS
+
     service.settings = replace(service.settings, max_runs_per_owner_per_day=1)
     access = service.access(Principal(world.member), world.org_id)
     service.enqueue(access, command="query", message="q", scope_key=None)
-    db[AUDIT].update_many({}, {"$set": {"at": now() - timedelta(days=2)}})
+    with pytest.raises(QuotaExceededError):
+        service.enqueue(access, command="query", message="q", scope_key=None)
+    assert db[QUOTAS].find_one()["expiresAt"] is not None
+    db[QUOTAS].delete_many({})  # what the TTL index does at midnight UTC
     service.enqueue(access, command="query", message="q", scope_key=None)
+
+
+def test_org_refusal_gives_back_the_user_slot(service, world):
+    service.settings = replace(
+        service.settings, max_runs_per_owner_per_day=5, max_runs_per_org_per_day=1
+    )
+    member = service.access(Principal(world.member), world.org_id)
+    service.enqueue(member, command="query", message="q", scope_key=None)
+    with pytest.raises(QuotaExceededError):
+        service.enqueue(member, command="query", message="q", scope_key=None)
+    doc = service.quotas.col.find_one({"_id": {"$regex": "^user:"}})
+    assert doc["n"] == 1
+
+
+def test_quota_counter_never_overshoots_under_concurrency(db):
+    from selfmemory.features.runs.store import QuotaCounter
+
+    counter = QuotaCounter(db)
+    results: list[bool] = []
+    lock = threading.Lock()
+
+    def take():
+        ok = counter.take("user", "u1", 5)
+        with lock:
+            results.append(ok)
+
+    threads = [threading.Thread(target=take) for _ in range(30)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert results.count(True) == 5
 
 
 def test_create_run_route_maps_quota_to_429(service, world, monkeypatch):
@@ -303,3 +339,56 @@ def test_worker_entry_point_is_importable():
     from selfmemory.apps import worker as app_worker
 
     assert app_worker.main is worker_mod.main
+
+
+# ------------------------------------------------------------- fair share
+
+
+def test_flooding_owner_cannot_starve_another_owner(db):
+    from selfmemory.features.runs.store import CLAIM_SCAN, JobStore
+
+    store = JobStore(db)
+
+    def job(owner, org="o1", chat=None):
+        return store.create(
+            principal={"userId": owner, "pinnedProjectId": None, "owner": owner},
+            org_id=org,
+            command="query",
+            scope=None,
+            message="q",
+            display_text="q",
+            chat_id=chat,
+        )
+
+    for _ in range(CLAIM_SCAN * 2):
+        job("flooder")
+    store.jobs.update_many({}, {"$set": {"createdAt": now() - timedelta(hours=1)}})
+    victim = job("victim")
+    assert store.claim("w1", max_per_owner=1)["owner"] == "flooder"
+    # the flooder is at its cap; the victim's job is claimed despite the backlog
+    assert store.claim("w1", max_per_owner=1)["_id"] == victim["_id"]
+    assert store.claim("w1", max_per_owner=1) is None
+
+
+def test_busy_chat_backlog_does_not_block_other_jobs(db):
+    from selfmemory.features.runs.store import CLAIM_SCAN, JobStore
+
+    store = JobStore(db)
+    p = {"userId": "u1", "pinnedProjectId": None, "owner": "u1"}
+    args = {"org_id": "o1", "command": "query", "scope": None, "message": "q"}
+    for _ in range(CLAIM_SCAN + 5):
+        store.create(principal=p, display_text="q", chat_id="c1", **args)
+    other = store.create(principal=p, display_text="q", chat_id="c2", **args)
+    assert store.claim("w1")["chatId"] == "c1"
+    assert store.claim("w1")["_id"] == other["_id"]
+
+
+def test_queued_jobs_per_owner_are_capped(service, world):
+    service.settings = replace(service.settings, max_queued_per_owner=2)
+    access = service.access(Principal(world.member), world.org_id)
+    for _ in range(2):
+        service.enqueue(access, command="query", message="q", scope_key=None)
+    with pytest.raises(QuotaExceededError):
+        service.enqueue(access, command="query", message="q", scope_key=None)
+    service.jobs.claim("w1")  # one leaves the queue, so there is room again
+    service.enqueue(access, command="query", message="q", scope_key=None)

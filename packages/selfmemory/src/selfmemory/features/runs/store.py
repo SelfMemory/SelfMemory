@@ -30,6 +30,7 @@ __all__ = [
     "ScopeLease",
     "ScopeBusyError",
     "QuotaExceededError",
+    "QuotaCounter",
     "now",
 ]
 
@@ -40,6 +41,7 @@ EVENTS = "wiki_job_events"
 LEASES = "wiki_leases"
 CHATS = "wiki_chats"
 MESSAGES = "wiki_chat_messages"
+QUOTAS = "wiki_run_quotas"
 
 MAX_EVENTS_PER_JOB = 20_000
 STALE_HEARTBEAT_S = 60
@@ -83,6 +85,7 @@ def ensure_indexes(db) -> None:
     )
     db[CHATS].create_index([("kind", ASCENDING), ("updatedAt", ASCENDING)])
     db[MESSAGES].create_index([("chatId", ASCENDING), ("at", ASCENDING)])
+    db[QUOTAS].create_index("expiresAt", expireAfterSeconds=0)
 
 
 def valid_job_id(job_id: str | None) -> bool:
@@ -167,8 +170,25 @@ class JobStore:
             orgs[r.get("orgId")] += 1
             if r.get("chatId"):
                 busy_chats.add(r["chatId"])
+        # Exclude held-back jobs in the query itself, so one tenant's backlog
+        # cannot fill the scan window and starve everyone else.
+        eligible = dict(ready)
+        full_owners = [
+            o
+            for o, n in owners.items()
+            if max_per_owner is not None and n >= max_per_owner
+        ]
+        full_orgs = [
+            o for o, n in orgs.items() if max_per_org is not None and n >= max_per_org
+        ]
+        if full_owners:
+            eligible["owner"] = {"$nin": full_owners}
+        if full_orgs:
+            eligible["orgId"] = {"$nin": full_orgs}
+        if busy_chats:
+            eligible["chatId"] = {"$nin": list(busy_chats)}
         candidates = (
-            self.jobs.find(ready, {"owner": 1, "orgId": 1, "chatId": 1})
+            self.jobs.find(eligible, {"owner": 1, "orgId": 1, "chatId": 1})
             .sort("createdAt", ASCENDING)
             .limit(CLAIM_SCAN)
         )
@@ -202,6 +222,9 @@ class JobStore:
             if job:
                 return job
         return None
+
+    def queued_count(self, owner: str) -> int:
+        return self.jobs.count_documents({"owner": owner, "status": "queued"})
 
     def heartbeat(self, job_id: str, worker_id: str) -> dict | None:
         """``None`` means this worker no longer owns the job and must stop."""
@@ -554,7 +577,44 @@ class ScopeBusyError(RuntimeError):
 
 
 class QuotaExceededError(RuntimeError):
-    """An owner or organization used up its runs for the rolling day."""
+    """A user or organization used up its runs for the day, or has too many
+    runs queued."""
+
+
+class QuotaCounter:
+    """Atomic per-UTC-day run counters, one document per (kind, id, day).
+
+    ``take`` increments only while the count is under the limit, in a single
+    conditional upsert, so concurrent requests cannot overshoot it. Mongo
+    errors propagate: the quota fails closed.
+    """
+
+    def __init__(self, db):
+        self.col = db[QUOTAS]
+
+    @staticmethod
+    def _key(kind: str, ident: str, t: datetime) -> str:
+        return f"{kind}:{ident}:{t:%Y-%m-%d}"
+
+    def take(self, kind: str, ident: str, limit: int) -> bool:
+        t = now()
+        key = self._key(kind, ident, t)
+        day_end = datetime(t.year, t.month, t.day, tzinfo=UTC) + timedelta(days=1)
+        try:
+            self.col.find_one_and_update(
+                {"_id": key, "n": {"$lt": limit}},
+                {"$inc": {"n": 1}, "$setOnInsert": {"expiresAt": day_end}},
+                upsert=True,
+            )
+        except DuplicateKeyError:
+            return False  # the document exists and is at the limit
+        return True
+
+    def give_back(self, kind: str, ident: str) -> None:
+        self.col.update_one(
+            {"_id": self._key(kind, ident, now()), "n": {"$gt": 0}},
+            {"$inc": {"n": -1}},
+        )
 
 
 class ScopeLease:

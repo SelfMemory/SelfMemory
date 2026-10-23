@@ -18,6 +18,7 @@ from selfmemory.features.runs.homes import delete_chat_home
 from selfmemory.features.runs.store import (
     ChatStore,
     JobStore,
+    QuotaCounter,
     QuotaExceededError,
     ScopeLease,
 )
@@ -77,6 +78,7 @@ class WikiService:
         self.jobs = JobStore(db)
         self.chats = ChatStore(db)
         self.audit = AuditLog(db)
+        self.quotas = QuotaCounter(db)
 
     def record(self, access: OrgAccess, action: str, **kw) -> None:
         """Append an audit record for the caller behind ``access``."""
@@ -178,21 +180,32 @@ class WikiService:
         return job
 
     def check_quota(self, access: OrgAccess) -> None:
-        """Refuse a new run once the owner or the organization used up its
-        runs for the rolling day (``max_runs_per_*_per_day``; 0 = no limit)."""
+        """Refuse a new run when the owner has too many queued, or reserve one
+        of the user's and the organization's runs for today
+        (``max_runs_per_*_per_day``; 0 = no limit).
+
+        The daily quotas count per person (``user_id``), not per credential,
+        so extra project-pinned keys do not multiply a user's allowance.
+        """
         s = self.settings
-        since = self.audit.window_start(86400)
-        if s.max_runs_per_owner_per_day and (
-            self.audit.count_since("run.queued", since, owner=access.principal.owner)
-            >= s.max_runs_per_owner_per_day
-        ):
+        if self.jobs.queued_count(access.principal.owner) >= s.max_queued_per_owner:
             raise QuotaExceededError(
-                f"daily run quota reached ({s.max_runs_per_owner_per_day} per user)"
+                f"too many queued runs ({s.max_queued_per_owner}); wait for some "
+                "to finish"
             )
-        if s.max_runs_per_org_per_day and (
-            self.audit.count_since("run.queued", since, org_id=access.org_id)
-            >= s.max_runs_per_org_per_day
+        user = access.principal.user_id
+        took_user = False
+        if s.max_runs_per_owner_per_day:
+            if not self.quotas.take("user", user, s.max_runs_per_owner_per_day):
+                raise QuotaExceededError(
+                    f"daily run quota reached ({s.max_runs_per_owner_per_day} per user)"
+                )
+            took_user = True
+        if s.max_runs_per_org_per_day and not self.quotas.take(
+            "org", access.org_id, s.max_runs_per_org_per_day
         ):
+            if took_user:
+                self.quotas.give_back("user", user)
             raise QuotaExceededError(
                 f"daily run quota reached ({s.max_runs_per_org_per_day} per "
                 "organization)"

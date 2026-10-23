@@ -9,7 +9,7 @@ optional TTL index (``audit_retention_days``).
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from pymongo import ASCENDING, DESCENDING
 from pymongo.errors import OperationFailure, PyMongoError
@@ -74,21 +74,6 @@ class AuditLog:
         except PyMongoError:
             logger.exception("audit write failed for %s", action)
 
-    def count_since(
-        self,
-        action: str,
-        since: datetime,
-        *,
-        org_id: str | None = None,
-        owner: str | None = None,
-    ) -> int:
-        q: dict = {"action": action, "at": {"$gte": since}}
-        if org_id is not None:
-            q["orgId"] = org_id
-        if owner is not None:
-            q["owner"] = owner
-        return self.col.count_documents(q)
-
     def recent(
         self, org_id: str, limit: int = 100, before: datetime | None = None
     ) -> list[dict]:
@@ -96,6 +81,3 @@ class AuditLog:
         if before is not None:
             q["at"] = {"$lt": before}
         return list(self.col.find(q).sort("at", DESCENDING).limit(limit))
-
-    def window_start(self, seconds: int) -> datetime:
-        return datetime.now(UTC) - timedelta(seconds=seconds)
