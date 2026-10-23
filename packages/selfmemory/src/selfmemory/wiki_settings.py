@@ -73,6 +73,15 @@ class WikiSettings:
     unisolated_ack: bool = False
     run_timeout_s: int = 600
     max_concurrent_runs: int = 8
+    # Fair share across tenants: runs one credential owner / one organization
+    # may have going at once, across every worker. Excess jobs wait queued.
+    max_runs_per_owner: int = 4
+    max_runs_per_org: int = 16
+    # Finished runs (results, event streams) are kept this long, so a caller
+    # that disconnected can resubscribe or poll.
+    run_retention_s: int = 24 * 3600
+    # Agent contexts (A2A ``contextId``) are deleted after this long idle.
+    context_idle_ttl_s: int = 3600
     upload_max_files: int = 2000
     upload_max_bytes: int = 50 * 1024 * 1024
     worker_enabled: bool = True
@@ -136,6 +145,10 @@ def load_settings(env: dict[str, str] | None = None) -> WikiSettings:
         unisolated_ack=_flag(e.get("SELFMEMORY_UNISOLATED_ACK"), False),
         run_timeout_s=_int(e.get("SELFMEMORY_RUN_TIMEOUT_S"), 600),
         max_concurrent_runs=max(1, _int(e.get("SELFMEMORY_MAX_CONCURRENT_RUNS"), 8)),
+        max_runs_per_owner=max(1, _int(e.get("SELFMEMORY_MAX_RUNS_PER_OWNER"), 4)),
+        max_runs_per_org=max(1, _int(e.get("SELFMEMORY_MAX_RUNS_PER_ORG"), 16)),
+        run_retention_s=max(60, _int(e.get("SELFMEMORY_RUN_RETENTION_S"), 86400)),
+        context_idle_ttl_s=max(60, _int(e.get("SELFMEMORY_CONTEXT_IDLE_TTL_S"), 3600)),
         upload_max_files=_int(e.get("SELFMEMORY_UPLOAD_MAX_FILES"), 2000),
         upload_max_bytes=_int(e.get("SELFMEMORY_UPLOAD_MAX_BYTES"), 50 * 1024 * 1024),
         worker_enabled=_flag(e.get("SELFMEMORY_WORKER"), True),

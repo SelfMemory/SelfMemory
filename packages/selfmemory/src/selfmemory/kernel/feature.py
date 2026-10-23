@@ -24,6 +24,10 @@ class AppContext(Protocol):
         """Mount an HTTP router under the versioned API prefix."""
         ...
 
+    def add_public_router(self, router: Any) -> None:
+        """Mount a router at the site root, for well-known discovery paths."""
+        ...
+
 
 @dataclass(frozen=True)
 class Feature:

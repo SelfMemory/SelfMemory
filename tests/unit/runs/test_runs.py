@@ -7,9 +7,18 @@ from dataclasses import replace
 from datetime import timedelta
 
 import pytest
+from pymongo.errors import DuplicateKeyError
 
 from selfmemory.features.runs import worker as worker_mod
-from selfmemory.features.runs.store import JobStore, ScopeBusyError, ScopeLease, now
+from selfmemory.features.runs.store import (
+    JOBS,
+    ChatStore,
+    JobStore,
+    ScopeBusyError,
+    ScopeLease,
+    ensure_indexes,
+    now,
+)
 from selfmemory.features.tenancy.access import Principal
 from selfmemory.features.wiki.adapters import git_repo as git
 from selfmemory.features.wiki.service import WikiService
@@ -69,6 +78,54 @@ class TestJobStore:
         assert s.requeue(j["_id"], "w1", delay_s=60)
         assert s.claim("w1") is None
         assert s.get(j["_id"])["attempts"] == 0
+
+    def test_turns_of_one_chat_run_in_order(self, db):
+        ensure_indexes(db)
+        s = JobStore(db)
+        first = _job(s, chat_id="c1")
+        second = _job(s, chat_id="c1")
+        other = _job(s)
+        assert s.claim("w1")["_id"] == first["_id"]
+        # the chat is busy, so the next claim skips its second turn
+        assert s.claim("w2")["_id"] == other["_id"]
+        assert s.claim("w3") is None
+        s.finish(first["_id"], "w1", "done", {})
+        assert s.claim("w3")["_id"] == second["_id"]
+
+    def test_unique_index_stops_a_second_running_turn(self, db):
+        ensure_indexes(db)
+        s = JobStore(db)
+        _job(s, chat_id="c1")
+        s.claim("w1")
+        late = _job(s, chat_id="c1")
+        with pytest.raises(DuplicateKeyError):
+            db[JOBS].update_one({"_id": late["_id"]}, {"$set": {"status": "running"}})
+
+    def test_fair_share_caps_owner_and_org(self, db):
+        s = JobStore(db)
+        busy = {"userId": "u1", "pinnedProjectId": None, "owner": "u1"}
+        calm = {"userId": "u2", "pinnedProjectId": None, "owner": "u2"}
+        a1 = _job(s, principal=busy)
+        _job(s, principal=busy)
+        b1 = _job(s, principal=calm)
+        assert s.claim("w", max_per_owner=1)["_id"] == a1["_id"]
+        # u1 is at its cap, so u2 goes ahead of u1's older job
+        assert s.claim("w", max_per_owner=1)["_id"] == b1["_id"]
+        assert s.claim("w", max_per_owner=1) is None
+        _job(s, principal=calm, org_id="o1")
+        assert s.claim("w", max_per_org=2) is None
+        assert s.claim("w", max_per_org=3) is not None
+
+    def test_idle_agent_contexts_expire(self, db):
+        chats = ChatStore(db)
+        s = JobStore(db)
+        old = chats.create("u1", "o1", None, kind="a2a")
+        app = chats.create("u1", "o1", None)
+        busy = chats.create("u1", "o1", None, kind="a2a")
+        _job(s, chat_id=busy["_id"])
+        assert chats.prune_idle("a2a", now() + timedelta(hours=2)) == 1
+        assert chats.owned("u1", old["_id"]) is None
+        assert chats.owned("u1", app["_id"]) and chats.owned("u1", busy["_id"])
 
     def test_cancel_queued_and_running(self, db):
         s = JobStore(db)
@@ -237,8 +294,9 @@ def test_each_owner_gets_its_own_agent_home(service, world):
     a = {"owner": "u1", "userId": "u1", "orgId": world.org_id}
     b = {"owner": "u1#project:p", "userId": "u1", "orgId": world.org_id}
     c = {"owner": "u2", "userId": "u2", "orgId": world.org_id}
-    homes = {_run_home(service.settings, j) for j in (a, b, c)}
+    homes = {_run_home(service.settings, j, "d1") for j in (a, b, c)}
     assert len(homes) == 3
+    assert _run_home(service.settings, a, "d1") != _run_home(service.settings, a, "d2")
     assert all(service.settings.agent_home not in h.parents for h in homes)
 
 
@@ -252,3 +310,42 @@ def test_ingest_removes_symlinks_the_agent_created(service, world, tmp_path):
     done = _run(service, job)
     assert done["status"] == "done"
     assert not (alpha / "escape").exists() and not (alpha / "escape").is_symlink()
+
+
+def test_session_resets_when_the_readable_scopes_change(service, world):
+    access = service.access(Principal(world.member), world.org_id)
+    chat = service.chats.create(world.member, world.org_id, None, world.member)
+    first = service.enqueue(
+        access, command="query", message="q1", scope_key=None, chat=chat
+    )
+    _run(service, first)
+    saved = service.chats.owned(world.member, chat["_id"])
+    assert saved["sessionId"] == "ses_fake" and saved["sessionScope"]
+
+    same = service.enqueue(
+        access, command="query", message="q2", scope_key=None, chat=saved
+    )
+    _run(service, same)
+    notices = [
+        e["event"]
+        for e in service.jobs.read_events(same["_id"], 0)
+        if e["event"]["kind"] == "notice"
+    ]
+    assert notices == []
+
+    narrower = service.enqueue(
+        access,
+        command="query",
+        message="q3",
+        scope_key=f"project:{world.alpha}",
+        chat=saved,
+    )
+    _run(service, narrower)
+    notices = [
+        e["event"]["message"]
+        for e in service.jobs.read_events(narrower["_id"], 0)
+        if e["event"]["kind"] == "notice"
+    ]
+    assert any("new agent session" in m for m in notices)
+    after = service.chats.owned(world.member, chat["_id"])
+    assert after["sessionScope"] != saved["sessionScope"]

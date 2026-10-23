@@ -95,8 +95,11 @@ if _parsed_mcp_url.port:
 mcp = FastMCP(
     name="SelfMemory",
     instructions=(
-        "Read access to an organization's knowledge wiki: search pages, fetch "
-        "them, list the tree, or ask the wiki agent a question with citations."
+        "An organization's knowledge wiki. Read: search, fetch, wiki_tree, "
+        "list_scopes, list_files, read_file, ask, run_status. Write (needs the "
+        "memories:write scope and write permission on the project): write_file, "
+        "delete_file, ingest, cancel_run. Paths are relative to the org root, "
+        "e.g. wiki/projects/<id>/page.md or raw/projects/<id>/notes.md."
     ),
     stateless_http=False,
     json_response=True,
@@ -314,20 +317,32 @@ app.mount("/mcp", mcp.streamable_http_app())
 # ============================================================================
 # MCP Tools (Work with Both OAuth and API Key Authentication)
 #
-# Read access to the organization's knowledge wiki. Every call forwards the
-# caller's own token to the core server, which applies that caller's scopes.
+# The organization's knowledge wiki. Every call forwards the caller's own
+# token to the core server, which applies that caller's project permissions
+# (writes need canWrite there). Here we additionally check the token's OAuth
+# scope: memories:read for reads, memories:write for anything that changes data.
 # ============================================================================
 
 
-def _wiki_client(ctx: Context) -> WikiClient:
-    token_context = get_validated_tool_context(
-        ctx, "memories:read", current_token_context
-    )
+READ_SCOPE = "memories:read"
+WRITE_SCOPE = "memories:write"
+
+
+def _wiki_client(ctx: Context, scope: str = READ_SCOPE) -> WikiClient:
+    """A client carrying the caller's token, after checking it has ``scope``."""
+    token_context = get_validated_tool_context(ctx, scope, current_token_context)
     return WikiClient(CORE_SERVER_HOST, token_context["raw_token"])
 
 
 _READ_ONLY = {
     "readOnlyHint": True,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": False,
+}
+
+_WRITE = {
+    "readOnlyHint": False,
     "destructiveHint": False,
     "idempotentHint": True,
     "openWorldHint": False,
@@ -398,29 +413,270 @@ async def wiki_tree(ctx: Context) -> dict:
     }
 )
 @handle_tool_errors
-async def ask(question: str, ctx: Context, scope: str | None = None) -> dict:
+async def ask(
+    question: str, ctx: Context, scope: str | None = None, wait: bool = True
+) -> dict:
     """Ask a question answered by the wiki agent, with page citations.
 
     Slower than ``search``/``fetch`` (an agent reads the wiki), but follows
     links across pages. Read-only.
 
+    With ``wait=True`` (default) this blocks for up to a few minutes and
+    returns the answer; if the agent is still working at the deadline it
+    returns ``status: "running"`` and a ``run_id``. With ``wait=False`` it
+    returns the ``run_id`` immediately. Either way, poll ``run_status`` with
+    the ``run_id`` until the status is ``done``, ``failed`` or ``cancelled``.
+
     Args:
         question: The question
         ctx: MCP context
         scope: Optional scope key to restrict to (e.g. ``project:<id>``)
+        wait: Block until the answer is ready (True) or return at once (False)
     """
-    with tracer.start_as_current_span("mcp_tool.ask"):
-        run = await _wiki_client(ctx).ask(question, scope)
-        result = run.get("result") or {}
+    with tracer.start_as_current_span("mcp_tool.ask") as span:
+        span.set_attribute("ask.wait", wait)
+        client = _wiki_client(ctx)
+        if not wait:
+            job = await client.start_run("query", question, scope)
+            return create_tool_success(
+                {"status": job.get("status", "queued"), "run_id": job["job_id"]}
+            )
+        run = await client.ask(question, scope)
+        return create_tool_success(_run_view(run))
+
+
+def _run_view(run: dict) -> dict:
+    result = run.get("result") or {}
+    return {
+        "status": run.get("status"),
+        "answer": result.get("answer", ""),
+        "error": result.get("error"),
+        "run_id": run.get("id"),
+    }
+
+
+@mcp.tool(annotations={"title": "List Scopes", **_READ_ONLY})
+@handle_tool_errors
+async def list_scopes(ctx: Context) -> dict:
+    """List the wiki scopes (org room, projects, sub-projects, personal) the
+    caller can read, with whether each is writable.
+
+    Each scope has a ``key`` (e.g. ``org``, ``project:<id>``) used by
+    ``list_files``, ``ingest`` and ``ask``, plus its ``wiki`` and ``raw``
+    folder paths: wiki pages live under ``wiki``, uploaded sources under
+    ``raw``. Use those as path prefixes for ``read_file``/``write_file``.
+    """
+    with tracer.start_as_current_span("mcp_tool.list_scopes"):
+        return create_tool_success(await _wiki_client(ctx).scopes())
+
+
+@mcp.tool(annotations={"title": "List Files", **_READ_ONLY})
+@handle_tool_errors
+async def list_files(ctx: Context, scope: str | None = None) -> dict:
+    """List wiki page paths, for every readable scope or just one.
+
+    Returned paths can be passed straight to ``read_file``, ``write_file``
+    or ``delete_file``.
+
+    Args:
+        ctx: MCP context
+        scope: Optional scope key from ``list_scopes`` (e.g. ``project:<id>``);
+            omit to list every readable scope
+    """
+    with tracer.start_as_current_span("mcp_tool.list_files"):
+        tree = await _wiki_client(ctx).tree()
+        scopes = tree.get("scopes", [])
+        if scope is not None:
+            scopes = [s for s in scopes if s.get("key") == scope]
+            if not scopes:
+                raise ValueError(f"scope not found or not readable: {scope}")
         return create_tool_success(
             {
-                "status": run.get("status"),
-                "answer": result.get("answer", ""),
-                "error": result.get("error"),
-                "run_id": run.get("id"),
+                "scopes": [
+                    {
+                        "key": s["key"],
+                        "label": s.get("label"),
+                        "writable": s.get("writable", False),
+                        "files": s.get("files", []),
+                    }
+                    for s in scopes
+                ]
             }
         )
 
+
+@mcp.tool(annotations={"title": "Read File", **_READ_ONLY})
+@handle_tool_errors
+async def read_file(path: str, ctx: Context) -> dict:
+    """Read one file's raw content (a wiki page or an uploaded raw source).
+
+    Unlike ``fetch`` this returns the exact text, suitable for editing and
+    writing back with ``write_file``. Binary files return ``binary: true``
+    and their ``size`` instead of ``content``.
+
+    Args:
+        path: File path relative to the org root, e.g.
+            ``wiki/projects/<id>/policies/security-policy.md``
+        ctx: MCP context
+
+    Returns ``{path, side, scope, content}``; ``side`` is ``wiki`` or ``raw``.
+    """
+    with tracer.start_as_current_span("mcp_tool.read_file"):
+        return create_tool_success(await _wiki_client(ctx).read_file(path))
+
+
+@mcp.tool(annotations={"title": "Write File", **_WRITE})
+@handle_tool_errors
+async def write_file(path: str, content: str, ctx: Context) -> dict:
+    """Create or fully replace one file. Requires write access.
+
+    Writes under ``wiki/`` are committed to that scope's history; writes
+    under ``raw/`` store a source document (run ``ingest`` afterwards to
+    have the agent fold it into the wiki). The whole file is replaced, so
+    ``read_file`` first when editing an existing page.
+
+    Args:
+        path: File path relative to the org root, e.g.
+            ``wiki/projects/<id>/topics/onboarding.md``
+        content: The complete new UTF-8 text of the file
+        ctx: MCP context
+
+    Returns ``{ok, side, sha}``; ``sha`` is the wiki commit (null for raw).
+    """
+    with tracer.start_as_current_span("mcp_tool.write_file") as span:
+        span.set_attribute("content.length", len(content))
+        result = await _wiki_client(ctx, WRITE_SCOPE).write_file(path, content)
+        return create_tool_success(result)
+
+
+@mcp.tool(
+    annotations={
+        "title": "Delete File",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+)
+@handle_tool_errors
+async def delete_file(path: str, ctx: Context) -> dict:
+    """Delete one file. Requires write access.
+
+    Wiki deletions are committed (recoverable from history); raw source
+    deletions are not. A scope's agent-maintained ``index.md`` and
+    ``log.md`` cannot be deleted.
+
+    Args:
+        path: File path relative to the org root
+        ctx: MCP context
+    """
+    with tracer.start_as_current_span("mcp_tool.delete_file"):
+        result = await _wiki_client(ctx, WRITE_SCOPE).delete_file(path)
+        return create_tool_success(result)
+
+
+@mcp.tool(
+    annotations={
+        "title": "Ingest into Wiki",
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": False,
+    }
+)
+@handle_tool_errors
+async def ingest(scope: str, message: str, ctx: Context) -> dict:
+    """Have the wiki agent ingest new knowledge into a scope. Requires write
+    access.
+
+    The agent reads ``message`` (the knowledge itself, or instructions such
+    as "ingest the new files in raw/") plus the scope's raw sources, and
+    updates the wiki pages. Returns a ``run_id`` immediately; ingests take
+    minutes, so poll ``run_status`` until it is ``done`` or ``failed``.
+
+    Args:
+        scope: Scope key to write into, from ``list_scopes`` (e.g.
+            ``project:<id>``); must be writable
+        message: What to ingest
+        ctx: MCP context
+    """
+    with tracer.start_as_current_span("mcp_tool.ingest"):
+        job = await _wiki_client(ctx, WRITE_SCOPE).start_run("ingest", message, scope)
+        return create_tool_success(
+            {"status": job.get("status", "queued"), "run_id": job["job_id"]}
+        )
+
+
+@mcp.tool(
+    annotations={
+        "title": "Run Status",
+        **_READ_ONLY,
+        "idempotentHint": False,
+    }
+)
+@handle_tool_errors
+async def run_status(run_id: str, ctx: Context) -> dict:
+    """Check an ``ask`` or ``ingest`` run started by this caller.
+
+    ``status`` is one of ``queued``, ``running``, ``done``, ``failed`` or
+    ``cancelled``. When finished, ``result`` holds the outcome (for ``ask``,
+    ``result.answer``; on failure, ``result.error``).
+
+    Args:
+        run_id: The ``run_id`` returned by ``ask`` or ``ingest``
+        ctx: MCP context
+    """
+    with tracer.start_as_current_span("mcp_tool.run_status"):
+        run = await _wiki_client(ctx).run(run_id)
+        return create_tool_success(
+            {
+                "run_id": run.get("id", run_id),
+                "status": run.get("status"),
+                "command": run.get("command"),
+                "result": run.get("result"),
+            }
+        )
+
+
+@mcp.tool(
+    annotations={
+        "title": "Cancel Run",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+)
+@handle_tool_errors
+async def cancel_run(run_id: str, ctx: Context) -> dict:
+    """Cancel a queued or running ``ask``/``ingest`` run started by this
+    caller. Requires write access.
+
+    Args:
+        run_id: The ``run_id`` to cancel
+        ctx: MCP context
+    """
+    with tracer.start_as_current_span("mcp_tool.cancel_run"):
+        run = await _wiki_client(ctx, WRITE_SCOPE).cancel_run(run_id)
+        return create_tool_success(
+            {"run_id": run.get("id", run_id), "status": run.get("status")}
+        )
+
+
+TOOL_NAMES = (
+    "search",
+    "fetch",
+    "wiki_tree",
+    "ask",
+    "list_scopes",
+    "list_files",
+    "read_file",
+    "write_file",
+    "delete_file",
+    "ingest",
+    "run_status",
+    "cancel_run",
+)
 
 # ============================================================================
 # Server Entry Point
@@ -448,7 +704,7 @@ def main():
     logger.info("   APIKey: npx install-mcp https://server/mcp --client claude \\")
     logger.info('             --oauth no --header "Authorization: Bearer <key>"')
     logger.info("")
-    logger.info("🛠️  Tools: search, add, fetch (both auth methods)")
+    logger.info(f"🛠️  Tools: {', '.join(TOOL_NAMES)} (both auth methods)")
 
     # Check dev mode
     dev_mode = os.getenv("MCP_DEV_MODE", "false").lower() == "true"

@@ -8,13 +8,15 @@ the reaper handed the job to someone else) can no longer write to it.
 
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 import time
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, OperationFailure
 
 __all__ = [
     "JOBS",
@@ -30,6 +32,8 @@ __all__ = [
     "now",
 ]
 
+logger = logging.getLogger(__name__)
+
 JOBS = "wiki_jobs"
 EVENTS = "wiki_job_events"
 LEASES = "wiki_leases"
@@ -39,6 +43,9 @@ MESSAGES = "wiki_chat_messages"
 MAX_EVENTS_PER_JOB = 20_000
 STALE_HEARTBEAT_S = 60
 MAX_ATTEMPTS = 3
+# Oldest queued jobs a claim looks at when the ones in front are held back by
+# a fair-share cap or a busy chat.
+CLAIM_SCAN = 50
 TERMINAL = ("done", "failed", "cancelled")
 _JOB_ID = re.compile(r"^[0-9a-f]{32}$")
 
@@ -52,11 +59,28 @@ def ensure_indexes(db) -> None:
     db[JOBS].create_index([("status", ASCENDING), ("heartbeatAt", ASCENDING)])
     db[JOBS].create_index([("chatId", ASCENDING), ("status", ASCENDING)])
     db[JOBS].create_index([("owner", ASCENDING), ("createdAt", DESCENDING)])
+    # One opencode session takes one turn at a time: at most one running job
+    # per chat, enforced by Mongo so two workers cannot both claim one.
+    try:
+        db[JOBS].create_index(
+            [("chatId", ASCENDING)],
+            name="one_running_per_chat",
+            unique=True,
+            partialFilterExpression={
+                "status": "running",
+                "chatId": {"$type": "string"},
+            },
+        )
+    except OperationFailure:
+        # two turns of one chat were already running (from before this rule);
+        # claim() still checks, and the next start creates the index
+        logger.warning("one_running_per_chat index not created yet")
     db[EVENTS].create_index([("jobId", ASCENDING), ("seq", ASCENDING)], unique=True)
     db[LEASES].create_index("expiresAt", expireAfterSeconds=0)
     db[CHATS].create_index(
         [("owner", ASCENDING), ("orgId", ASCENDING), ("updatedAt", DESCENDING)]
     )
+    db[CHATS].create_index([("kind", ASCENDING), ("updatedAt", ASCENDING)])
     db[MESSAGES].create_index([("chatId", ASCENDING), ("at", ASCENDING)])
 
 
@@ -112,25 +136,71 @@ class JobStore:
         self.jobs.insert_one(job)
         return job
 
-    def claim(self, worker_id: str) -> dict | None:
+    def claim(
+        self,
+        worker_id: str,
+        *,
+        max_per_owner: int | None = None,
+        max_per_org: int | None = None,
+    ) -> dict | None:
+        """Claim the oldest job that may run now.
+
+        A job is held back while its chat already has a running turn (turns of
+        one chat run in arrival order), or while its owner or organization is
+        at its fair-share cap across all workers. The caps are checked against
+        a snapshot, so racing workers can overshoot them by one each; the
+        one-turn-per-chat rule is exact (a unique index).
+        """
         t = now()
-        return self.jobs.find_one_and_update(
-            {
-                "status": "queued",
-                "$or": [{"notBefore": None}, {"notBefore": {"$lte": t}}],
-            },
-            {
-                "$set": {
-                    "status": "running",
-                    "workerId": worker_id,
-                    "startedAt": t,
-                    "heartbeatAt": t,
-                },
-                "$inc": {"attempts": 1},
-            },
-            sort=[("createdAt", ASCENDING)],
-            return_document=ReturnDocument.AFTER,
+        ready = {
+            "status": "queued",
+            "$or": [{"notBefore": None}, {"notBefore": {"$lte": t}}],
+        }
+        owners: Counter = Counter()
+        orgs: Counter = Counter()
+        busy_chats: set[str] = set()
+        for r in self.jobs.find(
+            {"status": "running"}, {"owner": 1, "orgId": 1, "chatId": 1}
+        ):
+            owners[r.get("owner")] += 1
+            orgs[r.get("orgId")] += 1
+            if r.get("chatId"):
+                busy_chats.add(r["chatId"])
+        candidates = (
+            self.jobs.find(ready, {"owner": 1, "orgId": 1, "chatId": 1})
+            .sort("createdAt", ASCENDING)
+            .limit(CLAIM_SCAN)
         )
+        for c in candidates:
+            chat_id = c.get("chatId")
+            if chat_id:
+                if chat_id in busy_chats:
+                    continue
+                # later turns of this chat wait behind this one either way
+                busy_chats.add(chat_id)
+            if max_per_owner is not None and owners[c.get("owner")] >= max_per_owner:
+                continue
+            if max_per_org is not None and orgs[c.get("orgId")] >= max_per_org:
+                continue
+            try:
+                job = self.jobs.find_one_and_update(
+                    {"_id": c["_id"], **ready},
+                    {
+                        "$set": {
+                            "status": "running",
+                            "workerId": worker_id,
+                            "startedAt": t,
+                            "heartbeatAt": t,
+                        },
+                        "$inc": {"attempts": 1},
+                    },
+                    return_document=ReturnDocument.AFTER,
+                )
+            except DuplicateKeyError:
+                continue  # another worker started a turn of this chat
+            if job:
+                return job
+        return None
 
     def heartbeat(self, job_id: str, worker_id: str) -> dict | None:
         """``None`` means this worker no longer owns the job and must stop."""
@@ -345,16 +415,26 @@ class ChatStore:
         self.messages = db[MESSAGES]
 
     def create(
-        self, owner: str, org_id: str, scope: str | None, user_id: str | None = None
+        self,
+        owner: str,
+        org_id: str,
+        scope: str | None,
+        user_id: str | None = None,
+        kind: str = "app",
     ) -> dict:
+        """A conversation. ``kind`` is "app" (the chat screen, kept until the
+        user deletes it) or "a2a" (an agent's context, expired when idle)."""
         t = now()
         chat = {
             "_id": secrets.token_hex(12),
+            "kind": kind,
             "owner": owner,
             "userId": user_id or owner.split("#", 1)[0],
             "orgId": org_id,
             "scope": scope or "",
             "sessionId": None,
+            # which mount set the session was built on; see worker.scope_digest
+            "sessionScope": None,
             "title": "New chat",
             "createdAt": t,
             "updatedAt": t,
@@ -393,7 +473,12 @@ class ChatStore:
         self.chats.update_one({"_id": chat["_id"]}, {"$set": update})
 
     def add_assistant_turn(
-        self, chat_id: str, text: str, meta: dict, session_id: str | None
+        self,
+        chat_id: str,
+        text: str,
+        meta: dict,
+        session_id: str | None,
+        session_scope: str | None = None,
     ) -> None:
         t = now()
         self.messages.insert_one(
@@ -408,7 +493,32 @@ class ChatStore:
         update: dict = {"updatedAt": t}
         if session_id:
             update["sessionId"] = session_id
+            update["sessionScope"] = session_scope
         self.chats.update_one({"_id": chat_id}, {"$set": update})
+
+    def prune_idle(self, kind: str, older_than: datetime) -> int:
+        """Delete chats of ``kind`` untouched since ``older_than``, with their
+        messages. Chats with a queued or running turn are left alone."""
+        ids = [
+            c["_id"]
+            for c in self.chats.find(
+                {"kind": kind, "updatedAt": {"$lt": older_than}}, {"_id": 1}
+            )
+        ]
+        if not ids:
+            return 0
+        active = {
+            j["chatId"]
+            for j in self.chats.database[JOBS].find(
+                {"chatId": {"$in": ids}, "status": {"$in": ["queued", "running"]}},
+                {"chatId": 1},
+            )
+        }
+        ids = [i for i in ids if i not in active]
+        if ids:
+            self.messages.delete_many({"chatId": {"$in": ids}})
+            self.chats.delete_many({"_id": {"$in": ids}})
+        return len(ids)
 
     def delete(self, owner: str, chat_id: str) -> bool:
         chat = self.owned(owner, chat_id)

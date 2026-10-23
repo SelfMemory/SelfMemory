@@ -133,6 +133,9 @@ class _ApiContext:
             router, prefix=LEGACY_API_PREFIX, include_in_schema=False
         )
 
+    def add_public_router(self, router) -> None:
+        self.app.include_router(router)
+
 
 _ctx = _ApiContext(app)
 for feature in discover(BUILTIN):

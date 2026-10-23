@@ -5,7 +5,7 @@ Every value is read from the environment, which the server also reads through
 application cannot disagree about which port Mongo is on or where the wiki
 data lives.
 
-Defaults mirror ``server/config.py`` and ``selfmemory.wiki_settings``. They
+Defaults mirror ``selfmemory.config`` and ``selfmemory.wiki_settings``. They
 are defaults, not constants: setting the variable overrides them, and
 ``require()`` refuses to guess when a value is genuinely ambiguous.
 

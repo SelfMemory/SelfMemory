@@ -32,7 +32,7 @@ dev = [
 ]
 
 [tool.ruff]
-extend-exclude = ["legacy", "selfmemory-ts"]
+extend-exclude = ["selfmemory-ts"]
 line-length = 88
 indent-width = 4
 target-version = "py313"

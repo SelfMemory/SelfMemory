@@ -50,22 +50,69 @@ class WikiClient:
     async def tree(self) -> dict:
         return await self._request("GET", "/api/v1/wiki/tree")
 
-    async def ask(
-        self, question: str, scope: str | None = None, wait_s: float = 300.0
+    async def scopes(self) -> dict:
+        return await self._request("GET", "/api/v1/wiki/scopes")
+
+    async def read_file(self, path: str) -> dict:
+        """Raw file content plus its side and owning scope key."""
+        page, scopes = await asyncio.gather(self.fetch(path), self.scopes())
+        return {**page, "scope": scope_for_path(path, scopes.get("scopes", []))}
+
+    async def write_file(self, path: str, content: str) -> dict:
+        return await self._request(
+            "PUT", "/api/v1/wiki/file", json={"path": path, "content": content}
+        )
+
+    async def delete_file(self, path: str) -> dict:
+        return await self._request("DELETE", "/api/v1/wiki/file", params={"path": path})
+
+    async def start_run(
+        self, command: str, message: str = "", scope: str | None = None
     ) -> dict:
-        """Queue a read-only query run and wait for its answer."""
-        job = await self._request(
+        """Queue a run and return ``{job_id, status, events}`` without waiting."""
+        return await self._request(
             "POST",
             "/api/v1/wiki/runs",
-            json={"command": "query", "message": question, "scope": scope},
+            json={"command": command, "message": message, "scope": scope},
         )
-        job_id = job["job_id"]
+
+    async def run(self, run_id: str) -> dict:
+        return await self._request("GET", f"/api/v1/wiki/runs/{run_id}")
+
+    async def cancel_run(self, run_id: str) -> dict:
+        return await self._request("DELETE", f"/api/v1/wiki/runs/{run_id}")
+
+    async def wait_run(self, run_id: str, wait_s: float = 300.0) -> dict:
+        """Poll a run until it finishes, or report it still running at the
+        deadline."""
         deadline = time.monotonic() + wait_s
         delay = 1.0
         while time.monotonic() < deadline:
-            run = await self._request("GET", f"/api/v1/wiki/runs/{job_id}")
+            run = await self.run(run_id)
             if run["status"] in TERMINAL:
                 return run
             await asyncio.sleep(delay)
             delay = min(delay * 1.5, 5.0)
-        return {"id": job_id, "status": "running", "result": None}
+        return {"id": run_id, "status": "running", "result": None}
+
+    async def ask(
+        self, question: str, scope: str | None = None, wait_s: float = 300.0
+    ) -> dict:
+        """Queue a read-only query run and wait for its answer."""
+        job = await self.start_run("query", question, scope)
+        return await self.wait_run(job["job_id"], wait_s)
+
+
+def scope_for_path(path: str, scopes: list[dict]) -> str | None:
+    """The key of the scope owning ``path`` (longest wiki/raw prefix wins, so a
+    sub-project's file maps to the sub-project, not its parent)."""
+    best, best_len = None, -1
+    for s in scopes:
+        for root in (s.get("wiki"), s.get("raw")):
+            if (
+                root
+                and (path == root or path.startswith(root + "/"))
+                and len(root) > best_len
+            ):
+                best, best_len = s.get("key"), len(root)
+    return best

@@ -1,7 +1,7 @@
 """Token validation caching for Core server.
 
 Reduces repeated Hydra introspection and Kratos session validation calls.
-Uses TTL-based in-memory cache — same pattern as selfmemory-mcp/auth/token_cache.py.
+Uses a TTL-based in-memory cache.
 """
 
 import hashlib

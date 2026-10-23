@@ -44,6 +44,8 @@ Target architecture: `docs/architecture/index.html`. uv workspace; the library i
     - `uploads/` — markitdown conversion
     - `tenancy/` — orgs/projects/invitations routers; `access.py` is the only authz gate
     - `api_keys/`
+    - `a2a/` — A2A JSON-RPC at `/api/v1/a2a` + `/.well-known/agent-card.json`;
+      contextId = chat of kind "a2a", task = query job
   - `platform/` — mongo, ory (Kratos/Hydra validation), sandbox (bwrap/docker + isolation
     probe), telemetry, mcp (OAuth + auth middleware), `dependencies.py`
   - `apps/` — `api.py` (mounts features at `/api/v1`, legacy `/api` alias hidden from
@@ -52,7 +54,6 @@ Target architecture: `docs/architecture/index.html`. uv workspace; the library i
 - `scripts/devstack/` — `make run` stack manager
 - `tests/unit/<feature>/`, `tests/integration/`
 - `selfmemory-ts/` — TypeScript SDK
-- `legacy/` — removed memory/vector/LLM stack, pending deletion
 
 Layer rules are import-linter contracts in `pyproject.toml` (`make lint-imports`):
 apps → features → platform → kernel, and `features.wiki.domain` imports no I/O.
@@ -67,6 +68,10 @@ GitHub Actions (`ci.yml`): ruff lint + lint-imports → pytest with coverage →
   every wiki scope dir is its own git repo. Sub-projects nest inside the parent dir, so walks,
   mounts and commits of a parent must mask/exclude them (`Scope.nested`).
 - No LLM, embeddings or vector store in the server: all model work is `opencode run` per job.
+- One sandbox per run (no long-lived per-user sandboxes). A chat's opencode session
+  continues only while the run's mount set is unchanged (`worker.scope_digest`); HOME is
+  per (org, owner, digest). Turns of one chat run one at a time (unique index);
+  per-owner/per-org caps give fair share.
 - Agent runs refuse to start when isolation is required (production) and the probe fails.
 
 ## Auth Integration

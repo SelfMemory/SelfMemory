@@ -56,7 +56,6 @@ FLUSH_EVENTS = 32
 MAX_ANSWER = 2_000_000
 MAX_STDERR = 64_000
 MAX_TOOLS = 500
-PRUNE_AFTER = timedelta(hours=24)
 
 
 class _Sink:
@@ -115,10 +114,14 @@ def _fail(service, job, worker_id, sink, message, status="failed") -> None:
     service.jobs.finish(job["_id"], worker_id, status, result)
 
 
-def _chat_turn(service, job, answer, meta, session_id) -> None:
+def _chat_turn(service, job, answer, meta, session_id, session_scope=None) -> None:
     if job.get("chatId"):
         service.chats.add_assistant_turn(
-            job["chatId"], answer, {"mode": job["command"], **meta}, session_id
+            job["chatId"],
+            answer,
+            {"mode": job["command"], **meta},
+            session_id,
+            session_scope,
         )
 
 
@@ -130,11 +133,33 @@ def _add_usage(total: dict, tokens: dict) -> None:
             _add_usage(total.setdefault(k, {}), v)
 
 
-def _run_home(settings, job: dict) -> Path:
-    """HOME for this job's agent: one per (organization, credential owner)."""
+def scope_digest(root: Path, plan_dirs: dict) -> str:
+    """A stable name for what a run can see: its read and write mounts.
+
+    opencode transcripts hold the text of every file a run read, so a session
+    may only be continued by a run that sees the same scopes. When a chat's
+    scope selection or the caller's access changes, the digest changes and
+    the next turn starts a fresh session in a fresh HOME.
+    """
+
+    def rel(p: Path) -> str:
+        try:
+            return str(p.relative_to(root))
+        except ValueError:
+            return str(p)
+
+    parts = sorted(f"r:{rel(p)}" for p in plan_dirs["read_dirs"])
+    if plan_dirs.get("write_dir") is not None:
+        parts.append(f"w:{rel(plan_dirs['write_dir'])}")
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
+
+
+def _run_home(settings, job: dict, digest: str) -> Path:
+    """HOME for this job's agent: one per (organization, credential owner,
+    mount set). Never shared between owners or between scope selections."""
     owner = job.get("owner") or job["userId"]
-    digest = hashlib.sha256(owner.encode()).hexdigest()[:24]
-    return settings.data_root / ".homes" / safe_segment(job["orgId"]) / digest
+    who = hashlib.sha256(owner.encode()).hexdigest()[:24]
+    return settings.data_root / ".homes" / safe_segment(job["orgId"]) / who / digest
 
 
 def _commit_subject(job: dict) -> str:
@@ -214,6 +239,24 @@ def _run(service, job, worker_id, stop, sink, access, plan_dirs, status, target,
     settings = service.settings
     if job.get("attempts", 1) > 1:
         sink.emit({"kind": "attempt", "attempt": job["attempts"]})
+    digest = scope_digest(access.root, plan_dirs)
+    session_id = job.get("sessionId")
+    if job.get("chatId"):
+        # the chat's latest session, not the one known when this turn queued
+        chat = service.chats.chats.find_one(
+            {"_id": job["chatId"]}, {"sessionId": 1, "sessionScope": 1}
+        )
+        if chat is not None:
+            session_id = chat.get("sessionId")
+            if session_id and chat.get("sessionScope") != digest:
+                session_id = None
+                sink.emit(
+                    {
+                        "kind": "notice",
+                        "message": "the readable scopes changed, so this turn "
+                        "starts a new agent session",
+                    }
+                )
     plan = RunPlan(
         command=job["command"],
         message=job.get("message") or "",
@@ -221,10 +264,10 @@ def _run(service, job, worker_id, stop, sink, access, plan_dirs, status, target,
         read_dirs=plan_dirs["read_dirs"],
         write_dir=plan_dirs["write_dir"],
         mask_dirs=plan_dirs["mask_dirs"],
-        session_id=job.get("sessionId"),
+        session_id=session_id,
         actor=job["userId"],
         scope_labels=plan_dirs["labels"],
-        home=_run_home(settings, job),
+        home=_run_home(settings, job, digest),
         run_id=job["_id"],
     )
     from selfmemory.features.runs.adapters.opencode import spawn_agent
@@ -248,7 +291,6 @@ def _run(service, job, worker_id, stop, sink, access, plan_dirs, status, target,
     tools: list[dict] = []
     tokens: dict = {}
     cost = 0.0
-    session_id = job.get("sessionId")
     errors: list[str] = []
     stderr: list[str] = []
     truncated = False
@@ -324,6 +366,7 @@ def _run(service, job, worker_id, stop, sink, access, plan_dirs, status, target,
         errors,
         stderr,
         truncated,
+        digest,
     )
 
 
@@ -365,6 +408,7 @@ def _finish_run(
     errors,
     stderr,
     truncated,
+    digest=None,
 ) -> None:
     settings = service.settings
     if outcome in ("lost", "abandoned"):
@@ -422,7 +466,7 @@ def _finish_run(
         "error": error,
         "truncated": truncated,
     }
-    _chat_turn(service, job, answer_text, meta, session_id)
+    _chat_turn(service, job, answer_text, meta, session_id, digest)
     final = "cancelled" if outcome == "cancelled" else ("failed" if error else "done")
     service.jobs.finish(
         job["_id"],
@@ -498,14 +542,24 @@ class Worker:
             try:
                 if n % 40 == 1:
                     self.service.jobs.reap_stale()
-                    self.service.jobs.prune_finished(now() - PRUNE_AFTER)
+                    t = now()
+                    self.service.jobs.prune_finished(
+                        t - timedelta(seconds=settings.run_retention_s)
+                    )
+                    self.service.chats.prune_idle(
+                        "a2a", t - timedelta(seconds=settings.context_idle_ttl_s)
+                    )
                 if get_isolation(settings).blocked:
                     self.stop_event.wait(10)
                     continue
                 self.active = {t for t in self.active if t.is_alive()}
                 claimed = False
                 while len(self.active) < settings.max_concurrent_runs:
-                    job = self.service.jobs.claim(self.worker_id)
+                    job = self.service.jobs.claim(
+                        self.worker_id,
+                        max_per_owner=settings.max_runs_per_owner,
+                        max_per_org=settings.max_runs_per_org,
+                    )
                     if not job:
                         break
                     claimed = True
