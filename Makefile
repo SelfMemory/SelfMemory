@@ -1,6 +1,6 @@
 # Makefile for SelfMemory - UV-based workflow
 
-.PHONY: lint-imports help install install-dev sync test test-unit test-wiki coverage run run-dev run-api status check stop stop-clean worker isolation run-prod run-mcp run-mcp-prod clean clean-all lint lint-fix format quality build ship
+.PHONY: lint-imports openapi ts-client help install install-dev sync test test-unit test-wiki coverage run run-dev run-api status check stop stop-clean worker isolation run-prod run-mcp run-mcp-prod clean clean-all lint lint-fix format quality build ship
 
 DEVSTACK := uv run python -m scripts.devstack
 
@@ -155,6 +155,14 @@ clean-all: clean
 # Build package distribution
 build:
 	uv build --package selfmemory
+
+# Dump the /api/v1 OpenAPI contract to docs/api/openapi.json
+openapi:
+	uv run python scripts/export_openapi.py
+
+# Regenerate the typed TS client in selfmemory-ts from the committed contract
+ts-client: openapi
+	cd selfmemory-ts && npm ci && npm run generate
 
 # Lint code with ruff
 lint:
