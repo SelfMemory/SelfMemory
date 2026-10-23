@@ -36,6 +36,11 @@ def _int(value: str | None, default: int) -> int:
         return default
 
 
+def _retention_days(value: str | None) -> int:
+    days = _int(value, 0)
+    return 0 if days <= 0 else max(2, days)
+
+
 # Variables the agent is handed. Anything not named here stays out of the run,
 # so the server's own secrets (Mongo URI, Ory admin URLs, encryption keys) are
 # not reachable from a process the model could be talked into inspecting.
@@ -77,11 +82,19 @@ class WikiSettings:
     # may have going at once, across every worker. Excess jobs wait queued.
     max_runs_per_owner: int = 4
     max_runs_per_org: int = 16
+    # Quotas: runs one owner / one organization may queue per rolling day.
+    # 0 means unlimited. Counted from the audit log's ``run.queued`` records.
+    max_runs_per_owner_per_day: int = 0
+    max_runs_per_org_per_day: int = 0
     # Finished runs (results, event streams) are kept this long, so a caller
     # that disconnected can resubscribe or poll.
     run_retention_s: int = 24 * 3600
     # Agent contexts (A2A ``contextId``) are deleted after this long idle.
     context_idle_ttl_s: int = 3600
+    # Agent session homes (opencode transcripts) unused this long are deleted.
+    session_home_retention_s: int = 30 * 86400
+    # Audit records older than this many days expire; 0 keeps them forever.
+    audit_retention_days: int = 0
     upload_max_files: int = 2000
     upload_max_bytes: int = 50 * 1024 * 1024
     worker_enabled: bool = True
@@ -149,6 +162,17 @@ def load_settings(env: dict[str, str] | None = None) -> WikiSettings:
         max_runs_per_org=max(1, _int(e.get("SELFMEMORY_MAX_RUNS_PER_ORG"), 16)),
         run_retention_s=max(60, _int(e.get("SELFMEMORY_RUN_RETENTION_S"), 86400)),
         context_idle_ttl_s=max(60, _int(e.get("SELFMEMORY_CONTEXT_IDLE_TTL_S"), 3600)),
+        max_runs_per_owner_per_day=max(
+            0, _int(e.get("SELFMEMORY_MAX_RUNS_PER_OWNER_PER_DAY"), 0)
+        ),
+        max_runs_per_org_per_day=max(
+            0, _int(e.get("SELFMEMORY_MAX_RUNS_PER_ORG_PER_DAY"), 0)
+        ),
+        session_home_retention_s=max(
+            3600, _int(e.get("SELFMEMORY_SESSION_HOME_RETENTION_S"), 30 * 86400)
+        ),
+        # a quota looks back one day, so its records must outlive that
+        audit_retention_days=_retention_days(e.get("SELFMEMORY_AUDIT_RETENTION_DAYS")),
         upload_max_files=_int(e.get("SELFMEMORY_UPLOAD_MAX_FILES"), 2000),
         upload_max_bytes=_int(e.get("SELFMEMORY_UPLOAD_MAX_BYTES"), 50 * 1024 * 1024),
         worker_enabled=_flag(e.get("SELFMEMORY_WORKER"), True),

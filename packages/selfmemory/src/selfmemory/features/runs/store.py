@@ -29,6 +29,7 @@ __all__ = [
     "ChatStore",
     "ScopeLease",
     "ScopeBusyError",
+    "QuotaExceededError",
     "now",
 ]
 
@@ -496,15 +497,18 @@ class ChatStore:
             update["sessionScope"] = session_scope
         self.chats.update_one({"_id": chat_id}, {"$set": update})
 
-    def prune_idle(self, kind: str, older_than: datetime) -> int:
+    def prune_idle(self, kind: str, older_than: datetime, on_delete=None) -> int:
         """Delete chats of ``kind`` untouched since ``older_than``, with their
-        messages. Chats with a queued or running turn are left alone."""
-        ids = [
-            c["_id"]
+        messages. Chats with a queued or running turn are left alone.
+        ``on_delete`` is called with each deleted chat (to drop its home)."""
+        found = {
+            c["_id"]: c
             for c in self.chats.find(
-                {"kind": kind, "updatedAt": {"$lt": older_than}}, {"_id": 1}
+                {"kind": kind, "updatedAt": {"$lt": older_than}},
+                {"_id": 1, "owner": 1, "orgId": 1},
             )
-        ]
+        }
+        ids = list(found)
         if not ids:
             return 0
         active = {
@@ -518,15 +522,19 @@ class ChatStore:
         if ids:
             self.messages.delete_many({"chatId": {"$in": ids}})
             self.chats.delete_many({"_id": {"$in": ids}})
+            if on_delete is not None:
+                for i in ids:
+                    on_delete(found[i])
         return len(ids)
 
-    def delete(self, owner: str, chat_id: str) -> bool:
+    def delete(self, owner: str, chat_id: str) -> dict | None:
+        """Delete an owned chat and its messages; returns the deleted chat."""
         chat = self.owned(owner, chat_id)
         if not chat:
-            return False
+            return None
         self.messages.delete_many({"chatId": chat_id})
         self.chats.delete_one({"_id": chat_id})
-        return True
+        return chat
 
 
 # ---------------------------------------------------------------------------
@@ -543,6 +551,10 @@ class ChatStore:
 
 class ScopeBusyError(RuntimeError):
     pass
+
+
+class QuotaExceededError(RuntimeError):
+    """An owner or organization used up its runs for the rolling day."""
 
 
 class ScopeLease:

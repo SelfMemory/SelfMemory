@@ -1,7 +1,7 @@
 """The run worker: claims queued jobs and executes them as agent runs.
 
 Runs inside the API process by default (``SELFMEMORY_WORKER=off`` disables
-that) and standalone with ``python -m selfmemory.features.runs.worker``. Any number of
+that) and standalone with ``make worker`` (``python -m selfmemory.apps.worker``). Any number of
 workers can share one queue: claiming is one atomic update, and every write a
 worker makes afterwards is guarded on it still owning the job.
 
@@ -27,6 +27,12 @@ from selfmemory.features.runs.adapters.opencode import (
     kill_run,
     parse_event,
 )
+from selfmemory.features.runs.homes import (
+    delete_chat_home,
+    prune_homes,
+    run_home,
+    touch,
+)
 from selfmemory.features.runs.store import ScopeBusyError, now
 from selfmemory.features.tenancy.access import (
     AccessDenied,
@@ -36,7 +42,6 @@ from selfmemory.features.tenancy.access import (
 from selfmemory.features.wiki.adapters.files import remove_symlinks
 from selfmemory.features.wiki.service import WikiService
 from selfmemory.kernel.logging import sanitize_for_log
-from selfmemory.kernel.safe_paths import safe_segment
 from selfmemory.platform.sandbox.isolation import (
     IsolationUnavailableError,
     get_isolation,
@@ -156,10 +161,19 @@ def scope_digest(root: Path, plan_dirs: dict) -> str:
 
 def _run_home(settings, job: dict, digest: str) -> Path:
     """HOME for this job's agent: one per (organization, credential owner,
-    mount set). Never shared between owners or between scope selections."""
-    owner = job.get("owner") or job["userId"]
-    who = hashlib.sha256(owner.encode()).hexdigest()[:24]
-    return settings.data_root / ".homes" / safe_segment(job["orgId"]) / who / digest
+    chat, mount set). See ``homes``."""
+    return run_home(settings, job, digest)
+
+
+def _audit(service, job: dict, action: str, **kw) -> None:
+    service.audit.record(
+        action,
+        org_id=job["orgId"],
+        user_id=job["userId"],
+        owner=job.get("owner"),
+        job_id=job["_id"],
+        **kw,
+    )
 
 
 def _commit_subject(job: dict) -> str:
@@ -197,7 +211,12 @@ def execute_job(
         _fail(service, job, worker_id, sink, str(e))
         return
 
-    service.ensure_all(access)
+    try:
+        service.ensure_all(access)
+    except ScopeBusyError:
+        # another worker is scaffolding one of these scopes right now
+        service.jobs.requeue(job["_id"], worker_id)
+        return
     lease = None
     target = None
     if job["command"] == "ingest":
@@ -277,6 +296,20 @@ def _run(service, job, worker_id, stop, sink, access, plan_dirs, status, target,
     except (OSError, RuntimeError) as e:
         _fail(service, job, worker_id, sink, f"could not start the agent: {e}")
         return
+    touch(plan.home)
+    _audit(
+        service,
+        job,
+        "run.started",
+        scopes=sorted(str(p) for p in plan_dirs["labels"]),
+        target=job.get("scope"),
+        detail={
+            "command": job["command"],
+            "chatId": job.get("chatId"),
+            "writable": job.get("scope") if plan_dirs["write_dir"] else None,
+            "isolation": status.kind or "unconfined",
+        },
+    )
     sink.emit(
         {
             "kind": "start",
@@ -468,6 +501,14 @@ def _finish_run(
     }
     _chat_turn(service, job, answer_text, meta, session_id, digest)
     final = "cancelled" if outcome == "cancelled" else ("failed" if error else "done")
+    _audit(
+        service,
+        job,
+        "run.finished",
+        scopes=[commit["scope"]] if commit else [],
+        target=job.get("scope"),
+        detail={"status": final, "commit": (commit or {}).get("sha")},
+    )
     service.jobs.finish(
         job["_id"],
         worker_id,
@@ -547,8 +588,11 @@ class Worker:
                         t - timedelta(seconds=settings.run_retention_s)
                     )
                     self.service.chats.prune_idle(
-                        "a2a", t - timedelta(seconds=settings.context_idle_ttl_s)
+                        "a2a",
+                        t - timedelta(seconds=settings.context_idle_ttl_s),
+                        on_delete=lambda c: delete_chat_home(settings, c),
                     )
+                    prune_homes(settings, settings.session_home_retention_s)
                 if get_isolation(settings).blocked:
                     self.stop_event.wait(10)
                     continue
@@ -580,12 +624,15 @@ def main() -> None:  # pragma: no cover - process entry point
 
     load_dotenv()
     from selfmemory.features.runs.store import ensure_indexes
+    from selfmemory.platform.audit import ensure_audit_indexes
     from selfmemory.platform.mongo.database import mongo_db
     from selfmemory.wiki_settings import load_settings
 
     logging.basicConfig(level=logging.INFO)
+    settings = load_settings()
     ensure_indexes(mongo_db)
-    worker = Worker(WikiService(mongo_db, load_settings()))
+    ensure_audit_indexes(mongo_db, settings.audit_retention_days)
+    worker = Worker(WikiService(mongo_db, settings))
     signal.signal(signal.SIGTERM, lambda *_: worker.stop_event.set())
     signal.signal(signal.SIGINT, lambda *_: worker.stop_event.set())
     worker.start()

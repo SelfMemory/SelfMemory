@@ -14,7 +14,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from selfmemory.features.runs.store import ChatStore, JobStore, ScopeLease
+from selfmemory.features.runs.homes import delete_chat_home
+from selfmemory.features.runs.store import (
+    ChatStore,
+    JobStore,
+    QuotaExceededError,
+    ScopeLease,
+)
 from selfmemory.features.tenancy.access import (
     AccessDenied,
     OrgAccess,
@@ -39,6 +45,7 @@ from selfmemory.kernel.safe_paths import (
     sanitize_filename,
     sanitize_upload_dir,
 )
+from selfmemory.platform.audit import AuditLog
 
 if TYPE_CHECKING:
     from selfmemory.wiki_settings import WikiSettings
@@ -69,6 +76,17 @@ class WikiService:
         self.settings = settings
         self.jobs = JobStore(db)
         self.chats = ChatStore(db)
+        self.audit = AuditLog(db)
+
+    def record(self, access: OrgAccess, action: str, **kw) -> None:
+        """Append an audit record for the caller behind ``access``."""
+        self.audit.record(
+            action,
+            org_id=access.org_id,
+            user_id=access.principal.user_id,
+            owner=access.principal.owner,
+            **kw,
+        )
 
     # ------------------------------------------------------------ access
 
@@ -86,7 +104,14 @@ class WikiService:
         wiki_dir = access.abs(scope.wiki_rel)
         raw_dir = access.abs(scope.raw_rel)
         raw_dir.mkdir(parents=True, exist_ok=True)
-        scaffold_scope(wiki_dir, scope.key, scope.label, scope.nested)
+        if (wiki_dir / "index.md").exists() and git.is_repo(wiki_dir):
+            scaffold_scope(wiki_dir, scope.key, scope.label, scope.nested)
+            return
+        # First use: several workers or requests may get here at once, and
+        # two concurrent ``git init``s in one directory fail. The lease makes
+        # one of them do it; the others then find it done.
+        with self.lease(access, scope, "scaffold"):
+            scaffold_scope(wiki_dir, scope.key, scope.label, scope.nested)
 
     def ensure_all(self, access: OrgAccess) -> None:
         for s in access.scopes:
@@ -123,6 +148,7 @@ class WikiService:
             access.writable(scope_key)
         elif scope_key:
             access.scope(scope_key)
+        self.check_quota(access)
         display = display_text or message
         if chat is not None:
             self.chats.add_user_turn(
@@ -130,7 +156,7 @@ class WikiService:
                 display,
                 {"mode": command, "scope": scope_key, "files": files or []},
             )
-        return self.jobs.create(
+        job = self.jobs.create(
             principal=access.principal.to_doc(),
             org_id=access.org_id,
             command=command,
@@ -142,6 +168,52 @@ class WikiService:
             session_id=session_id or (chat or {}).get("sessionId"),
             meta=meta,
         )
+        self.record(
+            access,
+            "run.queued",
+            scopes=[scope_key] if scope_key else [],
+            job_id=job["_id"],
+            detail={"command": command, "chatId": job["chatId"]},
+        )
+        return job
+
+    def check_quota(self, access: OrgAccess) -> None:
+        """Refuse a new run once the owner or the organization used up its
+        runs for the rolling day (``max_runs_per_*_per_day``; 0 = no limit)."""
+        s = self.settings
+        since = self.audit.window_start(86400)
+        if s.max_runs_per_owner_per_day and (
+            self.audit.count_since("run.queued", since, owner=access.principal.owner)
+            >= s.max_runs_per_owner_per_day
+        ):
+            raise QuotaExceededError(
+                f"daily run quota reached ({s.max_runs_per_owner_per_day} per user)"
+            )
+        if s.max_runs_per_org_per_day and (
+            self.audit.count_since("run.queued", since, org_id=access.org_id)
+            >= s.max_runs_per_org_per_day
+        ):
+            raise QuotaExceededError(
+                f"daily run quota reached ({s.max_runs_per_org_per_day} per "
+                "organization)"
+            )
+
+    # ------------------------------------------------------------- chats
+
+    def delete_chat(self, principal: Principal, chat_id: str) -> bool:
+        """Delete a chat, its messages and its agent session homes."""
+        chat = self.chats.delete(principal.owner, chat_id)
+        if chat is None:
+            return False
+        delete_chat_home(self.settings, chat)
+        self.audit.record(
+            "chat.delete",
+            org_id=chat.get("orgId"),
+            user_id=principal.user_id,
+            owner=principal.owner,
+            target=chat_id,
+        )
+        return True
 
     # ------------------------------------------------------------ upload
 
