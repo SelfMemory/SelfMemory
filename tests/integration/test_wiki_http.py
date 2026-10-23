@@ -218,6 +218,11 @@ def test_graph_search_and_pinned_key(setup):
     assert {h["path"] for h in hits} == {f"{base}/a.md", f"{base}/b.md"}
     frames = c.get("/api/v1/wiki/timeline").json()["frames"]
     assert frames and frames[-1]["nodes"]
+    commits = c.get(
+        "/api/v1/wiki/history", params={"scope": f"project:{world.alpha}"}
+    ).json()["commits"]
+    assert any(f"{base}/b.md" in e["files"] for e in commits)
+    assert commits == sorted(commits, key=lambda e: e["date"], reverse=True)
 
     # an API key pinned to beta cannot read alpha, and needs no org_id
     k = as_user(world.owner, project_id=str(world.beta))
@@ -226,6 +231,12 @@ def test_graph_search_and_pinned_key(setup):
     )
     assert (
         k.get("/api/v1/wiki/file", params={"path": f"{base}/a.md"}).status_code == 403
+    )
+    assert (
+        k.get(
+            "/api/v1/wiki/history", params={"scope": f"project:{world.alpha}"}
+        ).status_code
+        == 403
     )
 
 

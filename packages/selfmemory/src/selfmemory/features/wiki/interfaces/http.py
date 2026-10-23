@@ -44,7 +44,11 @@ from selfmemory.features.wiki.adapters.files import (
     remove_file,
     write_bytes,
 )
-from selfmemory.features.wiki.adapters.graph import build_graph, build_timeline
+from selfmemory.features.wiki.adapters.graph import (
+    build_graph,
+    build_history,
+    build_timeline,
+)
 from selfmemory.features.wiki.adapters.okf import PROTECTED_WIKI_FILES
 from selfmemory.features.wiki.adapters.search import search_pages
 from selfmemory.features.wiki.service import UploadFile as StagedUpload
@@ -588,6 +592,19 @@ def timeline(
     except AccessDenied as e:
         raise _errors(e) from None
     return {"frames": build_timeline(roots, limit)}
+
+
+@router.get("/history", summary="Git commit log of one scope or everything readable")
+def history(
+    scope: str | None = None,
+    limit: int = Query(50, ge=1, le=500),
+    ctx: Ctx = Depends(get_ctx),
+):
+    try:
+        roots = ctx.access.scope_roots(scope)
+    except AccessDenied as e:
+        raise _errors(e) from None
+    return {"commits": build_history(roots, limit)}
 
 
 @router.get("/search", summary="Lexical search over readable pages")

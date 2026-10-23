@@ -30,6 +30,7 @@ __all__ = [
     "resolve_link",
     "outbound_links",
     "build_graph",
+    "build_history",
     "build_timeline",
     "ScopeRoot",
 ]
@@ -212,3 +213,23 @@ def build_timeline(scopes: Iterable[ScopeRoot], limit: int = 80) -> list[dict]:
             edges.extend(state["edges"])
         merged.append({**f, "nodes": sorted(nodes), "edges": edges})
     return merged
+
+
+def build_history(scopes: Iterable[ScopeRoot], limit: int = 50) -> list[dict]:
+    """Newest-first commit log across scopes, with the files each commit touched."""
+    entries = []
+    for scope in scopes:
+        for c in git.history(scope.abs, limit=limit):
+            entries.append(
+                {
+                    "scope": scope.key,
+                    "sha": c.sha,
+                    "date": c.date,
+                    "message": c.message,
+                    "files": [
+                        f"{scope.rel}/{f}" for f in git.commit_files(scope.abs, c.sha)
+                    ],
+                }
+            )
+    entries.sort(key=lambda e: e["date"], reverse=True)
+    return entries[:limit]
