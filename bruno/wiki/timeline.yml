@@ -1,0 +1,27 @@
+info:
+  name: Timeline
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v1/wiki/timeline"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns frames", function () {
+          expect(res.getStatus()).to.be.oneOf([200, 202]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  The graph after each commit, merged across scopes, for a growth animation.

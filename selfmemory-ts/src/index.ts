@@ -20,3 +20,6 @@ export type {
   PeopleSearchOptions,
   TemporalSearchOptions,
 } from './types'
+
+// Typed /api/v1 client generated from docs/api/openapi.json (`make ts-client`)
+export * as api from './generated'

@@ -1,0 +1,39 @@
+info:
+  name: Upload and ingest
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v1/wiki/upload"
+  body:
+    type: multipart-form
+    data:
+      - name: scope
+        value: project:{{projectId}}
+      - name: note
+        value: focus on decisions and owners
+      - name: files
+        type: file
+        value:
+          - ./README.md
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("uploads and queues", function () {
+          expect(res.getStatus()).to.be.oneOf([200, 202]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Stores the files under raw/ (PDF, DOCX, PPTX, XLSX and HTML are converted
+  to markdown) and queues an ingest run. Follow it with Run events.

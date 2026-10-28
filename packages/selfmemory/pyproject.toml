@@ -1,0 +1,69 @@
+[project]
+name = "selfmemory"
+version = "0.9.6"
+description = "A scoped, multi-tenant knowledge wiki maintained by an agent"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [{ name = "SelfMemory Team" }]
+license = "Apache-2.0"
+keywords = ["knowledge", "wiki", "agents", "opencode", "mcp", "a2a", "multi-tenant"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    # The wiki engine. All model work is done by the opencode agent binary,
+    # so there is no LLM, embedding or vector-store dependency.
+    "pydantic>=2.10.0,<3.0.0",
+    "pydantic-settings>=2.6.0",
+    "email-validator>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "cryptography>=45.0.3",
+    "httpx>=0.27.0",
+    "pyyaml>=6.0.0",
+    "markitdown[docx,pdf,pptx,xlsx]>=0.1.0",
+]
+
+[project.optional-dependencies]
+# Everything the API, worker and MCP processes need (selfmemory.apps.*)
+server = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "starlette>=0.50.0",
+    "python-multipart>=0.0.20",
+    "slowapi>=0.1.9",
+    "psutil>=7.0.0",
+    "pymongo>=4.10.0",
+    "ory-hydra-client>=25.4.0",
+    "ory-kratos-client>=25.4.0",
+    "argon2-cffi>=25.1.0",
+    "cachetools>=5.0.0",
+    "mcp[cli]>=1.23.0",
+    "opentelemetry-api>=1.30.0",
+    "opentelemetry-sdk>=1.30.0",
+    "opentelemetry-exporter-otlp>=1.30.0",
+    "opentelemetry-instrumentation-fastapi>=0.50b0",
+    "opentelemetry-instrumentation-httpx>=0.50b0",
+    "opentelemetry-instrumentation-pymongo>=0.50b0",
+    "opentelemetry-instrumentation-logging>=0.50b0",
+]
+
+[project.urls]
+Homepage = "https://selfmemory.com"
+Repository = "https://github.com/selfmemory/selfmemory"
+Documentation = "https://docs.selfmemory.com"
+Issues = "https://github.com/selfmemory/selfmemory/issues"
+
+[project.scripts]
+selfmemory-api = "selfmemory.apps.api:main"
+selfmemory-worker = "selfmemory.features.runs.worker:main"
+selfmemory-mcp = "selfmemory.apps.mcp:main"
+
+[build-system]
+requires = ["uv_build>=0.8.0,<0.10.0"]
+build-backend = "uv_build"

@@ -24,7 +24,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate": "openapi-ts"
   },
   "keywords": [
     "selfmemory",
@@ -38,6 +39,7 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@hey-api/openapi-ts": "^0.84.0",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
     "vitest": "^3.0.0"

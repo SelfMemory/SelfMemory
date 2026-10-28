@@ -35,7 +35,7 @@ Use scopes to indicate the area of the codebase affected:
 |-------|------|
 | `core` | Core memory engine (`selfmemory/`) |
 | `api` | REST API server (`selfmemory/api/`) |
-| `mcp` | MCP server (`selfmemory-mcp/`) |
+| `mcp` | MCP server (`selfmemory.apps.mcp`) |
 | `search` | Search engine (`selfmemory/search/`) |
 | `security` | Security and encryption (`selfmemory/security/`) |
 | `auth` | Authentication (`selfmemory/auth/`) |

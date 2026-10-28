@@ -1,0 +1,39 @@
+opencollection: 1.0.0
+
+info:
+  name: selfmemory
+
+request:
+  auth:
+    type: bearer
+    token: "{{apiKey}}"
+
+docs:
+  content: |-
+    # selfmemory
+
+    The knowledge wiki API. Sources go in, an agent files them into a scoped,
+    git-backed Open Knowledge Format wiki, and questions are answered from it
+    with citations.
+
+    ## Setup
+
+    1. Run the server: `make run` (listens on :8081)
+    2. Seed a project API key: `uv run python scripts/dev_seed_api_key.py`
+    3. Put it in the `local` environment as `apiKey`, and its project as
+       `projectId`
+
+    A project API key is pinned to one project: it reads that project, its
+    sub-projects it may read, and the org room, and needs no `org_id`.
+
+    ## Runs are asynchronous
+
+    `Upload and ingest`, `Ask` and `Lint` return a job id. Put it in `jobId`,
+    then read `Run` (polling) or `Run events` (server-sent events).
+
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

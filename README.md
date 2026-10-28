@@ -10,28 +10,94 @@
 
 # SelfMemory
 
-**Store AI memories for you and your agents**
+**A scoped, multi-tenant knowledge wiki that an agent maintains for your organization.**
 
-It is a open-source universal memory engine where users can store and retrieve their AI conversations and context across different models. Users can add memories through MCP, SDK, or a website selfmemory.com Over time, this will evolve into a one-stop memory hub with note-taking and chatbot features. For B2B, it becomes a knowledge backbone, storing project context, organizational knowledge, documents, and data sources to power company-wide AI systems.
+People drop in documents. An agent reads each one once and files it into a
+maintained wiki, and later questions are answered from that wiki with
+citations. Knowledge is kept per organization in four kinds of scope:
 
-## 🚀 Quick Start
+| Scope | Who reads it | Who writes it |
+| --- | --- | --- |
+| Org room (`org`) | every member | org owner and admins (via promotion review) |
+| Project (`project:<id>`) | project members with `canRead` | members with `canWrite` |
+| Sub-project | its own members only, never its parent's | its own writers |
+| Personal notes (`user:<id>`) | that person | that person |
+
+## How it works
+
+```
+upload ──▶ raw/<scope>/…        immutable sources (PDF, DOCX, PPTX, XLSX, HTML → markdown)
+             │
+             ▼  ingest run (opencode agent, sandboxed to this scope)
+           wiki/<scope>/…        Open Knowledge Format pages, one git repo per scope
+             │
+             ▼  query run (read-only agent) ──▶ answer with page citations
+```
+
+- **All model work is done by [opencode](https://opencode.ai)**, run once per
+  job. The server makes no LLM calls and has no vector store or embeddings.
+- **Each run is confined** to the directories its caller may read: bubblewrap
+  on Linux, docker/podman elsewhere. The boundary is verified by a probe on the
+  host before any agent starts, and in production an unverified sandbox
+  refuses every run.
+- **Facts never flow upward silently.** An ingest into a project that finds an
+  org-wide fact queues it in that scope's `promotions.md`; an org admin approves
+  it into the org room.
+- **Runs are durable jobs** in MongoDB, streamed over server-sent events, and
+  resumable. Any number of API processes and workers share the queue.
+- **The wiki is browsable**: a page tree, a link graph, and a timeline of how
+  the graph grew, commit by commit.
+
+## Run it locally
 
 ```bash
-pip install selfmemory
+make install-dev
+docker compose -f deploy/docker-compose.yml up -d mongodb   # tenancy + run queue
+make run                          # API on :8081, worker in-process
+uv run python scripts/dev_seed_api_key.py   # prints an API key + project id
 ```
 
-```python
-from selfmemory import SelfMemory
-
-memory = SelfMemory()
-
-# Add memories
-memory.add("Can you find the nearest BMW car showroom for me.", user_id="user")
-
-# Search memories
-results = memory.search("Can you find a car washing service near me?", user_id="user")
-print(results)
+```bash
+curl -H "Authorization: Bearer $KEY" -F scope=project:$PROJECT \
+     -F files=@notes.pdf localhost:8081/api/v1/wiki/upload
+curl -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+     -d '{"command":"query","message":"What did we decide?"}' \
+     localhost:8081/api/v1/wiki/runs
 ```
+
+The agent needs model credentials: an API key in the environment
+(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, …) or
+`HOME=$SELFMEMORY_AGENT_HOME opencode auth login`. See `.env.example`, the
+Bruno collection in `bruno/`, and `make isolation` to see which sandbox this
+host can provide.
+
+## Layout
+
+One domain core, exposed through REST (versioned under `/api/v1`) and MCP;
+see [`docs/architecture/index.html`](docs/architecture/index.html) for the
+blueprint.
+
+```
+packages/selfmemory/src/selfmemory/
+  config.py, wiki_settings.py   typed settings (pydantic-settings)
+  kernel/       pure helpers: path safety, ids, validators, feature registry
+  features/     one folder per capability: wiki, runs, uploads, tenancy, api_keys
+                (domain / adapters / service / interfaces inside each)
+  platform/     cross-cutting adapters: mongo, ory, sandbox, telemetry, mcp
+  apps/         process entry points: api.py, worker.py, mcp.py
+deploy/         docker compose, sandbox image
+tests/          unit/<feature>/, integration/
+```
+
+`make lint` also runs import-linter, which enforces that dependencies point
+downward (apps → features → platform → kernel) and that the wiki domain stays
+free of I/O.
+
+## MCP
+
+`selfmemory.apps.mcp` (`make run-mcp`) exposes the wiki to MCP clients (OAuth 2.1 via Ory Hydra, or
+an API key): `search`, `fetch`, `wiki_tree` and `ask`. Each call carries the
+caller's own credential, so it sees exactly what that caller may read.
 
 ## 📚 Full Documentation
 
