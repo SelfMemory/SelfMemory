@@ -34,7 +34,12 @@ from fastapi import (
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from selfmemory.features.runs.store import TERMINAL, ScopeBusyError, job_summary
+from selfmemory.features.runs.store import (
+    TERMINAL,
+    QuotaExceededError,
+    ScopeBusyError,
+    job_summary,
+)
 from selfmemory.features.tenancy.access import AccessDenied, OrgAccess, Principal
 from selfmemory.features.wiki.adapters.files import (
     IMAGE_EXTENSIONS,
@@ -87,6 +92,8 @@ def _errors(e: Exception) -> HTTPException:
         return HTTPException(status_code=403, detail=str(e))
     if isinstance(e, ScopeBusyError):
         return HTTPException(status_code=409, detail=str(e))
+    if isinstance(e, QuotaExceededError):
+        return HTTPException(status_code=429, detail=str(e))
     if isinstance(e, KeyError):
         return HTTPException(status_code=404, detail="not found")
     return HTTPException(status_code=400, detail=str(e))
@@ -174,11 +181,14 @@ def tree(ctx: Ctx = Depends(get_ctx)):
 @router.get("/file", summary="Read a wiki page or raw source")
 def read_file(path: str = Query(...), ctx: Ctx = Depends(get_ctx)):
     try:
-        _scope, side, abs_path = ctx.access.resolve_path(path)
+        scope, side, abs_path = ctx.access.resolve_path(path)
     except (AccessDenied, PathRefused) as e:
         raise _errors(e) from None
     if not abs_path.is_file():
         raise HTTPException(status_code=404, detail="not found")
+    ctx.service.record(
+        ctx.access, "file.read", scopes=[scope.key], target=path, detail={"side": side}
+    )
     if abs_path.suffix.lower() in IMAGE_EXTENSIONS:
         # User-supplied bytes: never let them run as a page on this origin
         # (an uploaded SVG can carry script).
@@ -220,6 +230,13 @@ def write_file(body: FileWrite, ctx: Ctx = Depends(get_ctx)):
                 )
     except (AccessDenied, PathRefused, ScopeBusyError) as e:
         raise _errors(e) from None
+    ctx.service.record(
+        ctx.access,
+        "file.write",
+        scopes=[scope.key],
+        target=body.path,
+        detail={"side": side, "sha": sha},
+    )
     return {"ok": True, "side": side, "sha": sha}
 
 
@@ -245,6 +262,13 @@ def delete_file(path: str = Query(...), ctx: Ctx = Depends(get_ctx)):
                 )
     except (AccessDenied, PathRefused, ScopeBusyError) as e:
         raise _errors(e) from None
+    ctx.service.record(
+        ctx.access,
+        "file.delete",
+        scopes=[scope.key],
+        target=path,
+        detail={"side": side, "sha": sha},
+    )
     return {"ok": True, "side": side, "sha": sha}
 
 
@@ -317,20 +341,32 @@ async def upload(
     finally:
         shutil.rmtree(stage, ignore_errors=True)
     result["skipped"] = skipped + result["skipped"]
+    if result["written"]:
+        ctx.service.record(
+            ctx.access,
+            "file.upload",
+            scopes=[scope],
+            detail={"files": result["written"][:200], "count": len(result["written"])},
+        )
     job = None
     if ingest and result["written"]:
         message = "\n".join(result["written"])
         if note and note.strip():
             message += f"\n\nPay particular attention to: {note.strip()}"
-        job = await asyncio.to_thread(
-            ctx.service.enqueue,
-            ctx.access,
-            command="ingest",
-            message=message,
-            scope_key=scope,
-            display_text=f"Ingest {len(result['written'])} file(s)",
-            files=result["written"],
-        )
+        try:
+            job = await asyncio.to_thread(
+                ctx.service.enqueue,
+                ctx.access,
+                command="ingest",
+                message=message,
+                scope_key=scope,
+                display_text=f"Ingest {len(result['written'])} file(s)",
+                files=result["written"],
+            )
+        except QuotaExceededError as e:
+            raise HTTPException(
+                status_code=429, detail=f"files were saved but not ingested: {e}"
+            ) from None
     return {
         **result,
         "job_id": job["_id"] if job else None,
@@ -378,7 +414,7 @@ def create_run(body: RunRequest, ctx: Ctx = Depends(get_ctx)):
             files=body.files,
             chat=chat,
         )
-    except (AccessDenied, ValueError) as e:
+    except (AccessDenied, ValueError, QuotaExceededError) as e:
         raise _errors(e) from None
     return {
         "job_id": job["_id"],
@@ -558,13 +594,15 @@ def create_chat(body: ChatCreate, ctx: Ctx = Depends(get_ctx)):
     return {"id": chat["_id"], "title": chat["title"]}
 
 
-@router.delete("/chats/{chat_id}", summary="Delete a chat and its messages")
+@router.delete(
+    "/chats/{chat_id}", summary="Delete a chat, its messages and its agent session"
+)
 def delete_chat(
     chat_id: str,
     principal: Principal = Depends(get_principal),
     service: WikiService = Depends(get_service),
 ):
-    if not service.chats.delete(principal.owner, chat_id):
+    if not service.delete_chat(principal, chat_id):
         raise HTTPException(status_code=404, detail="chat not found")
     return {"ok": True}
 

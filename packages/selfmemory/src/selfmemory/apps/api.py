@@ -14,6 +14,7 @@ from selfmemory.features.runs.worker import Worker
 from selfmemory.features.wiki.service import WikiService
 from selfmemory.kernel.datetime import utc_now
 from selfmemory.kernel.feature import discover
+from selfmemory.platform.audit import ensure_audit_indexes
 from selfmemory.platform.dependencies import mongo_db
 from selfmemory.platform.health import is_alive, is_ready, perform_health_checks
 from selfmemory.platform.ory.hydra_proxy import router as hydra_proxy_router
@@ -61,10 +62,11 @@ async def lifespan(app: FastAPI):
     Any number of API processes may each run a worker: claiming a job is one
     atomic update, so they share the queue without coordination. Set
     SELFMEMORY_WORKER=off to run workers separately
-    (``python -m selfmemory.features.runs.worker``).
+    (``make worker`` / ``python -m selfmemory.apps.worker``).
     """
     try:
         ensure_indexes(mongo_db)
+        ensure_audit_indexes(mongo_db, WIKI_SETTINGS.audit_retention_days)
     except Exception:
         logging.exception("could not create wiki indexes; continuing")
     service = WikiService(mongo_db, WIKI_SETTINGS)

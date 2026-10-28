@@ -70,8 +70,13 @@ GitHub Actions (`ci.yml`): ruff lint + lint-imports → pytest with coverage →
 - No LLM, embeddings or vector store in the server: all model work is `opencode run` per job.
 - One sandbox per run (no long-lived per-user sandboxes). A chat's opencode session
   continues only while the run's mount set is unchanged (`worker.scope_digest`); HOME is
-  per (org, owner, digest). Turns of one chat run one at a time (unique index);
-  per-owner/per-org caps give fair share.
+  per (org, owner, chat, digest) (`runs/homes.py`), deleted with the chat and after
+  `session_home_retention_s` unused. Turns of one chat run one at a time (unique index);
+  per-owner/per-org concurrency caps give fair share (excluded in the claim query, so a
+  backlog cannot starve others); a per-owner queued cap and optional per-user/per-org
+  daily quotas (atomic counters, `QuotaCounter`) refuse with 429.
+- `platform/audit.py` is an append-only Mongo log (`audit_log`) of run/file/chat actions
+  with scopes, never content.
 - Agent runs refuse to start when isolation is required (production) and the probe fails.
 
 ## Auth Integration

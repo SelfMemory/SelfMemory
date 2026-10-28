@@ -242,6 +242,7 @@ def test_busy_scope_requeues_ingest(service, world):
     access = service.access(Principal(world.member), world.org_id)
     key = f"project:{world.alpha}"
     job = service.enqueue(access, command="ingest", message="x", scope_key=key)
+    service.ensure_all(access)  # scaffolding takes the lease too
     held = service.lease(access, access.scope(key), "someone", wait_s=0)
     held.acquire()
     try:

@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from selfmemory.features.runs.store import TERMINAL
+from selfmemory.features.runs.store import TERMINAL, QuotaExceededError
 from selfmemory.features.tenancy.access import AccessDenied
 from selfmemory.features.wiki.interfaces.http import Ctx, get_ctx
 from selfmemory.platform.sandbox.isolation import isolation_report
@@ -37,6 +37,8 @@ INVALID_PARAMS = -32602
 TASK_NOT_FOUND = -32001
 TASK_NOT_CANCELABLE = -32002
 UNSUPPORTED = -32004
+# server-defined: the caller's daily run quota is used up
+QUOTA_EXCEEDED = -32029
 
 _STATE = {
     "queued": "submitted",
@@ -222,6 +224,8 @@ def _start_task(ctx: Ctx, params: dict) -> dict:
         )
     except (AccessDenied, ValueError) as e:
         raise RpcError(INVALID_PARAMS, str(e)) from None
+    except QuotaExceededError as e:
+        raise RpcError(QUOTA_EXCEEDED, str(e)) from None
 
 
 def _owned(ctx: Ctx, params: dict) -> dict:
