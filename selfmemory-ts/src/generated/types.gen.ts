@@ -106,6 +106,11 @@ export type ConsentAcceptRequest = {
      */
     grant_scope: Array<string>;
     /**
+     * Project Id
+     * Project to pin the token to (access is checked)
+     */
+    project_id?: string | null;
+    /**
      * Remember
      * Remember consent decision
      */
@@ -117,11 +122,11 @@ export type ConsentAcceptRequest = {
     remember_for?: number;
     /**
      * Session
-     * Session data to include in token
+     * Deprecated: only access_token.project_id is read, then checked
      */
-    session: {
+    session?: {
         [key: string]: unknown;
-    };
+    } | null;
 };
 
 /**
@@ -245,11 +250,6 @@ export type LoginAcceptRequest = {
      * Remember duration in seconds
      */
     remember_for?: number;
-    /**
-     * Subject
-     * User ID (Kratos identity ID)
-     */
-    subject: string;
 };
 
 /**

@@ -164,6 +164,18 @@
             "title": "Grant Scope",
             "type": "array"
           },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Project to pin the token to (access is checked)",
+            "title": "Project Id"
+          },
           "remember": {
             "default": true,
             "description": "Remember consent decision",
@@ -177,16 +189,22 @@
             "type": "integer"
           },
           "session": {
-            "additionalProperties": true,
-            "description": "Session data to include in token",
-            "title": "Session",
-            "type": "object"
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Deprecated: only access_token.project_id is read, then checked",
+            "title": "Session"
           }
         },
         "required": [
           "consent_challenge",
-          "grant_scope",
-          "session"
+          "grant_scope"
         ],
         "title": "ConsentAcceptRequest",
         "type": "object"
@@ -350,16 +368,10 @@
             "description": "Remember duration in seconds",
             "title": "Remember For",
             "type": "integer"
-          },
-          "subject": {
-            "description": "User ID (Kratos identity ID)",
-            "title": "Subject",
-            "type": "string"
           }
         },
         "required": [
-          "login_challenge",
-          "subject"
+          "login_challenge"
         ],
         "title": "LoginAcceptRequest",
         "type": "object"
