@@ -563,7 +563,7 @@ export const createChatApiV1WikiChatsPost = <ThrowOnError extends boolean = fals
 };
 
 /**
- * Delete a chat and its messages
+ * Delete a chat, its messages and its agent session
  */
 export const deleteChatApiV1WikiChatsChatIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteChatApiV1WikiChatsChatIdDeleteData, ThrowOnError>) => {
     return (options.client ?? client).delete<DeleteChatApiV1WikiChatsChatIdDeleteResponses, DeleteChatApiV1WikiChatsChatIdDeleteErrors, ThrowOnError>({

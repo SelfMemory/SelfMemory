@@ -2489,7 +2489,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Delete a chat and its messages",
+        "summary": "Delete a chat, its messages and its agent session",
         "tags": [
           "wiki"
         ]
