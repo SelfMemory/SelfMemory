@@ -1,0 +1,43 @@
+# Local development infrastructure for SelfMemory.
+#
+# MongoDB only. It holds tenancy (users, organizations, projects, API keys)
+# and the wiki run queue.
+#
+# The wiki itself is not a service. Uploads and the compiled, git-backed
+# markdown wikis live on disk under SELFMEMORY_DATA_ROOT (default
+# ~/.selfmemory/data), and all model work is done by the opencode agent run
+# per job. There is no vector store and no embedding service, so Qdrant and
+# Ollama are deliberately absent. `docker compose down --volumes` deletes the
+# Mongo volume only; it never touches the data root.
+#
+# Ports are overridable so this file and .env cannot drift apart:
+#
+#     MONGODB_PORT=27018 docker compose up -d
+#
+# Mongo binds to 127.0.0.1 and runs without --auth, matching the
+# credential-less MONGODB_URI in .env.example. That is a development-only
+# arrangement: there is no password on this database, so do not change the
+# bind address to 0.0.0.0.
+
+name: selfmemory
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: selfmemory-mongodb
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MONGODB_PORT:-27017}:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      # The port opens before Mongo will accept writes, so waiting on the
+      # listener alone can hand a half-initialised server to the app.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  mongodb-data:

@@ -1,0 +1,335 @@
+<title>SelfMemory Architecture Blueprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: blueprint sheet — left nav rail on desktop, single column on phone; layered stack drawn as horizontal strata */
+:root{--bg:#f5f7f8;--panel:#ffffff;--fg:#17232b;--muted:#5a6a74;--line:#d4dde2;--accent:#1d6f8a;--accent-soft:#e2f0f4;--now:#2f7d4f;--next:#b06a12;--later:#7a4fa3;
+--display:"Fraunces",Georgia,serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f171c;--panel:#16222a;--fg:#e3ebef;--muted:#93a5af;--line:#2a3a44;--accent:#5fb8d4;--accent-soft:#183340;--now:#6cc28d;--next:#e0a24d;--later:#b892de;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f171c;--panel:#16222a;--fg:#e3ebef;--muted:#93a5af;--line:#2a3a44;--accent:#5fb8d4;--accent-soft:#183340;--now:#6cc28d;--next:#e0a24d;--later:#b892de;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:200px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:6px;font-size:13px}
+nav a{color:var(--muted);text-decoration:none}nav a:hover,nav a:focus-visible{color:var(--accent)}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.2;margin:0}
+h1{font-size:2.6rem}h2{font-size:1.7rem;margin-bottom:12px}h3{font-size:1.1rem;margin-bottom:6px}
+p{max-width:68ch;margin:0 0 10px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+code,pre{font-family:var(--mono);font-size:13px}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;overflow-x:auto;margin:0;line-height:1.5}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.keep{color:var(--now)}.add{color:var(--next)}.drop{color:var(--later)}
+.strata{display:flex;flex-direction:column;gap:6px}
+.stratum{display:grid;grid-template-columns:170px minmax(0,1fr);gap:16px;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);padding:12px 16px;border-radius:4px}
+.stratum b{font-family:var(--mono);font-size:13px}
+.stratum span{color:var(--muted);font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.box ul{margin:6px 0 0;padding-left:18px}
+.phase{display:grid;grid-template-columns:90px minmax(0,1fr);gap:16px;padding:16px 0;border-top:1px solid var(--line)}
+.phase .n{font-family:var(--mono);color:var(--accent);font-size:13px}
+.lede{font-size:1.1rem;color:var(--muted);max-width:62ch}
+@media (max-width:820px){.wrap{grid-template-columns:minmax(0,1fr)}nav{display:none}.stratum{grid-template-columns:minmax(0,1fr);gap:2px}.phase{grid-template-columns:minmax(0,1fr);gap:4px}h1{font-size:2rem}}
+</style>
+
+<div class="wrap">
+<nav aria-label="Sections">
+<a href="#start">Where it starts</a><a href="#stack">Tech stack</a><a href="#layers">Layers</a><a href="#folders">Folder structure</a><a href="#feature">Adding a feature</a><a href="#native">CLI / MCP / A2A</a><a href="#frontend">New UI</a><a href="#runtime">Runtime &amp; sandbox</a><a href="#scale">Scaling</a><a href="#phases">Phased plan</a><a href="#decisions">Open decisions</a>
+</nav>
+<main>
+
+<header>
+<div class="eyebrow">selfmemory-core · target architecture · Oct 2026</div>
+<h1>SelfMemory Architecture Blueprint</h1>
+<p class="lede">The open-source Python backend for the LLM Wiki: one domain core, exposed equally through a REST API, a CLI, an MCP server and an A2A agent. The Next.js UI lives in its own repository and talks to the backend only through the published API contract.</p>
+</header>
+
+<section id="start">
+<div class="eyebrow">Request lifecycle</div>
+<h2>Where it starts and how it flows</h2>
+<p>Every entry point is a thin adapter. It authenticates, converts input into a typed command, and calls the same application service. No adapter holds business logic, so a feature written once is available everywhere.</p>
+<pre class="mermaid">
+flowchart LR
+  UI[Next.js UI<br/>separate repo] -->|REST + SSE| API
+  CLI[selfmemory CLI] --> APP
+  MCP[MCP clients<br/>Claude, Cursor] -->|Streamable HTTP| MCPS[MCP adapter]
+  A2A[Other agents] -->|A2A JSON-RPC| A2AS[A2A adapter]
+  API[FastAPI adapter] --> APP
+  MCPS --> APP
+  A2AS --> APP
+  APP[Application services<br/>use cases] --> DOM[Domain<br/>wiki, scopes, runs]
+  APP --> PORTS{{Ports}}
+  PORTS --> MONGO[(MongoDB<br/>jobs, chats, leases)]
+  PORTS --> FS[(Data root<br/>git per scope)]
+  PORTS --> ORY[Ory Kratos / Hydra / Keto]
+  APP -->|enqueue| Q[(Job queue)]
+  Q --> W[Run worker] --> SB[Sandbox<br/>bwrap / docker] --> OC[opencode agent run]
+</pre>
+<p>Today the boot point is <code>server/main.py</code> (FastAPI on :8081) plus the separate <code>selfmemory-mcp/main_unified.py</code>. The target is one composition root, <code>selfmemory/bootstrap.py</code>, that wires adapters to services, so the API, CLI, MCP and A2A processes all start from the same container.</p>
+</section>
+
+<section id="stack">
+<div class="eyebrow">Choices for the future, not a list of what exists</div>
+<h2>Tech stack</h2>
+<div class="tbl"><table>
+<thead><tr><th>Concern</th><th>Choice</th><th>Status</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Language</td><td>Python 3.13 (3.14 when deps catch up)</td><td><span class="pill add">upgrade</span></td><td>Faster interpreter, better typing, free-threaded build later for the worker</td></tr>
+<tr><td>Packaging</td><td>uv workspace, <code>uv_build</code> backend</td><td><span class="pill keep">keep</span></td><td>Already in use; one lockfile for core, MCP, CLI</td></tr>
+<tr><td>Web framework</td><td>FastAPI + Pydantic v2</td><td><span class="pill keep">keep</span></td><td>OpenAPI out of the box, which generates the UI client</td></tr>
+<tr><td>ASGI server</td><td>Uvicorn (Granian as an option)</td><td><span class="pill keep">keep</span></td><td>Standard; Granian if throughput matters</td></tr>
+<tr><td>Settings</td><td>pydantic-settings</td><td><span class="pill add">add</span></td><td>Typed env config instead of ad-hoc dotenv reads</td></tr>
+<tr><td>Data store</td><td>MongoDB via PyMongo async API</td><td><span class="pill keep">keep</span></td><td>Jobs, leases, chats; Motor is deprecated in favour of PyMongo async</td></tr>
+<tr><td>Knowledge store</td><td>Markdown files, git per scope</td><td><span class="pill keep">keep</span></td><td>Human-readable, diffable, no vector DB needed</td></tr>
+<tr><td>Search</td><td>ripgrep / SQLite FTS5 index per scope</td><td><span class="pill add">add</span></td><td>Fast keyword search without an embedding service</td></tr>
+<tr><td>Job queue</td><td>Mongo queue now; Redis Streams or NATS JetStream at scale</td><td><span class="pill add">later</span></td><td>Behind a <code>JobQueue</code> port so it swaps cleanly</td></tr>
+<tr><td>Agent runtime</td><td>opencode in bwrap / docker sandbox</td><td><span class="pill keep">keep</span></td><td>Model work isolated from the server process</td></tr>
+<tr><td>Identity</td><td>Ory Kratos + Hydra, Keto for permissions</td><td><span class="pill add">add Keto</span></td><td>Relationship-based authz replaces hand-written RBAC</td></tr>
+<tr><td>MCP</td><td>Official <code>mcp</code> Python SDK, Streamable HTTP, OAuth 2.1</td><td><span class="pill add">consolidate</span></td><td>Mount on the same app; drop separate server process</td></tr>
+<tr><td>A2A</td><td><code>a2a-sdk</code> (Linux Foundation A2A protocol)</td><td><span class="pill add">add</span></td><td>Agent Card + task endpoints for agent-to-agent use</td></tr>
+<tr><td>CLI</td><td>Typer + Rich</td><td><span class="pill add">add</span></td><td>Same services, local or remote mode</td></tr>
+<tr><td>Observability</td><td>OpenTelemetry + structlog</td><td><span class="pill keep">keep</span></td><td>Traces across API → worker → sandbox</td></tr>
+<tr><td>Quality</td><td>Ruff, pytest, ty or mypy, import-linter</td><td><span class="pill add">add types + import rules</span></td><td>import-linter enforces the layer rules below in CI</td></tr>
+<tr><td>Legacy memory stack</td><td>embeddings/, vector_stores/, llms/</td><td><span class="pill drop">remove</span></td><td>Decided: deleted entirely. The wiki has no LLM in the server</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="layers">
+<div class="eyebrow">Dependencies point downward only</div>
+<h2>Multi-layer architecture</h2>
+<div class="strata">
+<div class="stratum"><b>Interfaces</b><span>FastAPI routers, MCP tools, A2A skills, CLI commands. Parse, authenticate, call a service, format the reply.</span></div>
+<div class="stratum"><b>Application</b><span>Use cases such as <code>IngestUpload</code>, <code>StartRun</code>, <code>AskWiki</code>. Transactions, authorization checks via <code>access</code>, event emission.</span></div>
+<div class="stratum"><b>Domain</b><span>Scope, Page, Run, Org/Project. Pure Python, no I/O, no framework imports. Path safety and scope rules live here.</span></div>
+<div class="stratum"><b>Ports</b><span>Protocols: <code>WikiRepo</code>, <code>JobQueue</code>, <code>Sandbox</code>, <code>IdentityProvider</code>, <code>SearchIndex</code>.</span></div>
+<div class="stratum"><b>Infrastructure</b><span>Adapters: Mongo, git, bwrap/docker, opencode, Ory, FTS. Swappable without touching the layers above.</span></div>
+</div>
+<p style="margin-top:12px">import-linter contracts in CI: <code>domain</code> imports nothing above it; <code>interfaces</code> never import <code>infrastructure</code> directly.</p>
+</section>
+
+<section id="folders">
+<div class="eyebrow">Feature-first inside a layered shell</div>
+<h2>Folder structure</h2>
+<pre>selfmemory-core/
+├── pyproject.toml              # uv workspace root
+├── packages/
+│   ├── selfmemory/             # the core library (published to PyPI)
+│   │   └── src/selfmemory/
+│   │       ├── bootstrap.py    # composition root: wires ports → adapters
+│   │       ├── config.py       # pydantic-settings
+│   │       ├── kernel/         # shared: errors, ids, events, auth context, ports base
+│   │       ├── features/       # one folder per capability (vertical slice)
+│   │       │   ├── wiki/
+│   │       │   │   ├── domain.py        # Scope, Page, rules
+│   │       │   │   ├── ports.py         # WikiRepo, SearchIndex
+│   │       │   │   ├── service.py       # use cases
+│   │       │   │   ├── adapters/        # git_repo.py, fts_index.py
+│   │       │   │   └── interfaces/
+│   │       │   │       ├── http.py      # FastAPI router
+│   │       │   │       ├── mcp.py       # MCP tools
+│   │       │   │       ├── a2a.py       # A2A skills
+│   │       │   │       └── cli.py       # Typer commands
+│   │       │   ├── runs/       # job queue, worker, sandbox, opencode
+│   │       │   ├── uploads/    # markitdown conversion
+│   │       │   ├── tenancy/    # orgs, projects, members, invitations
+│   │       │   ├── chat/
+│   │       │   └── api_keys/
+│   │       ├── platform/       # cross-cutting adapters
+│   │       │   ├── mongo/  ory/  telemetry/  sandbox/
+│   │       └── apps/           # process entry points
+│   │           ├── api.py      # FastAPI app: mounts every feature's http + mcp + a2a
+│   │           ├── worker.py
+│   │           └── cli.py
+│   └── selfmemory-ts/          # generated TS client from OpenAPI
+├── schema/                     # agent prompts (opencode)
+├── deploy/                     # docker, compose, helm
+├── tests/
+│   ├── unit/&lt;feature&gt;/  integration/  contract/   # contract = OpenAPI + MCP + A2A snapshots
+└── docs/</pre>
+</section>
+
+<section id="feature">
+<div class="eyebrow">How new work lands</div>
+<h2>Adding a feature tomorrow</h2>
+<p>A new capability is a new folder under <code>features/</code> with the same five files. Each feature exposes a <code>register(app_ctx)</code> function; <code>apps/api.py</code> discovers features through a registry (an explicit list, or Python entry points for plugins), so routers, MCP tools, A2A skills and CLI commands appear without editing a central file.</p>
+<pre>features/
+  timeline/
+    __init__.py      # FEATURE = Feature(name="timeline", register=register)
+    domain.py
+    ports.py
+    service.py
+    adapters/
+    interfaces/{http,mcp,a2a,cli}.py</pre>
+<p>Third parties can ship features as separate packages using the <code>selfmemory.features</code> entry-point group.</p>
+</section>
+
+<section id="native">
+<div class="eyebrow">One service, four front doors</div>
+<h2>CLI, MCP and A2A native</h2>
+<div class="grid">
+<div class="box"><h3>REST / OpenAPI</h3><ul><li>Versioned under <code>/api/v1</code></li><li>SSE for run progress</li><li>OpenAPI spec is the UI contract</li></ul></div>
+<div class="box"><h3>CLI</h3><ul><li><code>selfmemory wiki ingest ./docs</code></li><li>Local mode calls services in-process</li><li>Remote mode calls the API with an API key</li><li><code>--json</code> output for scripting</li></ul></div>
+<div class="box"><h3>MCP</h3><ul><li>Mounted at <code>/mcp</code> on the main app (Streamable HTTP)</li><li>Tools, resources (wiki pages as <code>wiki://</code> URIs) and prompts</li><li>OAuth 2.1 via Hydra, with per-scope tokens</li><li>stdio mode via the CLI for local clients</li></ul></div>
+<div class="box"><h3>A2A</h3><ul><li>Agent Card at <code>/.well-known/agent-card.json</code></li><li>Skills: ingest, ask, summarise, run status</li><li>Long runs map to A2A tasks with streaming updates</li><li>Same auth as MCP</li></ul></div>
+</div>
+<p style="margin-top:12px">A small decorator (<code>@capability</code>) on a service method can generate the MCP tool and A2A skill schema from its Pydantic signature, so the four surfaces stay in sync.</p>
+</section>
+
+<section id="frontend">
+<div class="eyebrow">Separate repository</div>
+<h2>Adapting the new UI</h2>
+<p>Next.js (App Router, React Server Components) is a good fit and matches the existing dashboard (Radix, TanStack Query, Ory Elements, OpenTelemetry).</p>
+<div class="grid">
+<div class="box"><h3>Contract</h3><ul><li>Generate a typed client from OpenAPI (openapi-ts or orval) into <code>selfmemory-ts</code></li><li>Contract tests in the backend fail CI if the spec breaks</li></ul></div>
+<div class="box"><h3>Auth</h3><ul><li>Ory session cookie, validated by the backend middleware</li><li>Next.js middleware only redirects; it never authorises</li></ul></div>
+<div class="box"><h3>Data</h3><ul><li>Server Components fetch read paths</li><li>TanStack Query for mutations and polling</li><li>SSE for live run logs</li></ul></div>
+<div class="box"><h3>Migration</h3><ul><li>Ship the wiki screens on <code>/api/v1/wiki</code> first</li><li>Keep the old dashboard until parity, then retire memories pages</li></ul></div>
+</div>
+</section>
+
+<section id="runtime">
+<div class="eyebrow">Runners, sandboxes and sessions</div>
+<h2>Agent runtime and isolation</h2>
+<p><b>Recommendation:</b> one short-lived sandbox per turn, not per user and not per session. The conversation continues because the opencode session state is saved between turns, not because a process stays alive. bwrap starts in about 10 ms, so a fresh sandbox per question costs almost nothing. It also means permissions are checked again on every turn, and a crash or leak can't outlive a single answer.</p>
+<pre class="mermaid">
+flowchart LR
+  Q[User question<br/>chat id + selected scopes] --> AC[access.mount_plan<br/>re-derived every turn]
+  AC -->|readable scopes only| MS[Mount set]
+  MS --> SB[New sandbox<br/>bwrap / container]
+  H[(Session home<br/>org + user + chat)] -->|bind rw| SB
+  SB --> OC[opencode run --session id]
+  OC -->|stream events| SSE[SSE / MCP / A2A stream]
+  OC -->|exit| X[Sandbox destroyed<br/>transcript stays in home]
+</pre>
+
+<h3 style="margin-top:20px">What a sandbox can see</h3>
+<div class="tbl"><table>
+<thead><tr><th>User selects</th><th>Mounted read-only</th><th>Mounted writable</th><th>Never mounted</th></tr></thead>
+<tbody>
+<tr><td>One project</td><td>That project's wiki, its sub-projects the user can read, the org room</td><td>Nothing (questions are read-only)</td><td>Other projects, other users' personal scopes, other orgs</td></tr>
+<tr><td>All my projects</td><td>Every scope in <code>OrgAccess.scopes</code> for this user, which is the union of what they can read</td><td>Nothing</td><td>Projects they aren't a member of, other users' personal scopes</td></tr>
+<tr><td>Org level</td><td>The org room plus scopes the user can read</td><td>Nothing</td><td>Other orgs</td></tr>
+<tr><td>Ingest / write job</td><td>The target scope's raw sources and wiki</td><td>The target scope's wiki only</td><td>Everything else</td></tr>
+</tbody></table></div>
+<p style="margin-top:10px">The sandbox only ever contains directories the user is allowed to read. Anything else is never bound in, so it doesn't exist inside the run. This is how <code>selfmemory/wiki/sandbox.py</code> works today, and it should stay the only mechanism.</p>
+
+<h3 style="margin-top:20px">Session home rules (the leak to watch)</h3>
+<ul>
+<li>opencode transcripts contain the text of every file a run has read. The session home must therefore be keyed by <code>(org, user, chat, scope-set hash)</code>.</li>
+<li>If the user changes the selected scopes, or loses access to a scope, start a new opencode session. Never let an old transcript carry content from a scope the user can no longer read.</li>
+<li>Session homes are never shared between users, even inside the same org. An org-level shared chat runs under the requesting user's permissions.</li>
+<li>Delete the home when the chat is deleted, and expire it on a retention timer (for example 30 days).</li>
+</ul>
+
+<h3 style="margin-top:20px">Per surface</h3>
+<div class="tbl"><table>
+<thead><tr><th>Surface</th><th>Unit of work</th><th>Sandbox?</th><th>Session lifetime</th></tr></thead>
+<tbody>
+<tr><td>App chat screen</td><td>One chat = one opencode session id. Each message = one job = one sandboxed <code>opencode run --session</code></td><td>Yes, one per message</td><td>Lives with the chat document; the stream closes when the answer finishes</td></tr>
+<tr><td>MCP</td><td>Each tool call. File tools run directly in the server, no agent and no LLM</td><td>No, except the <code>ask_wiki</code> tool, which queues a normal run</td><td>Stateless. The MCP session only holds the auth token</td></tr>
+<tr><td>A2A</td><td>A2A <code>contextId</code> = one chat; each A2A task = one turn</td><td>Yes, one per task</td><td>No contextId means a stateless one-shot. A context expires after 1 h idle; task results are kept 24 h. See below</td></tr>
+<tr><td>CLI</td><td>Remote mode: same as the app chat. Local mode: run on your own machine against a local data root</td><td>Yes</td><td>Same as the app chat</td></tr>
+</tbody></table></div>
+
+<h3 style="margin-top:20px">Coding agents as callers (A2A and MCP)</h3>
+<p>A coding agent such as Claude Code or Cursor asking on a user's behalf already keeps its own conversation. It doesn't need us to remember much. Design for three things: it may send several questions at once, it may wait or poll, and it may disappear without saying goodbye.</p>
+<div class="tbl"><table>
+<thead><tr><th>Situation</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Question with no <code>contextId</code></td><td>Stateless one-shot task. New sandbox, new opencode session, nothing carried over. <b>This is the default for coding agents.</b></td></tr>
+<tr><td>Follow-up with a <code>contextId</code></td><td>Continues that context's opencode session in a new sandbox</td></tr>
+<tr><td>Several questions at once, different or no contexts</td><td>Run in parallel, one sandbox each, up to the user's limit (for example 4). Anything over the limit waits in the queue with state <code>submitted</code></td></tr>
+<tr><td>Several questions at once on the same <code>contextId</code></td><td>Run one after another in arrival order, because one opencode session can't take two turns at once. The second task stays <code>submitted</code> until the first finishes</td></tr>
+<tr><td>Caller wants to wait</td><td><code>message/stream</code> (SSE), or blocking <code>message/send</code> with a timeout</td></tr>
+<tr><td>Caller wants to fire and check back</td><td>Non-blocking send returns the task at once; the caller uses <code>tasks/get</code>, <code>tasks/resubscribe</code>, or a push-notification webhook</td></tr>
+<tr><td>Caller drops the connection</td><td>The run keeps going to completion. The result is kept so the caller can resubscribe. <code>tasks/cancel</code> kills the sandbox</td></tr>
+<tr><td>Permissions change mid-context</td><td>The next task starts a fresh session (the scope-set hash changed)</td></tr>
+</tbody></table></div>
+<div class="tbl" style="margin-top:12px"><table>
+<thead><tr><th>What</th><th>Keep for</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Task result and status</td><td>24 h</td><td>Long enough to resubscribe or poll after a disconnect</td></tr>
+<tr><td>A2A context (opencode session)</td><td>1 h idle, then deleted</td><td>A coding agent's follow-ups come within minutes; it holds its own long-term history</td></tr>
+<tr><td>App chat transcripts</td><td>Until the user deletes the chat, or the org retention limit</td><td>People come back to these</td></tr>
+<tr><td>Audit record (who asked what, which scopes were mounted)</td><td>Org policy, no file content</td><td>Compliance without keeping data copies</td></tr>
+</tbody></table></div>
+<p style="margin-top:10px">Make every one of these a per-org setting with these defaults. If a coding agent needs to check facts in detail, steer it to the MCP file tools: they need no sandbox or model on our side and run in milliseconds.</p>
+
+<h3 style="margin-top:20px">MCP tools and permissions</h3>
+<p>The MCP client's own model does the reasoning, so the server only needs to provide safe file access. Every tool resolves paths through <code>OrgAccess.resolve_path</code>. Allowed access is the user's role intersected with the OAuth scopes on the token (<code>wiki:read</code>, <code>wiki:write</code>).</p>
+<div class="tbl"><table>
+<thead><tr><th>Tool</th><th>Needs</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>list_scopes</code></td><td>read</td><td>Only scopes this user can read</td></tr>
+<tr><td><code>list_files</code>, <code>read_file</code>, <code>search</code></td><td>read</td><td>Sub-projects the user can't read are hidden</td></tr>
+<tr><td><code>write_file</code>, <code>delete_file</code></td><td>write on that scope</td><td>Each write is a git commit with the user as author</td></tr>
+<tr><td><code>ingest</code></td><td>write on that scope</td><td>Queues a sandboxed run and returns a run id</td></tr>
+<tr><td><code>ask_wiki</code></td><td>read</td><td>Optional. Server-side agent answer for clients that want one</td></tr>
+<tr><td><code>run_status</code></td><td>read</td><td>Progress of a queued run</td></tr>
+</tbody></table></div>
+
+<h3 style="margin-top:20px">Why not a long-lived sandbox per user or per session</h3>
+<div class="grid">
+<div class="box"><h3>Per turn (choose this)</h3><ul><li>Permissions re-checked every turn</li><li>Workers stay stateless, so any worker can take any job</li><li>Idle users cost nothing</li><li>Cost: opencode startup per turn, about 1 to 2 s</li></ul></div>
+<div class="box"><h3>Per session, kept warm</h3><ul><li>Faster follow-up answers</li><li>Has to be pinned to one worker and evicted after idle time</li><li>Has to be killed when permissions change</li><li>Add later only if startup latency hurts, using <code>opencode serve</code> with a 5 to 10 minute idle limit</li></ul></div>
+<div class="box"><h3>Per user</h3><ul><li>Mixes scope sets across chats</li><li>One mistake leaks between that user's chats</li><li>Lots of idle processes</li><li>Not recommended</li></ul></div>
+</div>
+
+<h3 style="margin-top:20px">Scaling the runners</h3>
+<ul>
+<li>Run workers as their own pool (<code>SELFMEMORY_WORKER=off</code> on the API). Mongo leases already let any number of workers share the queue.</li>
+<li>Session homes go on shared storage (or are synced to object storage between turns), so the next turn can run on any worker.</li>
+<li>Schedule fairly per org, with concurrency limits per user and per org, so one tenant can't take all the runners.</li>
+<li>Keep a pool of pre-started, empty sandboxes; mounts are added when a job claims one.</li>
+<li>When moving from bwrap to multi-tenant hosts, use gVisor or Firecracker microVMs per run. The mount-set model stays the same.</li>
+<li>Each run has a hard timeout, CPU and memory limits, and network access only to the model provider.</li>
+</ul>
+</section>
+
+<section id="scale">
+<div class="eyebrow">From one box to many</div>
+<h2>Scaling path</h2>
+<div class="tbl"><table>
+<thead><tr><th>Stage</th><th>Shape</th><th>Change</th></tr></thead>
+<tbody>
+<tr><td>Single host</td><td>API + in-process worker, Mongo, local data root</td><td>Today</td></tr>
+<tr><td>Split workers</td><td><code>SELFMEMORY_WORKER=off</code> on API, N worker processes</td><td>Mongo leases already allow this</td></tr>
+<tr><td>Shared storage</td><td>Data root on network storage or object store with git bundles</td><td>Swap the <code>WikiRepo</code> adapter</td></tr>
+<tr><td>Horizontal</td><td>Stateless API pods, worker pool on Kubernetes, sandbox as gVisor or Firecracker</td><td>Queue moves to Redis Streams / NATS; shard by org</td></tr>
+<tr><td>Multi-region</td><td>Org pinned to a region (data residency)</td><td>Routing by org id at the edge</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="phases">
+<div class="eyebrow">LLM Wiki delivery sequence</div>
+<h2>Phased development</h2>
+<div class="phase"><div class="n">Phase 0</div><div><h3>Stabilise</h3><p>Merge <code>feat/orgbrain-backend</code>. Pin Python 3.13, add pydantic-settings, add import-linter with the current layers.</p></div></div>
+<div class="phase"><div class="n">Phase 1</div><div><h3>Restructure</h3><p>Move to <code>features/</code> layout behind the composition root. Delete the embeddings, vector store, LLM and old memory modules, along with their routes, tests and dependencies. Version the API at <code>/api/v1</code>.</p></div></div>
+<div class="phase"><div class="n">Phase 2</div><div><h3>Wiki core</h3><p>Ingest, scopes, git history, search index, graph and timeline, runs with SSE progress. OpenAPI contract published and TS client generated.</p></div></div>
+<div class="phase"><div class="n">Phase 3</div><div><h3>New UI</h3><p>Next.js app consumes the generated client. Wiki browse, upload, run, chat. Old memory screens retired at parity.</p></div></div>
+<div class="phase"><div class="n">Phase 4</div><div><h3>Agent native</h3><p>MCP mounted in the main app with OAuth 2.1, Typer CLI with local and remote modes, A2A Agent Card and task skills.</p></div></div>
+<div class="phase"><div class="n">Phase 5</div><div><h3>Scale and harden</h3><p>Separate worker pool, Keto permissions, stronger sandbox, queue swap, per-org quotas and audit log.</p></div></div>
+<div class="phase"><div class="n">Phase 6</div><div><h3>Ecosystem</h3><p>Feature plugins via entry points, public SDKs, self-host Helm chart.</p></div></div>
+</section>
+
+<section id="decisions">
+<div class="eyebrow">Needs a call</div>
+<h2>Decisions</h2>
+<p><b>Decided:</b> remove the legacy memory and vector stack entirely. Use a single repo with <code>packages/</code>, with <code>selfmemory-mcp</code> folded into the core package as one feature interface. Retention defaults are set (see Agent runtime).</p>
+<p><b>Still open:</b></p>
+<ul>
+<li>Keto vs keeping authz in <code>server/wiki/access.py</code>.</li>
+<li>When to move the job queue off Mongo.</li>
+<li>Whether follow-up latency justifies warm per-session sandboxes.</li>
+<li>Default concurrency limit per user and per org.</li>
+</ul>
+</section>
+
+</main>
+</div>

@@ -1,0 +1,864 @@
+<title>Pages, Not Vectors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --ground: #F4F6F8;
+    --surface: #FFFFFF;
+    --sunken: #EAEEF2;
+    --ink: #14181F;
+    --ink-muted: #56616F;
+    --ink-faint: #7C8797;
+    --rule: #D8DEE6;
+    --rule-strong: #B9C2CD;
+    --write: #B4400B;
+    --write-soft: #FBEDE5;
+    --read: #0B6E68;
+    --read-soft: #E2F1EF;
+    --bound: #9C1239;
+    --bound-soft: #FAE8EC;
+
+    --f-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+    --f-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --f-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+    --measure: 66ch;
+    --wide: 960px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0D1117;
+      --surface: #151B23;
+      --sunken: #1C242E;
+      --ink: #E4EAF2;
+      --ink-muted: #9AA6B4;
+      --ink-faint: #77828F;
+      --rule: #2A3340;
+      --rule-strong: #3D4859;
+      --write: #F0894E;
+      --write-soft: #2E1D14;
+      --read: #4FD1C5;
+      --read-soft: #102B2A;
+      --bound: #F4809A;
+      --bound-soft: #2E1420;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0D1117;
+    --surface: #151B23;
+    --sunken: #1C242E;
+    --ink: #E4EAF2;
+    --ink-muted: #9AA6B4;
+    --ink-faint: #77828F;
+    --rule: #2A3340;
+    --rule-strong: #3D4859;
+    --write: #F0894E;
+    --write-soft: #2E1D14;
+    --read: #4FD1C5;
+    --read-soft: #102B2A;
+    --bound: #F4809A;
+    --bound-soft: #2E1420;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: var(--wide);
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 52px;
+  }
+
+  .col { max-width: var(--measure); }
+
+  h1, h2, h3 {
+    font-family: var(--f-display);
+    font-weight: 800;
+    line-height: 1.12;
+    text-wrap: balance;
+    margin: 0;
+  }
+  h1 { font-size: 46px; letter-spacing: -0.022em; }
+  h2 { font-size: 27px; letter-spacing: -0.012em; }
+  h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.004em; }
+  p { margin: 0 0 1em; }
+  p:last-child { margin-bottom: 0; }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  code, .mono { font-family: var(--f-mono); font-size: 0.86em; }
+  code {
+    background: var(--sunken);
+    padding: 0.12em 0.36em;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+
+  a { color: var(--read); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, .toggle:focus-visible {
+    outline: 2px solid var(--read);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  /* ---- masthead ---- */
+  .masthead { display: flex; flex-direction: column; gap: 20px; }
+  .masthead .lede {
+    font-size: 21px;
+    line-height: 1.5;
+    color: var(--ink-muted);
+    max-width: 62ch;
+  }
+  .masthead-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .toggle {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: none;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 5px 13px;
+    cursor: pointer;
+  }
+  .toggle:hover { color: var(--ink); border-color: var(--rule-strong); }
+
+  .keyline { height: 1px; background: var(--rule); border: 0; margin: 0; }
+
+  /* ---- section scaffolding ---- */
+  section { display: flex; flex-direction: column; gap: 22px; }
+  .section-head { display: flex; flex-direction: column; gap: 8px; }
+
+  /* ---- figures ---- */
+  figure { margin: 0; display: flex; flex-direction: column; gap: 12px; }
+  .figbox {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 22px 20px;
+    overflow-x: auto;
+  }
+  figure svg { display: block; width: 100%; min-width: 620px; height: auto; color: var(--ink); }
+  figcaption {
+    font-size: 14.5px;
+    color: var(--ink-muted);
+    max-width: 62ch;
+  }
+  .fig-num {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+  }
+
+  /* ---- rules / invariants ---- */
+  .rules { display: flex; flex-direction: column; gap: 0; }
+  .rule-item {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 18px;
+    padding: 16px 0;
+    border-top: 1px solid var(--rule);
+    align-items: start;
+  }
+  .rule-item:last-child { border-bottom: 1px solid var(--rule); }
+  .rule-tag {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding-top: 4px;
+  }
+  .t-write { color: var(--write); }
+  .t-read { color: var(--read); }
+  .t-bound { color: var(--bound); }
+  .rule-item h3 { margin-bottom: 5px; }
+  .rule-item p { font-size: 16px; color: var(--ink-muted); }
+
+  /* ---- tables ---- */
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 15.5px; min-width: 520px; }
+  th, td { text-align: left; padding: 11px 14px 11px 0; vertical-align: top; }
+  th {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--rule-strong);
+    padding-bottom: 9px;
+  }
+  td { border-bottom: 1px solid var(--rule); color: var(--ink-muted); }
+  td:first-child { color: var(--ink); }
+  td strong { font-weight: 600; color: var(--ink); }
+
+  .chip {
+    display: inline-block;
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .chip-yes { background: var(--read-soft); color: var(--read); }
+  .chip-no { background: var(--bound-soft); color: var(--bound); }
+  .chip-part { background: var(--write-soft); color: var(--write); }
+
+  /* ---- tree ---- */
+  .tree {
+    font-family: var(--f-mono);
+    font-size: 13px;
+    line-height: 1.85;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 20px 22px;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--ink-muted);
+  }
+  .tree b { color: var(--ink); font-weight: 500; }
+  .tree .c-bound { color: var(--bound); }
+  .tree .c-read { color: var(--read); }
+
+  /* ---- callout ---- */
+  .callout {
+    border-left: 2px solid var(--write);
+    padding: 2px 0 2px 20px;
+    color: var(--ink-muted);
+    font-size: 16px;
+    max-width: 62ch;
+  }
+  .callout strong { color: var(--ink); font-weight: 600; }
+
+  /* ---- status ---- */
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .status-col { background: var(--surface); padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .status-col ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .status-col li {
+    font-size: 14.5px;
+    line-height: 1.45;
+    color: var(--ink-muted);
+    padding-left: 17px;
+    position: relative;
+  }
+  .status-col li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 8px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--rule-strong);
+  }
+  .status-col.done li::before { background: var(--read); }
+  .status-col.todo li::before { background: var(--write); }
+  .status-col li b { color: var(--ink); font-weight: 600; }
+  .status-col .mono { font-size: 12.5px; color: var(--ink-faint); }
+
+  .open-q { display: flex; flex-direction: column; gap: 14px; }
+  .open-q .q {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 12px;
+    font-size: 16px;
+    color: var(--ink-muted);
+  }
+  .open-q .q span:first-child {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+    padding-top: 4px;
+  }
+  .open-q .q b { color: var(--ink); font-weight: 600; }
+
+  footer {
+    font-size: 13.5px;
+    color: var(--ink-faint);
+    font-family: var(--f-mono);
+    line-height: 1.7;
+  }
+
+  @media (max-width: 640px) {
+    h1 { font-size: 34px; }
+    h2 { font-size: 23px; }
+    body { font-size: 16px; }
+    .page { padding: 36px 20px 64px; gap: 42px; }
+    .rule-item { grid-template-columns: 1fr; gap: 6px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="masthead-top">
+      <span class="eyebrow">selfmemory · architecture · branch feat/knowledge-memory-2.0</span>
+      <button class="toggle" id="themeToggle" type="button">Theme</button>
+    </div>
+    <h1>Pages, Not Vectors</h1>
+    <p class="lede">
+      Memory stored as markdown pages that an agent rewrites, instead of embedded
+      chunks that accumulate. One folder per project, one git repo behind it, and
+      an agent that reads it with <code>grep</code> the way a person would.
+    </p>
+    <hr class="keyline">
+  </header>
+
+  <section>
+    <div class="section-head col">
+      <span class="eyebrow">The shift</span>
+      <h2>Why the store changes shape</h2>
+    </div>
+    <div class="col">
+      <p>
+        Vector memory answers <em>what looks like this query</em>. That is the wrong
+        question for personal memory, where the thing you want is <em>what do we
+        currently know about X</em>. The difference shows up on the third write: a
+        correction does not replace the claim it corrects, it lands beside it, and
+        retrieval now returns both with no way to tell which is live.
+      </p>
+      <p>
+        Compaction fixes this at write time instead of query time. A new source is
+        merged into the pages it affects, so the store holds one current answer per
+        subject and the contradiction is resolved once, by a model that saw both
+        claims, rather than on every read forever.
+      </p>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <svg viewBox="0 0 860 372" role="img" aria-label="Append-only vector storage keeps three conflicting chunks and returns two of them to the reader; compaction rewrites a single page so the reader gets one current answer.">
+          <defs>
+            <marker id="ar-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+            </marker>
+            <marker id="ar-a-write" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--write)"></path>
+            </marker>
+            <marker id="ar-a-read" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--read)"></path>
+            </marker>
+          </defs>
+
+          <!-- ROW 1 : append -->
+          <text x="0" y="14" font-family="var(--f-mono)" font-size="11.5" letter-spacing="1.4" fill="var(--ink-faint)">APPEND — TODAY</text>
+
+          <text x="0" y="46" font-family="var(--f-mono)" font-size="12" fill="currentColor">3 sources</text>
+          <rect x="0" y="58" width="120" height="26" rx="3" fill="var(--sunken)" stroke="var(--rule)"></rect>
+          <text x="10" y="75" font-family="var(--f-mono)" font-size="11" fill="var(--ink-muted)">&quot;uses qdrant&quot;</text>
+          <rect x="0" y="90" width="120" height="26" rx="3" fill="var(--sunken)" stroke="var(--rule)"></rect>
+          <text x="10" y="107" font-family="var(--f-mono)" font-size="11" fill="var(--ink-muted)">&quot;uses uv&quot;</text>
+          <rect x="0" y="122" width="120" height="26" rx="3" fill="var(--sunken)" stroke="var(--rule)"></rect>
+          <text x="10" y="139" font-family="var(--f-mono)" font-size="11" fill="var(--ink-muted)">&quot;dropped qdrant&quot;</text>
+
+          <line x1="132" y1="103" x2="196" y2="103" stroke="var(--write)" stroke-width="1.5" marker-end="url(#ar-a-write)"></line>
+          <text x="140" y="96" font-family="var(--f-mono)" font-size="10.5" fill="var(--write)">embed</text>
+
+          <rect x="206" y="52" width="176" height="102" rx="4" fill="none" stroke="var(--rule-strong)" stroke-dasharray="3 3"></rect>
+          <text x="216" y="46" font-family="var(--f-mono)" font-size="11" fill="var(--ink-faint)">vector store</text>
+          <rect x="218" y="62" width="152" height="24" rx="3" fill="var(--surface)" stroke="var(--rule)"></rect>
+          <text x="228" y="78" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">chunk · qdrant</text>
+          <rect x="218" y="91" width="152" height="24" rx="3" fill="var(--surface)" stroke="var(--rule)"></rect>
+          <text x="228" y="107" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">chunk · uv</text>
+          <rect x="218" y="120" width="152" height="24" rx="3" fill="var(--surface)" stroke="var(--bound)"></rect>
+          <text x="228" y="136" font-family="var(--f-mono)" font-size="10.5" fill="var(--bound)">chunk · dropped</text>
+
+          <line x1="392" y1="103" x2="452" y2="103" stroke="var(--read)" stroke-width="1.5" marker-end="url(#ar-a-read)"></line>
+          <text x="396" y="96" font-family="var(--f-mono)" font-size="10.5" fill="var(--read)">top-k</text>
+
+          <rect x="462" y="76" width="150" height="54" rx="4" fill="var(--surface)" stroke="var(--rule)"></rect>
+          <text x="474" y="98" font-family="var(--f-mono)" font-size="11" fill="var(--ink-muted)">2 chunks,</text>
+          <text x="474" y="115" font-family="var(--f-mono)" font-size="11" fill="var(--bound)">both &quot;current&quot;</text>
+
+          <line x1="622" y1="103" x2="676" y2="103" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar-a)"></line>
+          <text x="688" y="99" font-family="var(--f-mono)" font-size="12" fill="var(--bound)">which is live?</text>
+          <text x="688" y="117" font-family="var(--f-mono)" font-size="11" fill="var(--ink-faint)">decided per query</text>
+
+          <line x1="0" y1="188" x2="860" y2="188" stroke="var(--rule)" stroke-width="1"></line>
+
+          <!-- ROW 2 : compact -->
+          <text x="0" y="222" font-family="var(--f-mono)" font-size="11.5" letter-spacing="1.4" fill="var(--ink-faint)">COMPACT — PROPOSED</text>
+
+          <rect x="0" y="240" width="120" height="26" rx="3" fill="var(--sunken)" stroke="var(--rule)"></rect>
+          <text x="10" y="257" font-family="var(--f-mono)" font-size="11" fill="var(--ink-muted)">&quot;uses qdrant&quot;</text>
+          <rect x="0" y="272" width="120" height="26" rx="3" fill="var(--sunken)" stroke="var(--rule)"></rect>
+          <text x="10" y="289" font-family="var(--f-mono)" font-size="11" fill="var(--ink-muted)">&quot;uses uv&quot;</text>
+          <rect x="0" y="304" width="120" height="26" rx="3" fill="var(--sunken)" stroke="var(--rule)"></rect>
+          <text x="10" y="321" font-family="var(--f-mono)" font-size="11" fill="var(--ink-muted)">&quot;dropped qdrant&quot;</text>
+
+          <line x1="132" y1="285" x2="196" y2="285" stroke="var(--write)" stroke-width="1.5" marker-end="url(#ar-a-write)"></line>
+          <text x="134" y="278" font-family="var(--f-mono)" font-size="10.5" fill="var(--write)">rewrite</text>
+
+          <rect x="206" y="234" width="176" height="102" rx="4" fill="var(--surface)" stroke="var(--write)"></rect>
+          <text x="218" y="256" font-family="var(--f-mono)" font-size="11" fill="var(--write)">project/selfmemory.md</text>
+          <line x1="218" y1="266" x2="370" y2="266" stroke="var(--rule)"></line>
+          <text x="218" y="284" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">Uses uv. No vector</text>
+          <text x="218" y="299" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">store.</text>
+          <text x="218" y="320" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-faint)">## Superseded: qdrant</text>
+
+          <line x1="392" y1="285" x2="452" y2="285" stroke="var(--read)" stroke-width="1.5" marker-end="url(#ar-a-read)"></line>
+          <text x="398" y="278" font-family="var(--f-mono)" font-size="10.5" fill="var(--read)">read</text>
+
+          <rect x="462" y="258" width="150" height="54" rx="4" fill="var(--surface)" stroke="var(--rule)"></rect>
+          <text x="474" y="280" font-family="var(--f-mono)" font-size="11" fill="var(--ink-muted)">1 page,</text>
+          <text x="474" y="297" font-family="var(--f-mono)" font-size="11" fill="var(--read)">already resolved</text>
+
+          <line x1="622" y1="285" x2="676" y2="285" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar-a)"></line>
+          <text x="688" y="281" font-family="var(--f-mono)" font-size="12" fill="var(--read)">answer</text>
+          <text x="688" y="299" font-family="var(--f-mono)" font-size="11" fill="var(--ink-faint)">decided once, at write</text>
+        </svg>
+      </div>
+      <figcaption>
+        <span class="fig-num">Fig 1</span> — The correction is the same in both rows.
+        Appending leaves it as a third chunk competing with what it corrects; compacting
+        folds it into the page and files the old claim under <code>## Superseded</code>.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="section-head col">
+      <span class="eyebrow">Storage</span>
+      <h2>A project is a folder is a repo</h2>
+    </div>
+    <div class="col">
+      <p>
+        Organizations contain projects contain users — the RBAC already in
+        <code>server/</code>. Each project gets a directory of markdown pages, and each
+        directory is a git repo held in durable storage. Sessions clone it; nothing
+        long-lived runs on a mounted disk.
+      </p>
+      <p>
+        Git is doing real work here, not just persistence. It gives per-page history and
+        blame, rollback when a compaction goes wrong, <em>what did my memory learn this
+        week</em> as a <code>log</code>, and — the part that matters most — a push
+        rejection where a plain filesystem would silently lose a write.
+      </p>
+    </div>
+
+    <div class="tree">org_acme/
+├── <b>proj_selfmemory/</b>          <span class="c-read">linked</span> — joins org-wide queries
+│   ├── index.md                page catalogue, one line each
+│   ├── log.md                  append-only operation record
+│   ├── schema.md               conventions the agent follows
+│   ├── inbox.md                <span class="c-read">un-compacted writes land here first</span>
+│   └── pages/
+│       ├── project/selfmemory.md
+│       ├── topic/tooling.md
+│       └── person/shrijayan.md
+├── <b>proj_website/</b>             <span class="c-read">linked</span>
+└── <b>proj_payroll/</b>             <span class="c-bound">isolated</span> — never joins a multi-project session</div>
+
+    <p class="col">
+      The <span class="mono">linked / isolated</span> flag is set when the project is
+      created and decides one thing: whether this repo may be cloned into a session
+      alongside others. Isolated is absolute — it holds for org owners too. An exception
+      for admins would make the guarantee meaningless, and an admin who needs the data
+      can still query that project on its own.
+    </p>
+  </section>
+
+  <section>
+    <div class="section-head col">
+      <span class="eyebrow">Write path</span>
+      <h2>Ingest returns before the thinking starts</h2>
+    </div>
+    <div class="col">
+      <p>
+        Compaction costs an agent session. Paying that inline would make
+        <code>remember()</code> a multi-second call, so the request only appends to
+        <code>inbox.md</code> and returns. A per-project worker drains the inbox in
+        batches — on a timer, or at N entries.
+      </p>
+      <p>
+        That queue is also the concurrency fix. One worker per project means two ingests
+        can never rewrite the same page at once, which is the failure mode that would
+        otherwise corrupt memory silently and stay invisible for months.
+      </p>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <svg viewBox="0 0 860 300" role="img" aria-label="Ingest appends to an inbox file and returns immediately; a per-project worker later clones the repo into an encrypted-at-rest session, runs the agent, and commits back.">
+          <defs>
+            <marker id="ar-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--write)"></path>
+            </marker>
+            <marker id="ar-b-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+            </marker>
+          </defs>
+
+          <text x="0" y="14" font-family="var(--f-mono)" font-size="11.5" letter-spacing="1.4" fill="var(--ink-faint)">REQUEST — RETURNS IN MILLISECONDS</text>
+
+          <rect x="0" y="30" width="128" height="44" rx="4" fill="var(--surface)" stroke="var(--rule)"></rect>
+          <text x="14" y="51" font-family="var(--f-mono)" font-size="11.5" fill="currentColor">client</text>
+          <text x="14" y="66" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-faint)">remember(text)</text>
+
+          <line x1="138" y1="52" x2="196" y2="52" stroke="var(--write)" stroke-width="1.5" marker-end="url(#ar-b)"></line>
+          <text x="140" y="45" font-family="var(--f-mono)" font-size="10.5" fill="var(--write)">POST</text>
+
+          <rect x="206" y="30" width="140" height="44" rx="4" fill="var(--surface)" stroke="var(--rule)"></rect>
+          <text x="220" y="51" font-family="var(--f-mono)" font-size="11.5" fill="currentColor">API</text>
+          <text x="220" y="66" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-faint)">authz · project scope</text>
+
+          <line x1="356" y1="52" x2="414" y2="52" stroke="var(--write)" stroke-width="1.5" marker-end="url(#ar-b)"></line>
+          <text x="358" y="45" font-family="var(--f-mono)" font-size="10.5" fill="var(--write)">append</text>
+
+          <rect x="424" y="30" width="134" height="44" rx="4" fill="var(--write-soft)" stroke="var(--write)"></rect>
+          <text x="438" y="51" font-family="var(--f-mono)" font-size="11.5" fill="var(--write)">inbox.md</text>
+          <text x="438" y="66" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">durable, un-merged</text>
+
+          <line x1="568" y1="52" x2="626" y2="52" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar-b-n)"></line>
+          <text x="638" y="49" font-family="var(--f-mono)" font-size="12" fill="var(--read)">202 accepted</text>
+          <text x="638" y="66" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-faint)">no model call yet</text>
+
+          <line x1="491" y1="84" x2="491" y2="122" stroke="var(--write)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ar-b)"></line>
+          <text x="502" y="108" font-family="var(--f-mono)" font-size="10.5" fill="var(--write)">drained on timer / at N entries</text>
+
+          <line x1="0" y1="140" x2="860" y2="140" stroke="var(--rule)"></line>
+          <text x="0" y="172" font-family="var(--f-mono)" font-size="11.5" letter-spacing="1.4" fill="var(--ink-faint)">BACKGROUND — ONE WORKER PER PROJECT</text>
+
+          <rect x="0" y="188" width="150" height="52" rx="4" fill="var(--surface)" stroke="var(--rule)"></rect>
+          <text x="14" y="209" font-family="var(--f-mono)" font-size="11.5" fill="currentColor">queue</text>
+          <text x="14" y="225" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-faint)">serialized per project</text>
+
+          <line x1="160" y1="214" x2="218" y2="214" stroke="var(--write)" stroke-width="1.5" marker-end="url(#ar-b)"></line>
+          <text x="162" y="207" font-family="var(--f-mono)" font-size="10.5" fill="var(--write)">clone</text>
+
+          <rect x="228" y="176" width="220" height="76" rx="4" fill="var(--surface)" stroke="var(--write)"></rect>
+          <text x="242" y="197" font-family="var(--f-mono)" font-size="11.5" fill="var(--write)">agent session · tmpfs</text>
+          <text x="242" y="215" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">decrypted working copy</text>
+          <text x="242" y="231" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">read + write tools</text>
+          <text x="242" y="245" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-faint)">one project only</text>
+
+          <line x1="458" y1="214" x2="516" y2="214" stroke="var(--write)" stroke-width="1.5" marker-end="url(#ar-b)"></line>
+          <text x="460" y="207" font-family="var(--f-mono)" font-size="10.5" fill="var(--write)">commit</text>
+
+          <rect x="526" y="188" width="160" height="52" rx="4" fill="var(--surface)" stroke="var(--rule)"></rect>
+          <text x="540" y="209" font-family="var(--f-mono)" font-size="11.5" fill="currentColor">project repo</text>
+          <text x="540" y="225" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-faint)">encrypted at rest</text>
+
+          <line x1="696" y1="214" x2="744" y2="214" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ar-b-n)"></line>
+          <text x="754" y="211" font-family="var(--f-mono)" font-size="11" fill="var(--ink-faint)">session</text>
+          <text x="754" y="227" font-family="var(--f-mono)" font-size="11" fill="var(--ink-faint)">wiped</text>
+        </svg>
+      </div>
+      <figcaption>
+        <span class="fig-num">Fig 2</span> — The model never runs on the request path.
+        Everything below the rule is a background job, which is what makes the agent's
+        latency affordable and what serializes writes.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="section-head col">
+      <span class="eyebrow">Read path</span>
+      <h2>Permissions decide the mount, not the answer</h2>
+    </div>
+    <div class="col">
+      <p>
+        A query resolves RBAC first, then clones only the repos that user may read and
+        that are not marked isolated. The session sees exactly that set — filtering
+        after the agent has read something is not filtering, and mounting broadly to
+        sort it out later is the leak.
+      </p>
+      <p>
+        Sessions that span more than one project get <strong>read-only tools</strong>.
+        Mount two projects with write access and a page in one, written from a
+        user-supplied source, can instruct the agent to copy the other project into it.
+        One invariant closes that: writes only ever happen in a single-project session.
+      </p>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <svg viewBox="0 0 860 320" role="img" aria-label="A query resolves permissions, clones only the permitted non-isolated project repos into a read-only session, returns a cited answer, and wipes the session. The isolated project is never cloned.">
+          <defs>
+            <marker id="ar-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--read)"></path>
+            </marker>
+            <marker id="ar-c-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+            </marker>
+          </defs>
+
+          <rect x="0" y="118" width="128" height="52" rx="4" fill="var(--surface)" stroke="var(--rule)"></rect>
+          <text x="14" y="139" font-family="var(--f-mono)" font-size="11.5" fill="currentColor">query</text>
+          <text x="14" y="155" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-faint)">org member</text>
+
+          <line x1="138" y1="144" x2="192" y2="144" stroke="var(--read)" stroke-width="1.5" marker-end="url(#ar-c)"></line>
+
+          <rect x="202" y="112" width="132" height="64" rx="4" fill="var(--surface)" stroke="var(--rule)"></rect>
+          <text x="216" y="133" font-family="var(--f-mono)" font-size="11.5" fill="currentColor">resolve access</text>
+          <text x="216" y="150" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">role ∩ project</text>
+          <text x="216" y="165" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">∩ not isolated</text>
+
+          <!-- three repos -->
+          <line x1="344" y1="130" x2="398" y2="60" stroke="var(--read)" stroke-width="1.5" marker-end="url(#ar-c)"></line>
+          <line x1="344" y1="144" x2="398" y2="144" stroke="var(--read)" stroke-width="1.5" marker-end="url(#ar-c)"></line>
+          <line x1="344" y1="158" x2="392" y2="234" stroke="var(--bound)" stroke-width="1.5" stroke-dasharray="4 3"></line>
+          <line x1="378" y1="220" x2="394" y2="236" stroke="var(--bound)" stroke-width="1.5"></line>
+          <line x1="394" y1="220" x2="378" y2="236" stroke="var(--bound)" stroke-width="1.5"></line>
+
+          <rect x="408" y="38" width="150" height="44" rx="4" fill="var(--read-soft)" stroke="var(--read)"></rect>
+          <text x="420" y="58" font-family="var(--f-mono)" font-size="11" fill="var(--read)">proj_selfmemory</text>
+          <text x="420" y="73" font-family="var(--f-mono)" font-size="10" fill="var(--ink-muted)">cloned · linked</text>
+
+          <rect x="408" y="122" width="150" height="44" rx="4" fill="var(--read-soft)" stroke="var(--read)"></rect>
+          <text x="420" y="142" font-family="var(--f-mono)" font-size="11" fill="var(--read)">proj_website</text>
+          <text x="420" y="157" font-family="var(--f-mono)" font-size="10" fill="var(--ink-muted)">cloned · linked</text>
+
+          <rect x="408" y="240" width="150" height="44" rx="4" fill="none" stroke="var(--bound)" stroke-dasharray="4 3"></rect>
+          <text x="420" y="260" font-family="var(--f-mono)" font-size="11" fill="var(--bound)">proj_payroll</text>
+          <text x="420" y="275" font-family="var(--f-mono)" font-size="10" fill="var(--bound)">isolated · not cloned</text>
+
+          <line x1="568" y1="60" x2="618" y2="112" stroke="var(--read)" stroke-width="1.5" marker-end="url(#ar-c)"></line>
+          <line x1="568" y1="144" x2="618" y2="144" stroke="var(--read)" stroke-width="1.5" marker-end="url(#ar-c)"></line>
+
+          <rect x="628" y="106" width="150" height="76" rx="4" fill="var(--surface)" stroke="var(--read)"></rect>
+          <text x="640" y="127" font-family="var(--f-mono)" font-size="11.5" fill="var(--read)">session · tmpfs</text>
+          <text x="640" y="145" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">grep · read · follow</text>
+          <text x="640" y="160" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-muted)">links</text>
+          <text x="640" y="175" font-family="var(--f-mono)" font-size="10.5" fill="var(--bound)">no write tools</text>
+
+          <line x1="703" y1="192" x2="703" y2="228" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar-c-n)"></line>
+          <text x="612" y="248" font-family="var(--f-mono)" font-size="11.5" fill="currentColor">answer + cited pages</text>
+          <text x="612" y="266" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-faint)">then the clone is wiped</text>
+
+          <text x="0" y="300" font-family="var(--f-mono)" font-size="10.5" fill="var(--ink-faint)">Isolated projects are excluded for every role, org owners included.</text>
+        </svg>
+      </div>
+      <figcaption>
+        <span class="fig-num">Fig 3</span> — <code>proj_payroll</code> is not filtered
+        out of the answer; it is never cloned. Content that was never written to the
+        session disk cannot be reached by anything the agent is told to do.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="section-head col">
+      <span class="eyebrow">Invariants</span>
+      <h2>Four rules the implementation cannot bend</h2>
+    </div>
+    <div class="rules">
+      <div class="rule-item">
+        <span class="rule-tag t-write">writes</span>
+        <div>
+          <h3>One worker per project, always</h3>
+          <p>Concurrent compaction of the same repo is a lost update with no error and no trace. Serialize at the queue; ingest is already asynchronous, so nothing gets slower.</p>
+        </div>
+      </div>
+      <div class="rule-item">
+        <span class="rule-tag t-bound">scope</span>
+        <div>
+          <h3>Multi-project sessions are read-only</h3>
+          <p>Write tools exist only in a session holding exactly one repo. This is what stops injected page content in one project from exfiltrating another into itself.</p>
+        </div>
+      </div>
+      <div class="rule-item">
+        <span class="rule-tag t-bound">scope</span>
+        <div>
+          <h3>Permissions gate the clone, not the response</h3>
+          <p>Resolve what the caller may read before anything is written to session disk. Anything mounted is assumed read, whatever the answer ends up saying.</p>
+        </div>
+      </div>
+      <div class="rule-item">
+        <span class="rule-tag t-read">truth</span>
+        <div>
+          <h3>Page bodies live in exactly one place</h3>
+          <p>The repo is the source of truth. Postgres holds identity, RBAC, the queue, billing and a light index for listing pages — never a second copy of a body to reconcile.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head col">
+      <span class="eyebrow">Encryption</span>
+      <h2>Encrypted at rest, plaintext where it must be</h2>
+    </div>
+    <div class="col">
+      <p>
+        Encryption is <strong>global and always on</strong> — there is no per-project
+        toggle. A toggle would make the security posture unstateable in a questionnaire,
+        offer users a choice where one answer is always the right-looking one, and fork
+        the retrieval path forever.
+      </p>
+      <p>
+        Keys stay derived per project by HKDF from a master key — the scheme already in
+        <code>selfmemory/security/encryption.py</code>, which fits one-key-per-repo
+        better than it fitted the vector payload. <em>Per-project keys, global policy</em>:
+        the key scope and the customer-facing choice are independent, and conflating them
+        is what makes a toggle look reasonable. The unit changes — the page body as one
+        blob, not four named fields.
+      </p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Where</th><th>State</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Project repo, at rest</td>
+            <td><span class="chip chip-yes">encrypted</span></td>
+            <td>Fernet over the page body, key derived per <code>project_id</code></td>
+          </tr>
+          <tr>
+            <td>In transit</td>
+            <td><span class="chip chip-yes">encrypted</span></td>
+            <td>Ordinary transport security</td>
+          </tr>
+          <tr>
+            <td>Session working copy</td>
+            <td><span class="chip chip-part">plaintext</span></td>
+            <td>The agent has to <code>grep</code> it. Keep it on tmpfs, wipe on teardown, never touch host disk</td>
+          </tr>
+          <tr>
+            <td>Model provider</td>
+            <td><span class="chip chip-no">plaintext</span></td>
+            <td>Unavoidable when a model maintains the pages. Mitigated by a zero-retention agreement, not by keys</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <strong>The cost is cold start, not search.</strong> Encryption looks like it kills
+      the fast answer tier, because ciphertext cannot be indexed server-side. It doesn't:
+      the fast tier needs a <em>decrypted working copy</em>, and the session already has
+      one on tmpfs. Ripgrep plus one model call over the hits is the fast tier, running
+      inside the session over data that is encrypted at rest. What actually costs time is
+      booting a cold session — which makes this a caching problem (keep a warm clone for
+      recently active projects) rather than a reason to fork the data model.
+    </div>
+    <div class="callout">
+      <strong>The enterprise axis is whose key, not whether.</strong> Platform-managed by
+      default; customer-managed KMS per organization for enterprise. That is the upsell
+      enterprises actually ask for, and a per-project toggle would sit directly in its way.
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head col">
+      <span class="eyebrow">State of play</span>
+      <h2>What exists, what is next</h2>
+    </div>
+    <div class="status-grid">
+      <div class="status-col done">
+        <span class="eyebrow">On the branch</span>
+        <ul>
+          <li><b>Compaction engine</b> — two-pass select-then-rewrite <span class="mono">selfmemory/knowledge/</span></li>
+          <li><b>Store</b> — project-scoped rows, optimistic locking, one transaction per ingest</li>
+          <li><b>Lint pass</b> — broken links deterministically, contradictions by model</li>
+          <li><b>Agent sessions</b> — disposable workspace, read-only tools, cited multi-hop answers <span class="mono">workspace.py · session.py</span></li>
+          <li><b>70 offline tests</b> — scripted model and fake runner, no network</li>
+        </ul>
+      </div>
+      <div class="status-col done">
+        <span class="eyebrow">Already in the product</span>
+        <ul>
+          <li><b>Org → project → user RBAC</b> <span class="mono">server/</span></li>
+          <li><b>Session validation</b> — Ory Kratos and Hydra</li>
+          <li><b>Per-project key derivation</b> — HKDF, currently on the vector path only</li>
+        </ul>
+      </div>
+      <div class="status-col todo">
+        <span class="eyebrow">To build</span>
+        <ul>
+          <li><b>Git-backed project repos</b> and the durable store behind them</li>
+          <li><b>Ingest queue</b>, one worker per project</li>
+          <li><b>Access resolution</b> feeding the workspace project list</li>
+          <li><b>Page-body encryption</b>, replacing the field-level API</li>
+          <li><b>Warm-clone cache</b> for recently active projects</li>
+          <li><b>Linked / isolated toggle</b> at project creation</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head col">
+      <span class="eyebrow">Unresolved</span>
+      <h2>Two decisions still open</h2>
+    </div>
+    <div class="open-q col">
+      <div class="q">
+        <span>01</span>
+        <p><b>What drains the inbox — time or volume?</b> A timer gives predictable cost; a threshold gives fresher memory. It sets how stale a just-written fact may be when read.</p>
+      </div>
+      <div class="q">
+        <span>02</span>
+        <p><b>How much does the agent runtime get to be load-bearing?</b> Behind an adapter it stays swappable; wired straight through, it is faster to build and harder to leave.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="keyline">
+  <footer>
+    selfmemory · feat/knowledge-memory-2.0 · architecture as discussed, not yet built<br>
+    Fig 1 and the session half of Fig 3 are committed. The queue, git-backed repos and encryption in Fig 2 are proposed.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById("themeToggle");
+    btn.addEventListener("click", function () {
+      var root = document.documentElement;
+      var current = root.getAttribute("data-theme");
+      if (!current) {
+        var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        current = prefersDark ? "dark" : "light";
+      }
+      root.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+    });
+  })();
+</script>
