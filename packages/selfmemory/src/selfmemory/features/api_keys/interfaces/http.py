@@ -23,7 +23,7 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from selfmemory.kernel.crypto import decrypt_api_key, encrypt_api_key, hash_api_key
+from selfmemory.kernel.crypto import encrypt_api_key, hash_api_key
 from selfmemory.kernel.datetime import utc_now
 from selfmemory.kernel.validators import validate_object_id
 from selfmemory.platform.dependencies import (
@@ -88,6 +88,13 @@ def create_project_api_key(
     - External auth layer → Kratos IDs
     - Internal database relationships → MongoDB ObjectIds
     """
+    # Only an interactive session may mint keys; otherwise a leaked API key or
+    # OAuth token could create new long-lived keys, even for other projects.
+    if auth.auth_type != "session":
+        raise HTTPException(
+            status_code=403, detail="API keys can only be created from a session"
+        )
+
     # auth.user_id is Kratos identity_id (UUID string)
     project_obj_id = validate_object_id(project_id, "project_id")
 
@@ -250,14 +257,11 @@ def list_project_api_keys(
         user = mongo_db.users.find_one({"kratosId": key["userId"]})
         owner_email = user.get("email", "Unknown") if user else "Unknown"
 
-        full_key = decrypt_api_key(key.get("encryptedKey", ""))
-
         result_keys.append(
             {
                 "id": str(key["_id"]),
                 "name": key.get("name", "Unnamed Key"),
                 "key_prefix": key.get("keyPrefix", "sk_im_..."),
-                "api_key": full_key,
                 "owner_id": key["userId"],
                 "owner_email": owner_email,
                 "permissions": key.get("permissions", []),

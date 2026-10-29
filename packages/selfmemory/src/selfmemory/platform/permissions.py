@@ -265,3 +265,27 @@ def is_owner(resource: dict, kratos_id: str, mongo_user_id: ObjectId) -> bool:
     # This dual-format check is temporary for migration compatibility.
     owner_id = resource.get("ownerId")
     return owner_id in (kratos_id, mongo_user_id)
+
+
+def user_id_variants(db: Database, user_id: ObjectId | str) -> list:
+    """
+    Every form a user's id may take in ``userId`` fields.
+
+    Older documents store the ObjectId ``_id``, its string form, or the Kratos
+    identity id; matching only one of them silently skips the rest.
+    """
+    variants: list = [user_id, str(user_id)]
+    if isinstance(user_id, str) and ObjectId.is_valid(user_id):
+        variants.append(ObjectId(user_id))
+    user = db.users.find_one(
+        {"$or": [{"_id": {"$in": variants}}, {"kratosId": {"$in": variants}}]}
+    )
+    if user:
+        variants += [user["_id"], str(user["_id"])]
+        if user.get("kratosId"):
+            variants.append(user["kratosId"])
+    unique: list = []
+    for v in variants:
+        if v not in unique:
+            unique.append(v)
+    return unique

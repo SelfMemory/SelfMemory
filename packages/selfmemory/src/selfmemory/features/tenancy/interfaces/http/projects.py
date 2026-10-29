@@ -34,6 +34,7 @@ from selfmemory.platform.permissions import (
     get_user_by_email,
     get_user_object_id_from_kratos_id,
     is_organization_member,
+    user_id_variants,
 )
 from selfmemory.platform.rate_limiter import limiter
 
@@ -961,7 +962,7 @@ def remove_user_from_project(
     # CASCADE 2: Deactivate project-scoped API keys for this user
     key_deactivation_result = mongo_db.api_keys.update_many(
         {
-            "userId": target_user_obj_id,
+            "userId": {"$in": user_id_variants(mongo_db, target_user_obj_id)},
             "projectId": project_obj_id,
         },
         {"$set": {"isActive": False, "deactivatedAt": utc_now()}},
